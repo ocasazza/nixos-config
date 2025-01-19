@@ -1,2 +1,25 @@
-result
 .direnv
+
+# SOPS & Age-related files
+.decrypted~*
+*.secret
+secrets/*.unencrypted
+secrets/*.dec
+secrets/*.plain
+secrets/*.yaml.dec
+.sops.yaml.dec
+*.key
+secrets/*.key
+
+# Nix-specific
+result
+result-*
+
+# Editor/IDE specific
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS-specific
+.DS_Store
