@@ -38,7 +38,7 @@ THIS WILL WIPE YOUR DISKS AND APPLY THE PARTITION SCHEME IN
 `./modules/nixos/disk-config.nix`
 
 ```shell
-sudo nix run --extra-experimental-features 'nix-command flakes' github:na-son/nixos-config#install
+sudo nix run --extra-experimental-features 'nix-command flakes' github:ocasazza/nixos-config#install
 ```
 
 After the initial install completes and you land at the greeter, hit `CTRL+ALT+F6` to open a terminal and login as root.
@@ -75,9 +75,9 @@ cachix auth $auth-token
 
 nix build $thing | cachix push $my-cachix
 # example
-nix --extra-experimental-features 'nix-command flakes' build .#darwinConfigurations.macos.system | cachix push na-son
+nix --extra-experimental-features 'nix-command flakes' build .#darwinConfigurations.macos.system | cachix push ocasazza
 # if "nothing to push" when you know there is something to push:
-cachix push na-son ./result
+cachix push ocasazza ./result
 ```
 
 ## Secret Management with YubiKey and SOPS
