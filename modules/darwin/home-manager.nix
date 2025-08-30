@@ -22,8 +22,34 @@ in
 
   homebrew = {
     enable = true;
-    casks = pkgs.callPackage ./casks.nix { };
-    masApps = { }; # $ mas search <app name>
+    brewPrefix = "/opt/homebrew/bin";
+    global = {
+      brewfile = true;
+      autoUpdate = false;
+    };
+    onActivation = {
+      autoUpdate = false;
+      upgrade = false;
+      cleanup = "zap";
+    };
+    taps = [];
+    casks = [
+      # Development Tools
+      "zoc"
+      # Communication Tools
+      "meetingbar"
+      "notion"
+      # Browsers
+      "google-chrome"
+      # mac stuff
+      "hiddenbar"
+    ];
+    brews = [];
+    # $ nix shell nixpkgs#mas
+    # $ mas search <app name>
+    masApps = {
+      "Fresco" = 1251572132;
+    };
   };
 
   home-manager = {
@@ -44,17 +70,15 @@ in
           ];
           stateVersion = "23.11";
         };
-        programs =
-          { }
-          // import ../shared/home-manager.nix {
-            inherit
-              config
-              pkgs
-              lib
-              user
-              ;
-          };
-
+        programs = lib.mkMerge [
+          (import ../shared/home-manager.nix {
+            inherit config pkgs lib user;
+          })
+          {
+            # Override ghostty to use the binary package from Nix
+            ghostty.package = lib.mkForce pkgs.ghostty-bin;
+          }
+        ];
         manual.manpages.enable = false;
       };
   };
@@ -78,5 +102,4 @@ in
       }
     ];
   };
-
 }

@@ -1,9 +1,13 @@
 {
-  description = "Austin likes this";
+  description = "Salt";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager.url = "github:nix-community/home-manager";
+
+    mac-app-util = {
+      url = "github:hraban/mac-app-util";
+    };
 
     # Disk partitioning
     disko = {
@@ -43,6 +47,7 @@
       self,
       darwin,
       nix-homebrew,
+      mac-app-util,
       homebrew-bundle,
       homebrew-core,
       homebrew-cask,
@@ -53,9 +58,9 @@
     }@inputs:
     let
       user = { # change to your preferred settings
-        name = "nason";
-        fullName = "Austin Nason";
-        email = "austin.nason@schrodinger.com";
+        name = "casazza";
+        fullName = "Olive Casazza";
+        email = "olive.casazza@schrodinger.com";
       };
       linuxSystems = [
         "x86_64-linux"
@@ -116,13 +121,21 @@
       darwinConfigurations = {
         macos = darwin.lib.darwinSystem {
           system = "aarch64-darwin";
-          specialArgs = {
-          user = user;
-          } // inputs;
+          specialArgs = { user = user; } // inputs;
           modules = [
             home-manager.darwinModules.home-manager
+            {
+              home-manager = {
+                useGlobalPkgs = true;
+                useUserPackages = true;
+                users.${user.name} = {
+                  imports = [ mac-app-util.homeManagerModules.default ];
+                };
+              };
+            }
             nix-homebrew.darwinModules.nix-homebrew
             {
+              # Homebrew configuration
               nix-homebrew = {
                 enable = true;
                 user = user.name;
@@ -139,16 +152,11 @@
           ];
         };
       };
-
       nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
         system:
         nixpkgs.lib.nixosSystem {
           inherit system;
-          specialArgs = 
-          {
-            user = user;
-          } // inputs;
-
+          specialArgs = { user = user;} // inputs;
           modules = [
             disko.nixosModules.disko
             home-manager.nixosModules.home-manager
@@ -157,6 +165,9 @@
                 useGlobalPkgs = true;
                 useUserPackages = true;
                 users.${user.name} = import ./modules/nixos/home-manager.nix;
+                imports = [
+                  mac-app-util.homeManagerModules.default
+                ];
               };
 
               environment.systemPackages = [

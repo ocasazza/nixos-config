@@ -27,8 +27,8 @@ with pkgs;
   # Cloud-related tools and SDKs
   docker
   docker-compose
-  #awscli
-  #google-cloud-sdk
+  awscli
+  google-cloud-sdk
   #qemu
   #podman
   #podman-compose
@@ -36,22 +36,27 @@ with pkgs;
   #dive
   #podman-desktop
 
+
   # Media-related packages
   dejavu_fonts
+  ffmpeg
   fd
   font-awesome
-  jetbrains-mono
+  nerd-fonts._0xproto
+  nerd-fonts.droid-sans-mono
   nerd-fonts.jetbrains-mono
 
   # Text and terminal utilities
   htop
-  #iftop
+  iftop
   jq
+  starship
   tree
   tmux
   unzip
   tio # serial console
   silver-searcher
+  vscode
 
   # devtools
   direnv
