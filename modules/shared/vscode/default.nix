@@ -5,6 +5,7 @@ let
 in
 {
   vscode = {
+    enable = true;
     profiles.default = {
       enableUpdateCheck = true;  # Allow VSCode to auto-update
       enableExtensionUpdateCheck = true;  # Allow extension update checks

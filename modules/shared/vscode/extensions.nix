@@ -8,10 +8,10 @@ with pkgs.vscode-extensions; [
   bbenoist.nix
   jnoortheen.nix-ide
 
-  # Language support
-  ms-python.python
-  ms-python.pylint
-  ms-python.black-formatter
+  # Language support - Using stable Python extension
+  # ms-python.python  # Temporarily disabled due to build issues
+  # ms-python.pylint  # Temporarily disabled due to build issues
+  # ms-python.black-formatter  # Temporarily disabled due to build issues
 
   # Documentation and writing
   yzhang.markdown-all-in-one
@@ -38,5 +38,12 @@ with pkgs.vscode-extensions; [
     publisher = "joshumcode";
     version = "2.0.0";
     sha256 = "sha256-PMfGxb4fTww9gi9+U4R5zx8jEwZDJLbWPaswMoQVt6M=";
+  }
+  # Python support - Using marketplace version to avoid build conflicts
+  {
+    name = "python";
+    publisher = "ms-python";
+    version = "2024.20.0";
+    sha256 = "sha256-FAKE-HASH-WILL-BE-UPDATED-ON-FIRST-BUILD";
   }
 ]
