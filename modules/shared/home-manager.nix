@@ -17,15 +17,12 @@
         "pwd"
       ];
     };
-
     shellAliases = {
       cat = "bat";
       ls = "ls --color=auto";
     };
-
     sessionVariables = {
       EDITOR = "nvim";
-
       # tfenv stuff
       TFENV_CONFIG_DIR = "$HOME/.local/share/tfenv";
       PATH = "$HOME/.tfenv/bin:$PATH";
@@ -35,7 +32,6 @@
   starship = {
     enable = true;
     enableZshIntegration = true;
-
     # these are TOML mappings from https://starship.rs/config
     settings = {
       add_newline = true;
@@ -107,22 +103,25 @@
     enable = true;
     package = null;
     settings = {
-      font-size = 18;
+      font-size = 14;
       font-family = "JetBrainsMono Nerd Font Mono";
-      theme = "Solarized Dark Higher Contrast";
+      theme = "Monokai Soda";
       cursor-style = "block";
       shell-integration-features = "no-cursor";
       clipboard-paste-protection = false;
       copy-on-select = true;
       term = "xterm-256color";
-
       macos-titlebar-proxy-icon = "hidden";
-
       config-file = "~/.config/ghostty/extra"; # for testing shaders atm
+      command = "/etc/profiles/per-user/casazza/bin/zsh";
+      keybind = [
+        "ctrl+w=close_surface"
+        "ctrl+shift+o=new_split:right"
+        "ctrl+shift+e=new_split:down"
+      ];
     };
   };
-  # custom-shader = "";
-
+  
   git = {
     enable = true;
     ignores = [
@@ -283,52 +282,24 @@
 
   ssh = {
     enable = true;
-    extraConfig = lib.mkMerge [
-      ''
-        Host github.com
-          Hostname github.com
-          IdentitiesOnly yes
-      ''
-      (lib.mkIf pkgs.stdenv.hostPlatform.isLinux ''
-        IdentityFile /home/${user.name}/.ssh/id_github
-      '')
-      (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin ''
-        IdentityFile /Users/${user.name}/.ssh/id_rsa
-      '')
-    ];
-  };
-
-  vscode = {
-    enable = true;
-    profiles.default = {
-      enableUpdateCheck = false;
-
-      # if extensions are messed up, rm ~/.vscode and build-switch
-      extensions = with pkgs.vscode-extensions; [
-        bbenoist.nix
-        hashicorp.terraform
-        #ms-python.python # build issue
-        vscodevim.vim
-        yzhang.markdown-all-in-one
-      ];
-
-      # https://code.visualstudio.com/docs/getstarted/settings#_default-settings
-      userSettings = {
-        # fonts
-        "editor.fontFamily" = "JetBrains Mono";
-        "terminal.integrated.fontFamily" = "JetBrainsMono Nerd Font Mono";
-
-        # colorscheme
-        "workbench.colorTheme" = "Solarized Dark";
-
-        # git
-        "diffEditor.ignoreTrimWhitespace" = false;
-        "git.confirmSync" = false;
-
-        # terminal behavior
-        "terminal.integrated.copyOnSelection" = true;
-        "terminal.integrated.defaultProfile.osx" = "zsh";
+    matchBlocks = {
+      "*" = {
+        extraOptions = lib.mkMerge [
+          (lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
+            IdentityFile = "/home/${user.name}/.ssh/id_github";
+          })
+          (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
+            IdentityFile = "/Users/${user.name}/.ssh/id_rsa";
+          })
+        ];
+      };
+      "github.com" = {
+        user = "admin";
+        hostname = "github.com";
+        identitiesOnly = true;
       };
     };
+    enableDefaultConfig = false;
   };
 }
+// import ./vscode { inherit pkgs lib; }
