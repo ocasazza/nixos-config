@@ -29,7 +29,9 @@
   "terminal.integrated.lineHeight" = 1.2;
 
   # Workbench settings - Minimal/Terminal-like UI
-  "workbench.colorTheme" = "Functional Contrast";  # Good for terminal users
+  # "workbench.colorTheme" = "Functional Contrast";  # Good for terminal users
+  "workbench.colorTheme" = "Material Dark";  # Good for terminal users
+
   "workbench.iconTheme" = "material-icon-theme";
   "workbench.editor.enablePreview" = false;  # More decisive file opening like Neovim
   "workbench.editor.closeOnFileDelete" = true;

@@ -105,7 +105,7 @@
     settings = {
       font-size = 14;
       font-family = "JetBrainsMono Nerd Font Mono";
-      theme = "Monokai Soda";
+      theme = "Material Dark";
       cursor-style = "block";
       shell-integration-features = "no-cursor";
       clipboard-paste-protection = false;
@@ -121,7 +121,7 @@
       ];
     };
   };
-  
+
   git = {
     enable = true;
     ignores = [

@@ -16,20 +16,18 @@ with pkgs.vscode-extensions; [
   # Documentation and writing
   yzhang.markdown-all-in-one
 
-  # Remote development - Great for terminal/SSH workflows
+  # Remote development
   ms-vscode-remote.vscode-remote-extensionpack
 
-  # Git and version control - Enhanced git for terminal workflow
-  eamodio.gitlens
+  # Git and version control
+  # eamodio.gitlens
 
   # Data Science
-  ms-toolsai.datawrangler
+  # ms-toolsai.datawrangler
 
-  # Themes and UI - Terminal-friendly
+  # Themes
   pkief.material-icon-theme
   esbenp.prettier-vscode
-
-  # AI assistance - Modern development workflow
   saoudrizwan.claude-dev
 ] ++ pkgs.vscode-utils.extensionsFromVscodeMarketplace [
   # Functional Contrast theme - Good for terminal users
@@ -39,11 +37,11 @@ with pkgs.vscode-extensions; [
     version = "2.0.0";
     sha256 = "sha256-PMfGxb4fTww9gi9+U4R5zx8jEwZDJLbWPaswMoQVt6M=";
   }
-  # Python support - Using marketplace version to avoid build conflicts
-  {
-    name = "python";
-    publisher = "ms-python";
-    version = "2024.20.0";
-    sha256 = "sha256-FAKE-HASH-WILL-BE-UPDATED-ON-FIRST-BUILD";
-  }
+  # Python support - Temporarily disabled due to hash issues
+  # {
+  #   name = "python";
+  #   publisher = "ms-python";
+  #   version = "2024.20.0";
+  #   sha256 = "sha256-FAKE-HASH-WILL-BE-UPDATED-ON-FIRST-BUILD";
+  # }
 ]
