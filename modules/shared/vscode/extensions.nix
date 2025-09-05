@@ -2,6 +2,7 @@
 
 with pkgs.vscode-extensions; [
   vscodevim.vim
+  hashicorp.terraform
   yzhang.markdown-all-in-one
   ms-vscode-remote.vscode-remote-extensionpack
   ms-toolsai.datawrangler
