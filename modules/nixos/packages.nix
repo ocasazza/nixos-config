@@ -12,7 +12,6 @@ shared-packages
 
   # App and package management
   gnumake
-  cmake
   home-manager
 
   # Media and design tools
@@ -22,19 +21,18 @@ shared-packages
   # Audio tools
   pavucontrol # Pulse audio controls
 
-  neovim
-
   # MISC DE / WM
+  neovim
   mako
   foot
-
   wl-clipboard
   cliphist
-
   rofi
   rofi-calc
 
   # Testing and development tools
+  nixpacks
+  k9s
 
   # Core unix tools
   unixtools.ifconfig
@@ -43,7 +41,6 @@ shared-packages
   inotify-tools
   libnotify
   greetd.tuigreet
-
   sqlite
   xdg-utils
   xdg-user-dirs

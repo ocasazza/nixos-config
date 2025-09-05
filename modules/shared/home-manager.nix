@@ -4,7 +4,6 @@
   user,
   ...
 }:
-
 {
   zsh = {
     enable = true;
@@ -105,7 +104,7 @@
     settings = {
       font-size = 14;
       font-family = "JetBrainsMono Nerd Font Mono";
-      theme = "Material Dark";
+      theme = "MaterialDarker";
       cursor-style = "block";
       shell-integration-features = "no-cursor";
       clipboard-paste-protection = false;
@@ -115,9 +114,9 @@
       config-file = "~/.config/ghostty/extra"; # for testing shaders atm
       command = "/etc/profiles/per-user/casazza/bin/zsh";
       keybind = [
-        "ctrl+w=close_surface"
-        "ctrl+shift+o=new_split:right"
-        "ctrl+shift+e=new_split:down"
+        "cmd+shift+d=close_surface"
+        "cmd+shift+o=new_split:down"
+        "cmd+shift+e=new_split:right"
       ];
     };
   };

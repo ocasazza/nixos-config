@@ -13,17 +13,14 @@ with pkgs;
   sqlite
   wget
   zip
-
   # networking
   ipcalc
-
   # Encryption and security tools
   #age
   #age-plugin-yubikey
   #gnupg
   #libfido2
   #pinentry
-
   # Cloud-related tools and SDKs
   docker
   docker-compose
@@ -35,8 +32,6 @@ with pkgs;
   #podman-tui
   #dive
   #podman-desktop
-
-
   # Media-related packages
   dejavu_fonts
   ffmpeg
@@ -45,7 +40,6 @@ with pkgs;
   nerd-fonts._0xproto
   nerd-fonts.droid-sans-mono
   nerd-fonts.jetbrains-mono
-
   # Text and terminal utilities
   htop
   iftop
@@ -57,23 +51,27 @@ with pkgs;
   tio # serial console
   silver-searcher
   vscode
-
-  # devtools
-  direnv
-  devenv
-
+  # rust
+  cargo
+  clippy
+  wasm-pack
+  # nodejs
+  nodejs
   # Python
   python313
   python313Packages.virtualenv # globally install virtualenv
-  #ansible
-  #ansible-lint
-
+  python313Packages.pip
+  ansible
+  ansible-lint
+  # devtools
+  direnv
+  devenv
   # Terraform
   #terraform-ls
   #terraform-docs
-
   # Nix
   nil
   nixfmt-rfc-style
   nix-tree # $nix-tree .#darwinConfigurations.macos.system
+  update-daemon
 ]

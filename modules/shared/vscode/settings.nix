@@ -1,4 +1,4 @@
-{ pkgs, lib, user }:
+{ pkgs, lib }:
 
 {
   # Editor settings - Neovim-like preferences
@@ -24,15 +24,15 @@
   # Terminal settings - Starship compatible
   "terminal.integrated.copyOnSelection" = true;
   "terminal.integrated.defaultProfile.osx" = "zsh";  # Works well with Starship
-  "terminal.integrated.fontFamily" = "JetBrainsMono Nerd Font Mono";  # Supports Starship icons
+  # "terminal.integrated.fontFamily" = "JetBrainsMono Nerd Font Mono";  # Supports Starship icons
   "terminal.integrated.fontSize" = 13;
   "terminal.integrated.lineHeight" = 1.2;
 
   # Workbench settings - Minimal/Terminal-like UI
   # "workbench.colorTheme" = "Functional Contrast";  # Good for terminal users
-  "workbench.colorTheme" = "Material Dark";  # Good for terminal users
+  "workbench.colorTheme" = "Sublime Material Theme - Dark";
 
-  "workbench.iconTheme" = "material-icon-theme";
+  # "workbench.iconTheme" = "material-icon-theme";
   "workbench.editor.enablePreview" = false;  # More decisive file opening like Neovim
   "workbench.editor.closeOnFileDelete" = true;
   "workbench.secondarySideBar.defaultVisibility" = "hidden";
@@ -80,7 +80,6 @@
   };
 
   # Remote SSH settings
-  "remote.SSH.configFile" = "/Users/${user}/Code/.vscode/ssh_config";
   "remote.SSH.showLoginTerminal" = true;
 
   # Update settings - Enable automatic updates

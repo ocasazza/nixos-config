@@ -1,47 +1,47 @@
 { pkgs }:
 
 with pkgs.vscode-extensions; [
-  # Essential Vim support - Core for Neovim users
   vscodevim.vim
-
-  # Nix support - Essential for this configuration
-  bbenoist.nix
-  jnoortheen.nix-ide
-
-  # Language support - Using stable Python extension
-  # ms-python.python  # Temporarily disabled due to build issues
-  # ms-python.pylint  # Temporarily disabled due to build issues
-  # ms-python.black-formatter  # Temporarily disabled due to build issues
-
-  # Documentation and writing
   yzhang.markdown-all-in-one
-
-  # Remote development
   ms-vscode-remote.vscode-remote-extensionpack
-
-  # Git and version control
-  # eamodio.gitlens
-
-  # Data Science
-  # ms-toolsai.datawrangler
-
-  # Themes
-  pkief.material-icon-theme
+  ms-toolsai.datawrangler
   esbenp.prettier-vscode
-  saoudrizwan.claude-dev
+  pkief.material-icon-theme
 ] ++ pkgs.vscode-utils.extensionsFromVscodeMarketplace [
-  # Functional Contrast theme - Good for terminal users
+  {
+    name = "claude-dev";
+    publisher = "saoudrizwan";
+    version = "3.26.7";
+    sha256 = "sha256-ACgIIDb5y1kDz7Zm/4MzNj5DLBmpMNo+lM8h/2OyO+M=";
+  }
+  {
+    name = "Nix";
+    publisher = "bbenoist";
+    version = "1.0.1";
+    sha256 = "sha256-qwxqOGublQeVP2qrLF94ndX/Be9oZOn+ZMCFX1yyoH0=";
+  }
+  {
+    name = "Go";
+    publisher = "golang";
+    version = "0.48.0";
+    sha256 = "sha256-W+GsieGOn9UhOB49v/NqsHCoOm4VNaZotipIN2E4N9k=";
+  }
+  {
+    name = "vscode-zig";
+    publisher = "ziglang";
+    version = "0.6.13";
+    sha256 = "sha256-4DYsSGqWa+jbD8tguULFQLdhKluXK8skj9nSst9UX8U=";
+  }
+  {
+    name = "theme-material-theme";
+    publisher = "jprestidge";
+    version = "1.0.1";
+    sha256 = "sha256-nUjskGZf/7Mi3mBAswFfbgdsNNfn5BF/kDZIn8v/BHA=";
+  }
   {
     name = "functional-contrast";
     publisher = "joshumcode";
     version = "2.0.0";
     sha256 = "sha256-PMfGxb4fTww9gi9+U4R5zx8jEwZDJLbWPaswMoQVt6M=";
   }
-  # Python support - Temporarily disabled due to hash issues
-  # {
-  #   name = "python";
-  #   publisher = "ms-python";
-  #   version = "2024.20.0";
-  #   sha256 = "sha256-FAKE-HASH-WILL-BE-UPDATED-ON-FIRST-BUILD";
-  # }
 ]
