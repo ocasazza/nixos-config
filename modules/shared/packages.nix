@@ -73,4 +73,5 @@ with pkgs;
   nil
   nixfmt-rfc-style
   nix-tree # $nix-tree .#darwinConfigurations.macos.system
+  update-daemon
 ]
