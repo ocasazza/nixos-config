@@ -172,11 +172,7 @@
                 useGlobalPkgs = true;
                 useUserPackages = true;
                 users.${user.name} = import ./modules/nixos/home-manager.nix;
-                imports = [
-                  mac-app-util.homeManagerModules.default
-                ];
               };
-
               environment.systemPackages = [
                 ghostty.packages.x86_64-linux.default
               ];

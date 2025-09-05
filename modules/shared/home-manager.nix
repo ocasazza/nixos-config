@@ -323,7 +323,7 @@
         ];
       };
       "github.com" = {
-        user = "admin";
+        user = "${user.name}";
         hostname = "github.com";
         identitiesOnly = true;
       };
