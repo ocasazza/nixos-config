@@ -3,6 +3,7 @@
   pkgs,
   home-manager,
   user,
+  nvf,
   ...
 }:
 
@@ -10,15 +11,17 @@ let
   sharedFiles = import ../shared/files.nix { inherit config pkgs user; };
   additionalFiles = import ./files.nix { inherit config pkgs user; };
 in
-{
-  imports = [ ./dock ];
+  {
+    imports = [
+      ./dock
+    ];
 
-  users.users.${user.name} = {
-    name = "${user.name}";
-    home = "/Users/${user.name}";
-    isHidden = false;
-    shell = pkgs.zsh;
-  };
+    users.users.${user.name} = {
+      name = "${user.name}";
+      home = "/Users/${user.name}";
+      isHidden = false;
+      shell = pkgs.zsh;
+    };
 
   homebrew = {
     enable = true;
@@ -52,16 +55,17 @@ in
     };
   };
 
-  home-manager = {
-    useGlobalPkgs = true;
-    users.${user.name} =
-      {
-        pkgs,
-        config,
-        lib,
-        ...
-      }:
-      {
+    home-manager = {
+      useGlobalPkgs = true;
+      users.${user.name} =
+        {
+          pkgs,
+          config,
+          lib,
+          ...
+        }:
+        {
+        imports = [ nvf.homeManagerModules.default ];
         home = {
           packages = pkgs.callPackage ./packages.nix { };
           file = lib.mkMerge [
