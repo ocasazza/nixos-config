@@ -1,7 +1,6 @@
 {
   config,
   pkgs,
-  home-manager,
   user,
   nvf,
   ...
@@ -16,12 +15,12 @@ in
       ./dock
     ];
 
-    users.users.${user.name} = {
-      name = "${user.name}";
-      home = "/Users/${user.name}";
-      isHidden = false;
-      shell = pkgs.zsh;
-    };
+  users.users.${user.name} = {
+    name = "${user.name}";
+    home = "/Users/${user.name}";
+    isHidden = false;
+    shell = pkgs.zsh;
+  };
 
   homebrew = {
     enable = true;
