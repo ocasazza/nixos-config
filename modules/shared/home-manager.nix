@@ -229,10 +229,10 @@
           IdentitiesOnly yes
       ''
       (lib.mkIf pkgs.stdenv.hostPlatform.isLinux ''
-        IdentityFile /home/${user.name}/.ssh/id_github
+        IdentityFile /home/${user.name}/.ssh/id_ed25519
       '')
       (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin ''
-        IdentityFile /Users/${user.name}/.ssh/id_rsa
+        IdentityFile /Users/${user.name}/.ssh/id_ed25519
       '')
     ];
   };
