@@ -112,4 +112,6 @@
 
   # Direnv integration - autoreload extension when direnv detects reload
   "direnv.restart.automatic" = true;
+  # "editor.experimentalGpuAcceleration"= "on";
+  # "terminal.integrated.gpuAcceleration"= "on";
 }

@@ -22,10 +22,10 @@ with pkgs;
   #libfido2
   #pinentry
   # Cloud-related tools and SDKs
-  docker
-  docker-compose
-  awscli
-  google-cloud-sdk
+  #docker
+  #docker-compose
+  #awscli
+  #google-cloud-sdk
   #qemu
   #podman
   #podman-compose
@@ -51,24 +51,23 @@ with pkgs;
   tio # serial console
   silver-searcher
   vscode
-  # rust
+  crush
+  # lang tools
   cargo
   clippy
+  go
   wasm-pack
-  # nodejs
   nodejs
-  # Python
   python313
-  python313Packages.virtualenv # globally install virtualenv
+  python313Packages.virtualenv
   python313Packages.pip
   ansible
   ansible-lint
-  # devtools
   direnv
   devenv
-  # Terraform
-  #terraform-ls
-  #terraform-docs
+  # terraform
+  # terraform-ls
+  # terraform-docs
   # Nix
   nil
   nixfmt-rfc-style

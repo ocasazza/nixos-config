@@ -51,7 +51,6 @@
         symbol = "[△](bold italic bright-blue)";
         format = " [$branch(:$remote_branch)]($style)";
         style = "italic bright-blue";
-
         only_attached = true;
         truncation_length = 11;
         truncation_symbol = "⋯";

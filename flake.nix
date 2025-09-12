@@ -1,31 +1,23 @@
 {
-  description = "Salt";
+  description = "salt";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager.url = "github:nix-community/home-manager";
-
-    mac-app-util = {
-      url = "github:hraban/mac-app-util";
-    };
-
     # Disk partitioning
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
     # Terminal
     ghostty = {
       url = "github:ghostty-org/ghostty";
     };
-
     # Neovim Config
     nvf = {
       url = "github:NotAShelf/nvf";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
     # The rest are all MacOS
     darwin = {
       url = "github:LnL7/nix-darwin/master";
@@ -53,7 +45,6 @@
       self,
       darwin,
       nix-homebrew,
-      mac-app-util,
       homebrew-bundle,
       homebrew-core,
       homebrew-cask,
@@ -64,7 +55,8 @@
       ghostty,
     }@inputs:
     let
-      user = { # change to your preferred settings
+      user = {
+        # change to your preferred settings
         name = "casazza";
         fullName = "Olive Casazza";
         email = "olive.casazza@schrodinger.com";
@@ -75,7 +67,6 @@
       ];
       darwinSystems = [ "aarch64-darwin" ];
       forAllSystems = f: nixpkgs.lib.genAttrs (linuxSystems ++ darwinSystems) f;
-
       formatter = nixpkgs.nixfmt-rfc-style;
       devShell =
         system:
@@ -124,25 +115,14 @@
       devShells = forAllSystems devShell;
       apps =
         nixpkgs.lib.genAttrs linuxSystems mkLinuxApps // nixpkgs.lib.genAttrs darwinSystems mkDarwinApps;
-
       darwinConfigurations = {
         macos = darwin.lib.darwinSystem {
           system = "aarch64-darwin";
           specialArgs = { user = user; } // inputs;
           modules = [
             home-manager.darwinModules.home-manager
-            {
-              home-manager = {
-                useGlobalPkgs = true;
-                useUserPackages = true;
-                users.${user.name} = {
-                  imports = [ mac-app-util.homeManagerModules.default ];
-                };
-              };
-            }
             nix-homebrew.darwinModules.nix-homebrew
             {
-              # Homebrew configuration
               nix-homebrew = {
                 enable = true;
                 user = user.name;
@@ -159,6 +139,7 @@
           ];
         };
       };
+
       nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
         system:
         nixpkgs.lib.nixosSystem {
