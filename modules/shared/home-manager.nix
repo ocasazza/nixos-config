@@ -23,8 +23,8 @@
     sessionVariables = {
       EDITOR = "nvim";
       # tfenv stuff
-      TFENV_CONFIG_DIR = "$HOME/.local/share/tfenv";
-      PATH = "$HOME/.tfenv/bin:$PATH";
+      # TFENV_CONFIG_DIR = "$HOME/.local/share/tfenv";
+      # PATH = "$HOME/.tfenv/bin:$PATH";
     };
   };
 
@@ -103,15 +103,15 @@
     settings = {
       font-size = 14;
       font-family = "JetBrainsMono Nerd Font Mono";
-      theme = "MaterialDarker";
+      theme = "Monokai Soda";
       cursor-style = "block";
       shell-integration-features = "no-cursor";
       clipboard-paste-protection = false;
       copy-on-select = true;
       term = "xterm-256color";
       macos-titlebar-proxy-icon = "hidden";
-      config-file = "~/.config/ghostty/extra"; # for testing shaders atm
-      command = "/Users/${user.name}/.nix-profile/bin/zsh";
+      # config-file = "~/.config/ghostty/extra"; # for testing shaders atm
+      command = "/etc/profiles/per-user/${user.name}/bin/zsh";
       keybind = [
         "cmd+shift+d=close_surface"
         "cmd+shift+e=new_split:down"
@@ -196,49 +196,6 @@
       M.nvdash = { load_on_startup = true }
     '';
   };
-
-  #nvf = {
-  #  enable = true;
-  #  settings = {
-  #    vim = {
-  #      autocomplete.nvim-cmp.enable = true;
-  #      autopairs.nvim-autopairs.enable = true;
-  #      comments.comment-nvim.enable = true;
-  #      enableLuaLoader = true;
-  #      git.gitsigns.enable = true;
-  #      mini.tabline.enable = true;
-  #      statusline.lualine.enable = true;
-  #      vimAlias = true;
-  #      filetree.nvimTree = {
-  #        enable = true;
-  #        mappings.toggle = " t";
-  #        setupOpts.hijack_cursor = true;
-  #      };
-  #      languages = {
-  #        enableTreesitter = true;
-  #        enableFormat = true;
-  #        bash.enable = true;
-  #        markdown.enable = true;
-  #        nix.enable = true;
-  #        python.enable = true;
-  #        terraform.enable = true;
-  #        yaml.enable = true;
-  #      };
-  #      lsp = {
-  #        enable = true;
-  #      };
-  #      theme = {
-  #        enable = true;
-  #        name = "solarized";
-  #        style = "dark";
-  #      };
-  #      clipboard = {
-  #        enable = true;
-  #        registers = "unnamedplus";
-  #      };
-  #    };
-  #  };
-  #};
 
   ssh = {
     enable = true;

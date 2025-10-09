@@ -38,6 +38,7 @@ in
     casks = [
       # Development Tools
       "zoc"
+      "ghostty"
       # Communication Tools
       "meetingbar"
       "notion"

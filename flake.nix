@@ -13,11 +13,6 @@
     ghostty = {
       url = "github:ghostty-org/ghostty";
     };
-    # Neovim Config
-    nvf = {
-      url = "github:NotAShelf/nvf";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # The rest are all MacOS
     darwin = {
       url = "github:LnL7/nix-darwin/master";
@@ -53,7 +48,7 @@
       homebrew-core,
       homebrew-cask,
       home-manager,
-      nvf,
+      nix4nvchad,
       nixpkgs,
       disko,
       ghostty,
@@ -86,6 +81,7 @@
                 git
                 statix
                 deadnix
+                nh
               ];
               shellHook = with pkgs; ''
                 export EDITOR=nvim
@@ -95,8 +91,6 @@
     in
     {
       devShells = forAllSystems devShell;
-      apps =
-        nixpkgs.lib.genAttrs linuxSystems mkLinuxApps // nixpkgs.lib.genAttrs darwinSystems mkDarwinApps;
       darwinConfigurations = {
         macos = darwin.lib.darwinSystem {
           system = "aarch64-darwin";

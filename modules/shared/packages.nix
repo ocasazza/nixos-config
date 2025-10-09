@@ -52,7 +52,7 @@ with pkgs;
   tio # serial console
   silver-searcher
   vscode
-  crush
+  # crush
   # lang tools
   cargo
   clippy
@@ -66,7 +66,7 @@ with pkgs;
   ansible-lint
   direnv
   devenv
-
+  # ghostty
   # Python
   python313
   python313Packages.virtualenv # globally install virtualenv

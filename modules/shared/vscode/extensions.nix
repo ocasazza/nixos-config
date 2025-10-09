@@ -14,7 +14,7 @@ with pkgs.vscode-extensions; [
     name = "claude-dev";
     publisher = "saoudrizwan";
     version = "3.28.2";
-    sha256 = "sha256-vunx8nYSvHmA/l0OiwFaVEyGE4EFY2jACyswVtUMY3g=";
+    sha256 = "sha256-1Je18CNoiuEkeOsYCwGIFI2fInDG2BEAZyOhv1qQ8rs=";
   }
   {
     name = "Nix";
