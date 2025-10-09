@@ -1,15 +1,24 @@
 {
-  description = "Austin likes this";
+  description = "salt";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager.url = "github:nix-community/home-manager";
-
+    # Disk partitioning
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
+    # Terminal
+    ghostty = {
+      url = "github:ghostty-org/ghostty";
+    };
+    # Neovim Config
+    nvf = {
+      url = "github:NotAShelf/nvf";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # The rest are all MacOS
     darwin = {
       url = "github:LnL7/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -29,10 +38,6 @@
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
-
-    ghostty = {
-      url = "github:ghostty-org/ghostty";
-    };
     nix4nvchad = {
       url = "github:nix-community/nix4nvchad";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -48,7 +53,7 @@
       homebrew-core,
       homebrew-cask,
       home-manager,
-      nix4nvchad,
+      nvf,
       nixpkgs,
       disko,
       ghostty,
@@ -56,9 +61,9 @@
     let
       user = {
         # change to your preferred settings
-        name = "nason";
-        fullName = "Austin Nason";
-        email = "austin.nason@schrodinger.com";
+        name = "casazza";
+        fullName = "Olive Casazza";
+        email = "olive.casazza@schrodinger.com";
       };
       linuxSystems = [
         "x86_64-linux"
@@ -66,7 +71,6 @@
       ];
       darwinSystems = [ "aarch64-darwin" ];
       forAllSystems = f: nixpkgs.lib.genAttrs (linuxSystems ++ darwinSystems) f;
-
       formatter = nixpkgs.nixfmt-rfc-style;
       devShell =
         system:
@@ -91,14 +95,12 @@
     in
     {
       devShells = forAllSystems devShell;
-
+      apps =
+        nixpkgs.lib.genAttrs linuxSystems mkLinuxApps // nixpkgs.lib.genAttrs darwinSystems mkDarwinApps;
       darwinConfigurations = {
         macos = darwin.lib.darwinSystem {
           system = "aarch64-darwin";
-          specialArgs = {
-            user = user;
-          };
-
+          specialArgs = { user = user; } // inputs;
           modules = [
             home-manager.darwinModules.home-manager
             {
@@ -134,10 +136,7 @@
         system:
         nixpkgs.lib.nixosSystem {
           inherit system;
-          specialArgs = {
-            user = user;
-          };
-
+          specialArgs = { user = user;} // inputs;
           modules = [
             disko.nixosModules.disko
             home-manager.nixosModules.home-manager
@@ -151,7 +150,6 @@
                 useUserPackages = true;
                 users.${user.name} = import ./modules/nixos/home-manager.nix;
               };
-
               environment.systemPackages = [
                 ghostty.packages.x86_64-linux.default
               ];

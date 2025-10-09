@@ -16,15 +16,12 @@
         "pwd"
       ];
     };
-
     shellAliases = {
       cat = "bat";
       ls = "ls --color=auto";
     };
-
     sessionVariables = {
       EDITOR = "nvim";
-
       # tfenv stuff
       TFENV_CONFIG_DIR = "$HOME/.local/share/tfenv";
       PATH = "$HOME/.tfenv/bin:$PATH";
@@ -34,8 +31,7 @@
   starship = {
     enable = true;
     enableZshIntegration = true;
-
-    # TOML mappings from https://starship.rs/config
+    # these are TOML mappings from https://starship.rs/config
     settings = {
       add_newline = true;
       scan_timeout = 10;
@@ -55,7 +51,6 @@
         symbol = "[△](bold italic bright-blue)";
         format = " [$branch(:$remote_branch)]($style)";
         style = "italic bright-blue";
-
         only_attached = true;
         truncation_length = 11;
         truncation_symbol = "⋯";
@@ -106,15 +101,22 @@
     enable = true;
     package = null;
     settings = {
-      copy-on-select = true;
-      clipboard-paste-protection = false;
-      cursor-style = "block";
-      font-size = 18;
+      font-size = 14;
       font-family = "JetBrainsMono Nerd Font Mono";
-      macos-titlebar-proxy-icon = "hidden";
+      theme = "MaterialDarker";
+      cursor-style = "block";
       shell-integration-features = "no-cursor";
-      theme = "Solarized Dark Higher Contrast";
+      clipboard-paste-protection = false;
+      copy-on-select = true;
       term = "xterm-256color";
+      macos-titlebar-proxy-icon = "hidden";
+      config-file = "~/.config/ghostty/extra"; # for testing shaders atm
+      command = "/Users/${user.name}/.nix-profile/bin/zsh";
+      keybind = [
+        "cmd+shift+d=close_surface"
+        "cmd+shift+e=new_split:down"
+        "cmd+shift+o=new_split:right"
+      ];
     };
   };
 
@@ -253,7 +255,6 @@
       controlPath = "~/.ssh/master-%r@%n:%p";
       controlPersist = "no";
     };
-
     extraConfig = lib.mkMerge [
       ''
         Host github.com
@@ -261,45 +262,12 @@
           IdentitiesOnly yes
       ''
       (lib.mkIf pkgs.stdenv.hostPlatform.isLinux ''
-        IdentityFile /home/${user.name}/.ssh/id_github
+        IdentityFile /home/${user.name}/.ssh/id_ed25519
       '')
       (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin ''
-        IdentityFile /Users/${user.name}/.ssh/id_rsa
+        IdentityFile /Users/${user.name}/.ssh/id_ed25519
       '')
     ];
   };
-
-  vscode = {
-    enable = true;
-    profiles.default = {
-      enableUpdateCheck = false;
-
-      # if extensions are messed up, rm ~/.vscode and build-switch
-      extensions = with pkgs.vscode-extensions; [
-        bbenoist.nix
-        hashicorp.terraform
-        #ms-python.python # build issue
-        vscodevim.vim
-        yzhang.markdown-all-in-one
-      ];
-
-      # https://code.visualstudio.com/docs/getstarted/settings#_default-settings
-      userSettings = {
-        # fonts
-        "editor.fontFamily" = "JetBrains Mono";
-        "terminal.integrated.fontFamily" = "JetBrainsMono Nerd Font Mono";
-
-        # colorscheme
-        "workbench.colorTheme" = "Solarized Dark";
-
-        # git
-        "diffEditor.ignoreTrimWhitespace" = false;
-        "git.confirmSync" = false;
-
-        # terminal behavior
-        "terminal.integrated.copyOnSelection" = true;
-        "terminal.integrated.defaultProfile.osx" = "zsh";
-      };
-    };
-  };
 }
+// import ./vscode { inherit pkgs lib; }

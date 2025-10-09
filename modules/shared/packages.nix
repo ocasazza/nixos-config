@@ -13,7 +13,6 @@ with pkgs;
   sqlite
   wget
   zip
-
   # networking
   #ipcalc
 
@@ -23,10 +22,9 @@ with pkgs;
   #gnupg
   #libfido2
   #pinentry
-
   # Cloud-related tools and SDKs
-  docker
-  docker-compose
+  #docker
+  #docker-compose
   #awscli
   #google-cloud-sdk
   #qemu
@@ -35,25 +33,37 @@ with pkgs;
   #podman-tui
   #dive
   #podman-desktop
-
   # Media-related packages
   dejavu_fonts
+  ffmpeg
   fd
   font-awesome
-  jetbrains-mono
+  nerd-fonts._0xproto
+  nerd-fonts.droid-sans-mono
   nerd-fonts.jetbrains-mono
-
   # Text and terminal utilities
   htop
-  #iftop
+  iftop
   jq
+  starship
   tree
   tmux
   unzip
   tio # serial console
   silver-searcher
-
-  # devtools
+  vscode
+  crush
+  # lang tools
+  cargo
+  clippy
+  go
+  wasm-pack
+  nodejs
+  python313
+  python313Packages.virtualenv
+  python313Packages.pip
+  ansible
+  ansible-lint
   direnv
   devenv
 
@@ -62,7 +72,6 @@ with pkgs;
   python313Packages.virtualenv # globally install virtualenv
   ansible
   #ansible-lint
-
   # Terraform
   #terraform-ls
   #terraform-docs
