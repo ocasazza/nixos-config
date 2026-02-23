@@ -5,67 +5,6 @@
   ...
 }:
 {
-  zed-editor = {
-    enable = true;
-    installRemoteServer = true;
-    extensions = [
-      "catppuccin"
-      "github-actions"
-      "nix"
-      "opentofu"
-    ];
-    extraPackages = [
-      pkgs.tofu-ls
-      pkgs.gemini-cli-bin
-    ];
-    userSettings = {
-      auto_signature_help = true; # not sure about this one yet
-      buffer_line_height = "standard";
-      buffer_font_size = 16;
-      tab_size = 4;
-      ui_font_size = 16;
-      use_system_prompts = false;
-      use_system_path_prompts = false;
-      vim_mode = false;
-      agent = {
-        default_model = {
-          provider = "copilot_chat";
-          model = "gpt-5-mini";
-        };
-        # inline_alternatives = [
-        # ];
-      };
-      features = {
-        copilot = true;
-        edit_prodiction_provider = "copilot";
-      };
-      gutter = {
-        min_line_number_digits = 0;
-        line_numbers = true;
-      };
-      indent_guides = {
-        coloring = "indent_aware";
-        active_line_width = 2;
-        line_width = 1;
-      };
-      project_panel = {
-        hide_root = true;
-        hide_hidden = true;
-        entry_spacing = "standard";
-        default_width = 180.0;
-      };
-      theme = {
-        mode = "system";
-        light = "Catppuccin Frappé";
-        dark = "Catppuccin Mocha";
-      };
-      telemetry = {
-        diagnostics = false;
-        metrics = false;
-      };
-    };
-  };
-
   zsh = {
     enable = true;
     history = {
@@ -160,7 +99,7 @@
 
   ghostty = {
     enable = true;
-    # package = null;
+    package = null;
     settings = {
       font-size = 14;
       font-family = "JetBrainsMono Nerd Font Mono";
@@ -209,43 +148,6 @@
       };
     };
   };
-
-  nushell = {
-    enable = true;
-    # The config.nu can be anywhere you want if you like to edit your Nushell with Nu
-    configFile.source = ./.config.nu;
-    # for editing directly to config.nu
-    extraConfig = ''
-      let carapace_completer = {|spans|
-        carapace $spans.0 nushell ...$spans | from json
-      }
-      $env.config = {
-        show_banner: false,
-        completions: {
-          case_sensitive: false # case-sensitive completions
-          quick: true # set to false to prevent auto-selecting completions
-          partial: true # set to false to prevent partial filling of the prompt
-          algorithm: "fuzzy" # prefix or fuzzy
-          external: {
-            # set to false to prevent nushell looking into $env.PATH to find more suggestions
-            enable: true
-            # set to lower can improve completion performance at the cost of omitting some options
-            max_results: 100
-            completer: $carapace_completer # check 'carapace_completer'
-          }
-        }
-      }
-      $env.PATH = ($env.PATH | split row (char esep) | prepend /home/myuser/.apps | append /usr/bin/env)
-    '';
-    # shellAliases = {
-    #   vi = "hx";
-    #   vim = "hx";
-    #   nano = "hx";
-    # };
-  };
-
-  carapace.enable = true;
-  carapace.enableNushellIntegration = true;
 
   gh = {
     enable = true;
@@ -315,12 +217,6 @@
         Host github.com
           Hostname github.com
           IdentitiesOnly yes
-
-        Host desk-nxst-*
-          CanonicalizeHostname yes
-          CanonicalDomains schrodinger.com
-          CanonicalizeMaxDots 1
-          IdentitiesOnly yes
       ''
       (lib.mkIf pkgs.stdenv.hostPlatform.isLinux ''
         IdentityFile /home/${user.name}/.ssh/id_ed25519
@@ -332,4 +228,3 @@
   };
 }
 // import ./vscode { inherit pkgs lib; }
-# // import ./zed.nix { inherit pkgs lib; }

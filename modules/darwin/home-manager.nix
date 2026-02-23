@@ -7,19 +7,21 @@
 }:
 
 let
-  sharedFiles = import ../shared/files/default.nix { inherit config pkgs user; };
-  additionalFiles = import ./files/default.nix { inherit config pkgs user; };
+  sharedFiles = import ../shared/files.nix { inherit config pkgs user; };
+  additionalFiles = import ./files.nix { inherit config pkgs user; };
 in
 {
   imports = [
     ./dock
   ];
+
   users.users.${user.name} = {
     name = "${user.name}";
     home = "/Users/${user.name}";
     isHidden = false;
     shell = pkgs.zsh;
   };
+
   homebrew = {
     enable = true;
     brewPrefix = "/opt/homebrew/bin";
@@ -34,10 +36,15 @@ in
     };
     taps = [];
     casks = [
-
-      "google-chrome"
-      "tigervnc-viewer"
+      # Development Tools
+      "zoc"
+      "ghostty"
+      # Communication Tools
       "meetingbar"
+      "notion"
+      # Browsers
+      "google-chrome"
+      # mac stuff
       "hiddenbar"
     ];
     brews = [];
@@ -47,6 +54,7 @@ in
       "Fresco" = 1251572132;
     };
   };
+
   home-manager = {
     useGlobalPkgs = true;
     users.${user.name} =
@@ -87,6 +95,8 @@ in
     entries = [
       { path = "/Applications/Google Chrome.app/"; }
       { path = "/Applications/Ghostty.app/"; }
+      { path = "/Applications/Visual Studio Code.app/"; }
+      { path = "/Applications/Notion.app/"; }
       {
         path = "/Users/${user.name}/Downloads";
         options = "--display stack --view list";

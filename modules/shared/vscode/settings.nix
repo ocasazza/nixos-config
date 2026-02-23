@@ -1,7 +1,6 @@
 { pkgs, lib }:
 
 {
-  "workbench.startupEditor" = "none";
   # Editor settings - Neovim-like preferences
   "editor.fontFamily" = "JetBrains Mono";
   "editor.fontSize" = 14;
@@ -29,13 +28,9 @@
   "terminal.integrated.fontSize" = 13;
   "terminal.integrated.lineHeight" = 1.2;
 
-  # These are pretty all pretty nice
-  # "workbench.colorTheme" = "Functional Contrast";
-  # "workbench.colorTheme" = "Sublime Material Theme - Dark";
-  # "workbench.colorTheme" = "Material Dark Soda";
-  # "workbench.colorTheme" = "monokai-charcoal (purple)",
-
-  "workbench.colorTheme"= "Broken Moon";
+  # Workbench settings - Minimal/Terminal-like UI
+  # "workbench.colorTheme" = "Functional Contrast";  # Good for terminal users
+  "workbench.colorTheme" = "Sublime Material Theme - Dark";
 
   # "workbench.iconTheme" = "material-icon-theme";
   "workbench.editor.enablePreview" = false;  # More decisive file opening like Neovim
@@ -119,5 +114,4 @@
   "direnv.restart.automatic" = true;
   # "editor.experimentalGpuAcceleration"= "on";
   # "terminal.integrated.gpuAcceleration"= "on";
-
 }

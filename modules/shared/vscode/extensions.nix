@@ -11,12 +11,6 @@ with pkgs.vscode-extensions; [
   # saoudrizwan.claude-dev
 ] ++ pkgs.vscode-utils.extensionsFromVscodeMarketplace [
   {
-    name = "theme-material-dark-soda";
-    publisher = "jbw91";
-    version = "1.3.1";
-    sha256 = "sha256-lpWLw9gYbQULBRE9VbNdYaI+NzxOiQ8/4bW2sWoYNxo=";
-  }
-  {
     name = "claude-dev";
     publisher = "saoudrizwan";
     version = "3.28.2";
@@ -51,17 +45,5 @@ with pkgs.vscode-extensions; [
     publisher = "joshumcode";
     version = "2.0.0";
     sha256 = "sha256-PMfGxb4fTww9gi9+U4R5zx8jEwZDJLbWPaswMoQVt6M=";
-  }
-  {
-    name = "brokenmoon";
-    publisher = "BradyPhillips";
-    version = "0.0.3";
-    sha256 = "sha256-MgZvEf8VPUTsRAr8d9qKX2kbHyiQxK0efA28L48TCog=";
-  }
-  {
-    name = "moon-purple";
-    publisher = "Imagineee";
-    version = "1.0.3";
-    sha256 = "sha256-7ml5fnvKPoY9Ks3F/Lrq3iSU6GEC65+t9nu0AZhH9C4=";
   }
 ]

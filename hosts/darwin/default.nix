@@ -5,23 +5,12 @@
   ...
 }:
 
-let
-  wallpaper = ../../modules/darwin/files/AFRC2017-0233-007-large.jpg;
-in
 {
   imports = [
     ../../modules/darwin/home-manager.nix
     ../../modules/shared
     ../../modules/shared/cachix
   ];
-
-  # Enable autopkgserver for Fleet GitOps package building
-  services.autopkgserver.enable = true;
-
-  # Set desktop wallpaper
-  system.activationScripts.postActivation.text = ''
-    sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"'
-  '';
 
   nix = {
     package = pkgs.nixVersions.latest;

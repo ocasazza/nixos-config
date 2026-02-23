@@ -13,7 +13,6 @@ with pkgs;
   sqlite
   wget
   zip
-  # tigervnc
   # networking
   #ipcalc
 
@@ -24,10 +23,10 @@ with pkgs;
   #libfido2
   #pinentry
   # Cloud-related tools and SDKs
-  docker
-  docker-compose
-  awscli
-  google-cloud-sdk
+  #docker
+  #docker-compose
+  #awscli
+  #google-cloud-sdk
   #qemu
   #podman
   #podman-compose
@@ -53,7 +52,7 @@ with pkgs;
   tio # serial console
   silver-searcher
   vscode
-  crush
+  # crush
   # lang tools
   cargo
   clippy
@@ -67,10 +66,11 @@ with pkgs;
   ansible-lint
   direnv
   devenv
+  # ghostty
+  # Python
   python313
   python313Packages.virtualenv # globally install virtualenv
-  cargo
-  trunk
+  ansible
   #ansible-lint
   # Terraform
   #terraform-ls
@@ -81,6 +81,4 @@ with pkgs;
   nixfmt-rfc-style
   nix-tree # $nix-tree .#darwinConfigurations.macos.system
   nh
-  zed
-  gemini-cli-bin
 ]

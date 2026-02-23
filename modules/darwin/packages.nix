@@ -7,9 +7,6 @@ in
 shared-packages
 ++ [
   dockutil
-  libvirt
   gnugrep
   ghostty-bin
-  python313Packages.docutils
-  claude-code
 ]
