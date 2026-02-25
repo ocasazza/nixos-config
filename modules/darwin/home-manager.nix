@@ -2,13 +2,12 @@
   config,
   pkgs,
   user,
-  inputs,
   ...
 }:
 
 let
-  sharedFiles = import ../shared/files.nix { inherit config pkgs user; };
-  additionalFiles = import ./files.nix { inherit config pkgs user; };
+  sharedFiles = import ../shared/files { inherit config pkgs user; };
+  additionalFiles = import ./files { inherit config pkgs user; };
 in
 {
   imports = [
@@ -24,7 +23,7 @@ in
 
   homebrew = {
     enable = true;
-    brewPrefix = "/opt/homebrew/bin";
+    prefix = "/opt/homebrew";
     global = {
       brewfile = true;
       autoUpdate = false;
@@ -34,20 +33,13 @@ in
       upgrade = false;
       cleanup = "zap";
     };
-    taps = [];
+    taps = [ ];
     casks = [
-      # Development Tools
-      "zoc"
       "ghostty"
-      # Communication Tools
       "meetingbar"
-      "notion"
-      # Browsers
-      "google-chrome"
-      # mac stuff
       "hiddenbar"
     ];
-    brews = [];
+    brews = [ ];
     # $ nix shell nixpkgs#mas
     # $ mas search <app name>
     masApps = {
@@ -79,7 +71,12 @@ in
         };
         programs = lib.mkMerge [
           (import ../shared/home-manager.nix {
-            inherit config pkgs lib user;
+            inherit
+              config
+              pkgs
+              lib
+              user
+              ;
           })
           {
             # Override ghostty to use the binary package from Nix

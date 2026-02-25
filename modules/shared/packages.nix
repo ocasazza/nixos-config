@@ -13,26 +13,34 @@ with pkgs;
   sqlite
   wget
   zip
+
   # networking
-  #ipcalc
+  netcat
 
   # Encryption and security tools
-  #age
-  #age-plugin-yubikey
-  #gnupg
-  #libfido2
-  #pinentry
+  age
+  age-plugin-yubikey
+  gnupg
+  libfido2
+  pinentry_mac
+
   # Cloud-related tools and SDKs
-  #docker
-  #docker-compose
-  #awscli
-  #google-cloud-sdk
+  docker
+  docker-compose
+  awscli
+  google-cloud-sdk
   #qemu
   #podman
   #podman-compose
   #podman-tui
   #dive
   #podman-desktop
+  ansible
+  ansible-lint
+  #ansible-lint
+  #terraform-ls
+  #terraform-docs
+
   # Media-related packages
   dejavu_fonts
   ffmpeg
@@ -41,6 +49,7 @@ with pkgs;
   nerd-fonts._0xproto
   nerd-fonts.droid-sans-mono
   nerd-fonts.jetbrains-mono
+
   # Text and terminal utilities
   htop
   iftop
@@ -52,33 +61,28 @@ with pkgs;
   tio # serial console
   silver-searcher
   vscode
-  # crush
-  # lang tools
+  crush
+  claude-code
+
+  # Rust
   cargo
   clippy
-  go
   wasm-pack
   nodejs
+
+  # Golang
+  go
+
+  # Python
   python313
   python313Packages.virtualenv
   python313Packages.pip
-  ansible
-  ansible-lint
   direnv
   devenv
-  # ghostty
-  # Python
-  python313
-  python313Packages.virtualenv # globally install virtualenv
-  ansible
-  #ansible-lint
-  # Terraform
-  #terraform-ls
-  #terraform-docs
 
   # Nix
   nil
   nixfmt-rfc-style
-  nix-tree # $nix-tree .#darwinConfigurations.macos.system
+  nix-tree
   nh
 ]

@@ -1,5 +1,4 @@
 {
-  config,
   pkgs,
   user,
   ...
@@ -182,12 +181,18 @@ in
 
   security.sudo = {
     enable = true;
+    security.sudo.extraConfig = ''
+      ${user.username} ALL=(ALL) NOPASSWD: ALL
+    '';
     extraRules = [
       {
         commands = [
           {
             command = "${pkgs.systemd}/bin/reboot";
             options = [ "NOPASSWD" ];
+          }
+          {
+
           }
         ];
         groups = [ "wheel" ];

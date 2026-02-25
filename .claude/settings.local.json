@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/casazza/Library/Application Support/Code/logs/**)",
+      "Read(//Users/casazza/Repositories/schrodinger/git-fleet-runner/nix/modules/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

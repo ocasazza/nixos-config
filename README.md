@@ -82,4 +82,3 @@ You may need to configure git for the root to trust this directory:
 sudo su -
 git config --system safe.directory = "/Users/ /nixos-config"
 ```
-

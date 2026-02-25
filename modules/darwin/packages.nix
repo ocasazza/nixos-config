@@ -9,4 +9,5 @@ shared-packages
   dockutil
   gnugrep
   ghostty-bin
+  yubikey-manager
 ]

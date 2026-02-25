@@ -1,4 +1,5 @@
 ## Layout
+
 ```
 .
 ├── config             # Config files not written in Nix
