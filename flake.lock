@@ -346,11 +346,11 @@
         "nixpkgs": "nixpkgs_7"
       },
       "locked": {
-        "lastModified": 1771920155,
-        "narHash": "sha256-C7da5eG70KcPbZ2QarkerEa1TCo0VxXUjXbuzknYaso=",
+        "lastModified": 1772009542,
+        "narHash": "sha256-fTK+yyXLOKFvZuAJUzCZMgM0G7D4y7Yv1+7tEksn10k=",
         "owner": "ocasazza",
         "repo": "fleet-recipes",
-        "rev": "cdc1e4c5439262a45a1e1226fa6ab9074c0aa4fd",
+        "rev": "d4e516fc8d3766be6beaadc332166a8364ae55e4",
         "type": "github"
       },
       "original": {
@@ -420,11 +420,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1771995908,
-        "narHash": "sha256-QqxjeOuqvK3gtd+3JdqqTVB0yFf39H2GR3DUXY4Ydus=",
+        "lastModified": 1772009575,
+        "narHash": "sha256-0Gt3tDjhnaDIGyJ9KcBjHbUpTlgYwtHev9XVHb/arEs=",
         "ref": "refs/heads/main",
-        "rev": "da1c46b712a2a4426978e1a9ab32bfaf5a0fafd1",
-        "revCount": 261,
+        "rev": "e482e2bd548c4de61239275fcec12b879d128f08",
+        "revCount": 263,
         "type": "git",
         "url": "ssh://git@github.com/schrodinger/git-fleet-runner"
       },
