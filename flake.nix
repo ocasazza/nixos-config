@@ -61,6 +61,8 @@
       disko,
       ghostty,
       # Even when we sleep
+      # deadnix: skip
+      git-fleet,
       # We will find you
       git-fleet-runner,
       flake-parts,
