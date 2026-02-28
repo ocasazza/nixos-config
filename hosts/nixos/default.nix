@@ -155,7 +155,7 @@ in
 
     podman = {
       enable = true;
-      dockerCompat = true;
+      #dockerCompat = true;
       defaultNetwork.settings.dns_enabled = true;
     };
   };
@@ -164,11 +164,11 @@ in
     ${user.name} = {
       isNormalUser = true;
       extraGroups = [
-        "wheel" # Enable ‘sudo’ for the user.
+        "wheel" # Enable 'sudo' for the user.
         "networkmanager"
         "video" # hotplug devices and thunderbolt
         "dialout" # TTY access
-        "docker"
+        #"docker"
       ];
       shell = pkgs.zsh;
       openssh.authorizedKeys.keys = keys;

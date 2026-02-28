@@ -67,6 +67,7 @@
       git-fleet-runner,
       flake-parts,
       git-hooks-nix,
+      ...
     }:
     let
       user = {
@@ -111,44 +112,50 @@
         };
 
       flake = {
-        darwinConfigurations = {
-          macos = darwin.lib.darwinSystem {
-            system = "aarch64-darwin";
-            specialArgs = {
-              user = user;
-            }
-            // inputs;
-            modules = [
-              home-manager.darwinModules.home-manager
-              {
-                home-manager = {
-                  extraSpecialArgs = {
-                    user = user;
-                    inherit inputs;
-                  };
-                  useGlobalPkgs = true;
-                  useUserPackages = true;
-                };
+        darwinConfigurations =
+          let
+            macosConfig = darwin.lib.darwinSystem {
+              system = "aarch64-darwin";
+              specialArgs = {
+                user = user;
               }
-              nix-homebrew.darwinModules.nix-homebrew
-              {
-                nix-homebrew = {
-                  enable = true;
-                  user = user.name;
-                  taps = {
-                    "homebrew/homebrew-core" = homebrew-core;
-                    "homebrew/homebrew-cask" = homebrew-cask;
-                    "homebrew/homebrew-bundle" = homebrew-bundle;
+              // inputs;
+              modules = [
+                home-manager.darwinModules.home-manager
+                {
+                  home-manager = {
+                    extraSpecialArgs = {
+                      user = user;
+                      inherit inputs;
+                    };
+                    useGlobalPkgs = true;
+                    useUserPackages = true;
                   };
-                  mutableTaps = false;
-                  autoMigrate = true;
-                };
-              }
-              git-fleet-runner.darwinModules.autopkgserver
-              ./hosts/darwin
-            ];
+                }
+                # Homebrew managed by Fleet MDM instead of nix-darwin
+                nix-homebrew.darwinModules.nix-homebrew
+                {
+                  nix-homebrew = {
+                    enable = false; # Disabled: managed by Fleet MDM
+                    user = user.name;
+                    taps = {
+                      "homebrew/homebrew-core" = homebrew-core;
+                      "homebrew/homebrew-cask" = homebrew-cask;
+                      "homebrew/homebrew-bundle" = homebrew-bundle;
+                    };
+                    mutableTaps = false;
+                    autoMigrate = true;
+                  };
+                }
+                git-fleet-runner.darwinModules.autopkgserver
+                ./hosts/darwin
+              ];
+            };
+          in
+          {
+            macos = macosConfig;
+            CK2Q9LN7PM-MBA = macosConfig; # Alias for hostname
           };
-        };
 
         nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
           system:

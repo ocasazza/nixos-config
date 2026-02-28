@@ -27,6 +27,20 @@
     when = "terminalFocus";
   }
 
+  # Disable markdown extension commands that may not exist or conflict
+  {
+    key = "backspace";
+    command = "-markdown.extension.onBackspaceKey";
+  }
+  {
+    key = "enter";
+    command = "-markdown.extension.onEnterKey";
+  }
+  {
+    key = "tab";
+    command = "-markdown.extension.onTabKey";
+  }
+
   # Disable all conflicting keybindings to avoid conflicts with Vim mode
   # This extensive list ensures Vim mode works properly without interference
   {

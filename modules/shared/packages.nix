@@ -25,8 +25,8 @@ with pkgs;
   pinentry_mac
 
   # Cloud-related tools and SDKs
-  docker
-  docker-compose
+  #docker
+  #docker-compose
   awscli
   google-cloud-sdk
   #qemu

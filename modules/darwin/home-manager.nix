@@ -21,30 +21,35 @@ in
     shell = pkgs.zsh;
   };
 
+  # Homebrew managed by Fleet MDM instead of nix-darwin
   homebrew = {
-    enable = true;
-    prefix = "/opt/homebrew";
-    global = {
-      brewfile = true;
-      autoUpdate = false;
-    };
-    onActivation = {
-      autoUpdate = false;
-      upgrade = false;
-      cleanup = "zap";
-    };
-    taps = [ ];
-    casks = [
-      "ghostty"
-      "meetingbar"
-      "hiddenbar"
-    ];
-    brews = [ ];
-    # $ nix shell nixpkgs#mas
-    # $ mas search <app name>
-    masApps = {
-      "Fresco" = 1251572132;
-    };
+    enable = false; # Disabled: managed by Fleet MDM
+    # prefix = "/opt/homebrew";
+    # global = {
+    #   brewfile = true;
+    #   autoUpdate = false;
+    # };
+    # onActivation = {
+    #   autoUpdate = false;
+    #   upgrade = false;
+    #   cleanup = "zap";
+    # };
+    # taps = [
+    #   "vjeantet/tap"
+    # ];
+    # casks = [
+    #   "ghostty"
+    #   "meetingbar"
+    #   "hiddenbar"
+    # ];
+    # brews = [
+    #   "vjeantet/tap/alerter"
+    # ];
+    # # $ nix shell nixpkgs#mas
+    # # $ mas search <app name>
+    # masApps = {
+    #   "Fresco" = 1251572132;
+    # };
   };
 
   home-manager = {
