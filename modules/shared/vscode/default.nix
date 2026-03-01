@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, ... }:
 {
   vscode = {
     enable = true;
@@ -6,7 +6,7 @@
       enableUpdateCheck = true; # Allow VSCode to auto-update
       enableExtensionUpdateCheck = true; # Allow extension update checks
       # Import modular configurations
-      userSettings = import ./settings.nix { inherit pkgs lib; };
+      userSettings = import ./settings.nix { inherit pkgs; };
       extensions = import ./extensions.nix { inherit pkgs; };
       keybindings = import ./keybindings.nix;
     };
