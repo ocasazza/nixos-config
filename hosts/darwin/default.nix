@@ -50,6 +50,18 @@ in
 
   environment.systemPackages = with pkgs; import ../../modules/shared/packages.nix { inherit pkgs; };
 
+  # Auto-load direnv for Claude Code (avoids needing nix develop)
+  environment.etc."profile.d/claude-direnv.sh" = {
+    text = ''
+      if command -v direnv >/dev/null 2>&1; then
+        if [ -n "$CLAUDECODE" ]; then
+          eval "$(DIRENV_LOG_FORMAT= direnv export bash)"
+        fi
+      fi
+    '';
+    mode = "0755";
+  };
+
   security.pam.services.sudo_local = {
     enable = true;
     reattach = true;
