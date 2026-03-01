@@ -51,7 +51,15 @@ in
   environment.systemPackages = with pkgs; import ../../modules/shared/packages.nix { inherit pkgs; };
 
   # Auto-load direnv for Claude Code (avoids needing nix develop)
-  environment.etc."profile.d/claude-direnv.sh".text = ''
+  programs.zsh.interactiveShellInit = ''
+    if command -v direnv >/dev/null 2>&1; then
+      if [ -n "$CLAUDECODE" ]; then
+        eval "$(DIRENV_LOG_FORMAT= direnv export zsh)"
+      fi
+    fi
+  '';
+
+  programs.bash.interactiveShellInit = ''
     if command -v direnv >/dev/null 2>&1; then
       if [ -n "$CLAUDECODE" ]; then
         eval "$(DIRENV_LOG_FORMAT= direnv export bash)"
