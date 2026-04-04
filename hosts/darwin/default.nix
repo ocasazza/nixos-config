@@ -26,27 +26,30 @@ in
     sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"'
   '';
 
-  nix = {
-    package = pkgs.nixVersions.latest;
-    settings.trusted-users = [
-      "@admin"
-      "${user.name}"
-    ];
+  # Determinate Nix manages the daemon — disable nix-darwin's Nix management.
+  nix.enable = false;
 
-    gc = {
-      automatic = true;
-      interval = {
-        Weekday = 0;
-        Hour = 2;
-        Minute = 0;
-      };
-      options = "--delete-older-than 30d";
-    };
+  # nix = {
+  #   package = pkgs.nixVersions.latest;
+  #   settings.trusted-users = [
+  #     "@admin"
+  #     "${user.name}"
+  #   ];
 
-    extraOptions = ''
-      experimental-features = nix-command flakes
-    '';
-  };
+  #   gc = {
+  #     automatic = true;
+  #     interval = {
+  #       Weekday = 0;
+  #       Hour = 2;
+  #       Minute = 0;
+  #     };
+  #     options = "--delete-older-than 30d";
+  #   };
+
+  #   extraOptions = ''
+  #     experimental-features = nix-command flakes
+  #   '';
+  # };
 
   environment.systemPackages = with pkgs; import ../../modules/shared/packages.nix { inherit pkgs; };
 
@@ -64,12 +67,15 @@ in
     fi
   '';
 
-  security.pam.services.sudo_local = {
-    enable = true;
-    reattach = true;
-    touchIdAuth = true;
-    watchIdAuth = true;
-  };
+  security.pam.services.sudo_local.enable = false;
+
+  # BeyondTrust blocks /etc/pam.d writes
+  # security.pam.services.sudo_local = {
+  #   enable = true;
+  #   reattach = true;
+  #   touchIdAuth = true;
+  #   watchIdAuth = true;
+  # };
 
   system = {
     stateVersion = 5;
