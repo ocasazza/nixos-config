@@ -183,8 +183,6 @@
 
   git = {
     enable = true;
-    userName = user.fullName;
-    userEmail = user.email;
     ignores = [
       ".DS_Store"
       ".swp"
@@ -193,7 +191,9 @@
     lfs = {
       enable = true;
     };
-    extraConfig = {
+    settings = {
+      user.name = user.fullName;
+      user.email = user.email;
       init.defaultBranch = "main";
       pull.rebase = true;
       rebase.autoStash = true;
