@@ -52,10 +52,4 @@ with pkgs.vscode-extensions;
     version = "1.0.3";
     sha256 = "sha256-7ml5fnvKPoY9Ks3F/Lrq3iSU6GEC65+t9nu0AZhH9C4=";
   }
-  {
-    name = "monokai-charcoal-high-contrast";
-    publisher = "74th";
-    version = "3.5.0";
-    sha256 = "sha256-2r+dxtnVR7iRuxI0ZYABkvpuk43X/mxXPZ/O34ra9Kk=";
-  }
 ]

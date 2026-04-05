@@ -84,12 +84,15 @@ in
     fi
   '';
 
-  security.pam.services.sudo_local = {
-    enable = true;
-    reattach = true;
-    touchIdAuth = true;
-    watchIdAuth = true;
-  };
+  security.pam.services.sudo_local.enable = false;
+
+  # BeyondTrust blocks /etc/pam.d writes
+  # security.pam.services.sudo_local = {
+  #   enable = true;
+  #   reattach = true;
+  #   touchIdAuth = true;
+  #   watchIdAuth = true;
+  # };
 
   system = {
     stateVersion = 5;
