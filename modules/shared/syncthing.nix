@@ -2,28 +2,27 @@
 # Continuous file synchronization across all machines running nixos-config.
 #
 # Each machine is uniquely identified by its hostname. Syncthing generates
-# a certificate/key pair on first run (stored in ~/.config/syncthing/).
+# a certificate/key pair on first run (stored in the syncthing data dir).
 # The device ID is derived from this certificate.
 #
-# Setup for a new machine:
-#   1. Activate nix-darwin (nh darwin switch .#macos)
-#   2. Syncthing starts automatically as a launchd/systemd user service
-#   3. The Syncthing menubar icon appears (macOS) for status and quick access
-#   4. Open http://localhost:8384 in a browser to pair devices
-#   5. Add your other devices by device ID
+# Pairing:
+#   On each machine, after activation, run:
+#     syncthing cli show system | grep myID
+#   Then add the device ID on the other machine via the web UI at
+#   http://localhost:8384 or via:
+#     syncthing cli config devices add --device-id <ID> --name <hostname>
 #
 # Default sync folder: ~/Repositories
-{
-  pkgs,
-  lib,
-  ...
-}:
+{ ... }:
 {
   services.syncthing = {
     enable = true;
 
-    overrideFolders = false;
-    overrideDevices = false;
+    # Declarative config is authoritative — removes folders/devices
+    # not defined here. Use the web UI to add folders/devices, then
+    # mirror them here to persist across rebuilds.
+    overrideFolders = true;
+    overrideDevices = true;
 
     settings = {
       options = {
@@ -42,9 +41,4 @@
       };
     };
   };
-
-  # Native macOS menubar app for Syncthing status and quick access
-  home.packages = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-    pkgs.syncthing-macos
-  ];
 }
