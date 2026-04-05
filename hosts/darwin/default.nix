@@ -1,6 +1,7 @@
 {
   pkgs,
   user,
+  config,
   ...
 }:
 
@@ -26,36 +27,52 @@ in
     sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"'
   '';
 
-  # Determinate Nix manages the daemon — disable nix-darwin's Nix management.
+  # Load Fleet secrets into user's shell environment
+  # Creates a .fleet_secrets file in the user's home directory
+  system.activationScripts.fleetSecrets.text = ''
+    echo "Loading Fleet MDM secrets..."
+    FLEET_SECRETS_FILE="${config.sops.secrets.fleet.path}"
+    USER_ENV_FILE="/Users/${user.name}/.fleet_secrets"
+
+    if [ -f "$FLEET_SECRETS_FILE" ]; then
+      cp "$FLEET_SECRETS_FILE" "$USER_ENV_FILE"
+      chown ${user.name}:staff "$USER_ENV_FILE"
+      chmod 600 "$USER_ENV_FILE"
+      echo "Fleet secrets loaded to $USER_ENV_FILE"
+    else
+      echo "Warning: Fleet secrets file not found at $FLEET_SECRETS_FILE"
+    fi
+  '';
+
+  # Determinate Nix manages the daemon, nix binary, and nix.conf.
+  # Don't let nix-darwin override it with a nixpkgs nix package.
+  # See: https://docs.determinate.systems/getting-started/individual-install/#with-nix-darwin
   nix.enable = false;
 
-  # nix = {
-  #   package = pkgs.nixVersions.latest;
-  #   settings.trusted-users = [
-  #     "@admin"
-  #     "${user.name}"
-  #   ];
-
-  #   gc = {
-  #     automatic = true;
-  #     interval = {
-  #       Weekday = 0;
-  #       Hour = 2;
-  #       Minute = 0;
-  #     };
-  #     options = "--delete-older-than 30d";
-  #   };
-
-  #   extraOptions = ''
-  #     experimental-features = nix-command flakes
-  #   '';
-  # };
-
   environment.systemPackages = with pkgs; import ../../modules/shared/packages.nix { inherit pkgs; };
+
+  # Set system-wide environment variables
+  environment.variables = {
+    # NH Darwin flake configuration
+    NH_DARWIN_FLAKE = ".#darwinConfigurations.macos";
+    # SOPS key file location
+    SOPS_AGE_KEY_FILE = "/Users/${user.name}/.config/sops/age/keys.txt";
+    # Nix configuration
+    NIXPKGS_ALLOW_UNFREE = "1";
+    # Git SSH configuration
+    GIT_SSH_COMMAND = "ssh -i /Users/${user.name}/.ssh/id_ed25519 -o IdentitiesOnly=yes";
+  };
 
   # Auto-load direnv for Claude Code (avoids needing nix develop)
   # Uses programs.zsh.shellInit for all zsh shells (interactive and non-interactive)
   programs.zsh.shellInit = ''
+    # Load Fleet MDM secrets
+    if [ -f "$HOME/.fleet_secrets" ]; then
+      set -a
+      source "$HOME/.fleet_secrets"
+      set +a
+    fi
+
     if command -v direnv >/dev/null 2>&1; then
       if [ -n "$CLAUDECODE" ]; then
         eval "$(direnv hook zsh)"
@@ -67,15 +84,12 @@ in
     fi
   '';
 
-  security.pam.services.sudo_local.enable = false;
-
-  # BeyondTrust blocks /etc/pam.d writes
-  # security.pam.services.sudo_local = {
-  #   enable = true;
-  #   reattach = true;
-  #   touchIdAuth = true;
-  #   watchIdAuth = true;
-  # };
+  security.pam.services.sudo_local = {
+    enable = true;
+    reattach = true;
+    touchIdAuth = true;
+    watchIdAuth = true;
+  };
 
   system = {
     stateVersion = 5;

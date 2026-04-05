@@ -6,16 +6,13 @@
     home-manager.url = "github:nix-community/home-manager";
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks-nix.url = "github:cachix/git-hooks.nix";
-    # Disk partitioning
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Terminal
     ghostty = {
       url = "github:ghostty-org/ghostty";
     };
-    # The rest are all MacOS
     darwin = {
       url = "github:LnL7/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -39,11 +36,19 @@
       url = "github:nix-community/nix4nvchad";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # Welcome to your life
+    opencode = {
+      url = "git+file:///Users/casazza/Repositories/schrodinger/opencode";
+    };
+    # Theres no turning back
     git-fleet = {
       url = "git+ssh://git@github.com/schrodinger/git-fleet";
     };
-    # Theres no turning back
+    # Even when we sleep
     git-fleet-runner = {
       url = "git+ssh://git@github.com/schrodinger/git-fleet-runner";
     };
@@ -60,7 +65,8 @@
       nixpkgs,
       disko,
       ghostty,
-      # Even when we sleep
+      opencode,
+      sops-nix,
       # deadnix: skip
       git-fleet,
       # We will find you
@@ -85,7 +91,6 @@
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ git-hooks-nix.flakeModule ];
       systems = linuxSystems ++ darwinSystems;
-
       perSystem =
         { config, system, ... }:
         let
@@ -148,6 +153,47 @@
                   };
                 }
                 git-fleet-runner.darwinModules.autopkgserver
+                sops-nix.darwinModules.default
+                opencode.darwinModules.default
+                (
+                  { config, ... }:
+                  {
+                    nixpkgs.overlays = [ opencode.overlays.default ];
+
+                    sops = {
+                      age.keyFile = "/Users/${user.name}/.config/sops/age/keys.txt";
+                      secrets.opencode = {
+                        sopsFile = ./secrets/opencode.env;
+                        format = "dotenv";
+                      };
+                      secrets.fleet = {
+                        sopsFile = ./secrets/fleet.env;
+                        format = "dotenv";
+                      };
+                    };
+
+                    programs.opencode = {
+                      enable = true;
+                      apiKeyHelper = true;
+                      managedConfig = {
+                        share = "disabled";
+                        enabled_providers = [ "anthropic" ];
+                        provider.anthropic.options.baseURL = "https://vertex-proxy.sdgr.app";
+                      };
+                      vertex = {
+                        enable = true;
+                        projectId = "vertex-code-454718";
+                        region = "us-east5";
+                        baseURL = "https://vertex-proxy.sdgr.app";
+                      };
+                      secrets.file = config.sops.secrets.opencode.path;
+                      environment = {
+                        OPENCODE_DISABLE_AUTOUPDATE = "true";
+                        ANTHROPIC_MODEL = "claude-sonnet-4-5";
+                      };
+                    };
+                  }
+                )
                 ./hosts/darwin
               ];
             };
@@ -168,20 +214,55 @@
             modules = [
               disko.nixosModules.disko
               home-manager.nixosModules.home-manager
-              {
-                home-manager = {
-                  extraSpecialArgs = {
-                    user = user;
-                    inherit inputs;
+              sops-nix.nixosModules.default
+              opencode.nixosModules.default
+              (
+                { config, ... }:
+                {
+                  nixpkgs.overlays = [ opencode.overlays.default ];
+                  home-manager = {
+                    extraSpecialArgs = {
+                      user = user;
+                      inherit inputs;
+                    };
+                    useGlobalPkgs = true;
+                    useUserPackages = true;
+                    users.${user.name} = import ./modules/nixos/home-manager.nix;
                   };
-                  useGlobalPkgs = true;
-                  useUserPackages = true;
-                  users.${user.name} = import ./modules/nixos/home-manager.nix;
-                };
-                environment.systemPackages = [
-                  ghostty.packages.x86_64-linux.default
-                ];
-              }
+                  environment.systemPackages = [
+                    ghostty.packages.x86_64-linux.default
+                  ];
+
+                  sops = {
+                    age.keyFile = "/home/${user.name}/.config/sops/age/keys.txt";
+                    secrets.opencode = {
+                      sopsFile = ./secrets/opencode.env;
+                      format = "dotenv";
+                    };
+                  };
+
+                  programs.opencode = {
+                    enable = true;
+                    apiKeyHelper = true;
+                    managedConfig = {
+                      share = "disabled";
+                      enabled_providers = [ "anthropic" ];
+                      provider.anthropic.options.baseURL = "https://vertex-proxy.sdgr.app";
+                    };
+                    vertex = {
+                      enable = true;
+                      projectId = "vertex-code-454718";
+                      region = "us-east5";
+                      baseURL = "https://vertex-proxy.sdgr.app";
+                    };
+                    secrets.file = config.sops.secrets.opencode.path;
+                    environment = {
+                      OPENCODE_DISABLE_AUTOUPDATE = "true";
+                      ANTHROPIC_MODEL = "claude-sonnet-4-5";
+                    };
+                  };
+                }
+              )
               ./hosts/nixos
             ];
           }

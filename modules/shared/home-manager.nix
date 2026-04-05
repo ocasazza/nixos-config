@@ -68,6 +68,66 @@
 
   zsh = {
     enable = true;
+    initExtraBeforeCompInit = ''
+      # Add custom completions directory to fpath before compinit runs
+      fpath=(~/.zsh/completions $fpath)
+    '';
+    initExtra = ''
+      # Wrapper for just package command with path completion
+      pkg() {
+        local env="''${1:-prod}"
+        local path="$2"
+        local dry_run="''${3:-true}"
+
+        if [[ -z "$path" ]]; then
+          echo "Usage: pkg [ENV] SOFTWARE_DIR [DRY_RUN]"
+          echo "Example: pkg prod lib/software/appgate/macos"
+          echo "Example: pkg prod lib/software/appgate/macos false"
+          return 1
+        fi
+
+        just ops::package "$env" "$path" "$dry_run"
+      }
+
+      # Custom completion for pkg command
+      _pkg() {
+        local -a args
+        args=(
+          '1:environment:(prod staging local)'
+          '2:software directory:_files -/'
+          '3:dry run:(true false)'
+        )
+        _arguments $args
+      }
+      compdef _pkg pkg
+
+      # history substring search keybindings (up/down arrows)
+      bindkey '^[[A' history-substring-search-up
+      bindkey '^[[B' history-substring-search-down
+    '';
+    autosuggestion = {
+      enable = true;
+      strategy = [
+        "history"
+        "completion"
+      ];
+    };
+    syntaxHighlighting.enable = true;
+    historySubstringSearch.enable = true;
+    plugins = [
+      {
+        # fzf-based tab completion - must load before autosuggestions
+        name = "fzf-tab";
+        src = pkgs.zsh-fzf-tab;
+        file = "share/fzf-tab/fzf-tab.plugin.zsh";
+      }
+      {
+        # reminds you to use aliases you've already defined
+        name = "zsh-you-should-use";
+        src = pkgs.zsh-you-should-use;
+        file = "share/zsh/plugins/zsh-you-should-use/you-should-use.plugin.zsh";
+      }
+    ];
     history = {
       append = true; # parallel history until shell exit
       ignoreAllDups = true; # remove previous when duplicate commands run
@@ -83,6 +143,7 @@
     };
     sessionVariables = {
       EDITOR = "nvim";
+      CLICOLOR = "1";
       # tfenv stuff
       # TFENV_CONFIG_DIR = "$HOME/.local/share/tfenv";
       # PATH = "$HOME/.tfenv/bin:$PATH";
@@ -171,7 +232,10 @@
       copy-on-select = true;
       term = "xterm-256color";
       macos-titlebar-proxy-icon = "hidden";
-      # config-file = "~/.config/ghostty/extra"; # for testing shaders atm
+      # Shader effects
+      background-opacity = 0.95;
+      background-blur-radius = 20;
+      config-file = "~/.config/ghostty/extra"; # for testing custom shaders
       command = "/etc/profiles/per-user/${user.name}/bin/zsh";
       keybind = [
         "cmd+shift+d=close_surface"
