@@ -1,0 +1,5 @@
+creation_rules:
+  - path_regex: secrets/opencode\.env$
+    age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl
+  - path_regex: secrets/fleet\.env$
+    age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl

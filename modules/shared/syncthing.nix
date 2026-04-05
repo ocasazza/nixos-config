@@ -8,20 +8,20 @@
 # Setup for a new machine:
 #   1. Activate nix-darwin (nh darwin switch .#macos)
 #   2. Syncthing starts automatically as a launchd/systemd user service
-#   3. Open http://localhost:8384 in a browser
-#   4. Add your other devices by device ID
-#   5. Share folders between devices
+#   3. The Syncthing menubar icon appears (macOS) for status and quick access
+#   4. Open http://localhost:8384 in a browser to pair devices
+#   5. Add your other devices by device ID
 #
-# The default sync folder is ~/Sync. Add more folders via the web UI
-# or by extending this config.
-{ ... }:
+# Default sync folder: ~/Repositories
+{
+  pkgs,
+  lib,
+  ...
+}:
 {
   services.syncthing = {
     enable = true;
 
-    # Syncthing settings are written to config.xml on first run.
-    # After that, changes made in the web UI take precedence.
-    # Set overrideFolders/overrideDevices to true to enforce declarative config.
     overrideFolders = false;
     overrideDevices = false;
 
@@ -30,16 +30,21 @@
         localAnnounceEnabled = true;
         globalAnnounceEnabled = true;
         relaysEnabled = true;
-        urAccepted = -1; # Decline usage reporting
+        urAccepted = -1;
       };
 
       folders = {
-        "default" = {
-          path = "~/Sync";
-          label = "Sync";
+        "repos" = {
+          path = "~/Repositories";
+          label = "Repositories";
           fsWatcherEnabled = true;
         };
       };
     };
   };
+
+  # Native macOS menubar app for Syncthing status and quick access
+  home.packages = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+    pkgs.syncthing-macos
+  ];
 }
