@@ -53,6 +53,10 @@
     hermes = {
       url = "github:NousResearch/hermes-agent";
     };
+    colmena = {
+      url = "github:zhaofengli/colmena";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -72,6 +76,7 @@
       # We will find you
       git-fleet-runner,
       hermes,
+      colmena,
       flake-parts,
       git-hooks-nix,
       ...
@@ -89,6 +94,53 @@
         "aarch64-linux"
       ];
       darwinSystems = [ "aarch64-darwin" ];
+
+      # ── Exo cluster ──────────────────────────────────────────────────────────
+      exoCluster = {
+        "CK2Q9LN7PM-MBA" = 52416;
+        "C02FCCSWQ05D-MBP" = 52416;
+        "L75T4YHXV7-MBA" = 52416;
+        "GJHC5VVN49-MBP" = 52416;
+      };
+
+      exoPeersFor =
+        hostname:
+        nixpkgs.lib.mapAttrsToList (host: port: "${host}.local:${toString port}") (
+          nixpkgs.lib.filterAttrs (h: _: h != hostname) exoCluster
+        );
+
+      # ── Shared nix-darwin base modules ───────────────────────────────────────
+      baseModules = [
+        home-manager.darwinModules.home-manager
+        {
+          home-manager = {
+            extraSpecialArgs = {
+              user = user;
+              inherit inputs;
+            };
+            useGlobalPkgs = true;
+            useUserPackages = true;
+            backupFileExtension = "bak";
+          };
+        }
+        nix-homebrew.darwinModules.nix-homebrew
+        {
+          nix-homebrew = {
+            enable = false;
+            user = user.name;
+            taps = {
+              "homebrew/homebrew-core" = homebrew-core;
+              "homebrew/homebrew-cask" = homebrew-cask;
+              "homebrew/homebrew-bundle" = homebrew-bundle;
+            };
+            mutableTaps = false;
+            autoMigrate = true;
+          };
+        }
+        git-fleet-runner.darwinModules.autopkgserver
+      ]
+      ++ nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.darwinModules.default
+      ++ [ ./hosts/darwin ];
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ git-hooks-nix.flakeModule ];
@@ -111,6 +163,7 @@
                 statix
                 deadnix
                 nh
+                colmena.packages.${system}.colmena
               ];
               shellHook = ''
                 export EDITOR=nvim
@@ -122,55 +175,6 @@
       flake = {
         darwinConfigurations =
           let
-            # All exo cluster nodes — hostname → libp2p port
-            exoCluster = {
-              "CK2Q9LN7PM-MBA" = 52416; # olive's MBA (this machine)
-              "C02FCCSWQ05D-MBP" = 52416;
-              "L75T4YHXV7-MBA" = 52416;
-              "GJHC5VVN49-MBP" = 52416;
-            };
-
-            # Peer list for a given hostname: all other cluster nodes
-            exoPeersFor =
-              hostname:
-              nixpkgs.lib.mapAttrsToList (host: port: "${host}.local:${toString port}") (
-                nixpkgs.lib.filterAttrs (h: _: h != hostname) exoCluster
-              );
-
-            # Shared base module list
-            baseModules = [
-              home-manager.darwinModules.home-manager
-              {
-                home-manager = {
-                  extraSpecialArgs = {
-                    user = user;
-                    inherit inputs;
-                  };
-                  useGlobalPkgs = true;
-                  useUserPackages = true;
-                  backupFileExtension = "bak";
-                };
-              }
-              # Homebrew managed by Fleet MDM instead of nix-darwin
-              nix-homebrew.darwinModules.nix-homebrew
-              {
-                nix-homebrew = {
-                  enable = false; # Disabled: managed by Fleet MDM
-                  user = user.name;
-                  taps = {
-                    "homebrew/homebrew-core" = homebrew-core;
-                    "homebrew/homebrew-cask" = homebrew-cask;
-                    "homebrew/homebrew-bundle" = homebrew-bundle;
-                  };
-                  mutableTaps = false;
-                  autoMigrate = true;
-                };
-              }
-              git-fleet-runner.darwinModules.autopkgserver
-            ]
-            ++ nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.darwinModules.default
-            ++ [ ./hosts/darwin ];
-
             # Build a darwin config for a given hostname with its exo peer list
             mkMachineConfig =
               hostname:
@@ -203,6 +207,79 @@
           }
           # Generate a config for every cluster node
           // nixpkgs.lib.mapAttrs (hostname: _: mkMachineConfig hostname) exoCluster;
+
+        # Colmena hive for remote deployment to exo cluster nodes
+        colmenaHive = colmena.lib.makeHive {
+          meta = {
+            nixpkgs = import nixpkgs { system = "aarch64-darwin"; };
+            specialArgs = {
+              inherit user isDeterminate hermes;
+              system = "aarch64-darwin";
+            }
+            // inputs;
+          };
+
+          # One entry per cluster node — colmena merges meta.specialArgs with per-node overrides
+          "CK2Q9LN7PM-MBA" =
+            { name, ... }:
+            {
+              deployment = {
+                targetHost = "192.168.1.3";
+                targetUser = user.name;
+                buildOnTarget = false;
+              };
+              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
+              _module.args = {
+                exoPeers = exoPeersFor "CK2Q9LN7PM-MBA";
+                exoListenInterfaces = [ "en0" ];
+              };
+            };
+
+          "GJHC5VVN49-MBP" =
+            { name, ... }:
+            {
+              deployment = {
+                targetHost = "192.168.1.56";
+                targetUser = user.name;
+                buildOnTarget = false;
+              };
+              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
+              _module.args = {
+                exoPeers = exoPeersFor "GJHC5VVN49-MBP";
+                exoListenInterfaces = [ "en0" ];
+              };
+            };
+
+          "C02FCCSWQ05D-MBP" =
+            { name, ... }:
+            {
+              deployment = {
+                targetHost = "C02FCCSWQ05D-MBP.local";
+                targetUser = user.name;
+                buildOnTarget = false;
+              };
+              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
+              _module.args = {
+                exoPeers = exoPeersFor "C02FCCSWQ05D-MBP";
+                exoListenInterfaces = [ "en0" ];
+              };
+            };
+
+          "L75T4YHXV7-MBA" =
+            { name, ... }:
+            {
+              deployment = {
+                targetHost = "L75T4YHXV7-MBA.local";
+                targetUser = user.name;
+                buildOnTarget = false;
+              };
+              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
+              _module.args = {
+                exoPeers = exoPeersFor "L75T4YHXV7-MBA";
+                exoListenInterfaces = [ "en0" ];
+              };
+            };
+        };
 
         nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
           system:
