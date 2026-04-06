@@ -21,8 +21,14 @@ let
     _exo_addr=$(ipconfig getifaddr ${iface} 2>/dev/null || ip -4 addr show ${iface} 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1)
     [ -n "$_exo_addr" ] && _exo_listen_addrs="$_exo_listen_addrs /ip4/$_exo_addr/tcp/${toString cfg.exo.libp2pPort}"
   '') cfg.exo.listenInterfaces;
-  isDarwin = pkgs.stdenv.isDarwin;
-  isLinux = pkgs.stdenv.isLinux;
+  isDarwin = builtins.elem system [
+    "aarch64-darwin"
+    "x86_64-darwin"
+  ];
+  isLinux = builtins.elem system [
+    "x86_64-linux"
+    "aarch64-linux"
+  ];
 
   # Patch hermes source to add Vertex proxy rawPredict URL translation
   patchedHermesSource = pkgs.applyPatches {
