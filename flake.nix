@@ -97,6 +97,7 @@
 
       # ── Exo cluster ──────────────────────────────────────────────────────────
       exoCluster = {
+        "GN9CFLM92K-MBP" = 52416; # this machine
         "CK2Q9LN7PM-MBA" = 52416;
         "C02FCCSWQ05D-MBP" = 52416;
         "L75T4YHXV7-MBA" = 52416;
