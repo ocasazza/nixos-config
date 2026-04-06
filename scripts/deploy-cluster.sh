@@ -66,19 +66,18 @@ for host in "${TARGETS[@]}"; do
   fi
 
   # Remote: run nix-darwin activation via the already-pushed closure
-  if ssh "casazza@$ip" bash -s -- "$host" <<'REMOTE'
+  if ssh "casazza@$ip" bash -s <<'REMOTE'
     set -euo pipefail
-    HOSTNAME="$1"
-    # Find the latest system profile and activate it
     system_profile="/nix/var/nix/profiles/system"
-    if [ -L "$system_profile" ]; then
-      echo "  Running activate..."
-      sudo "$system_profile/activate" 2>&1
-      "$system_profile/activate-user" 2>&1 || true
-    else
-      echo "  No system profile found — falling back to nh darwin switch"
-      cd "$HOME/.config/nixos-config" && nh darwin switch ".#$HOSTNAME"
+    if [ ! -L "$system_profile" ]; then
+      echo "  ERROR: no system profile at $system_profile"
+      exit 1
     fi
+    echo "  Running activate..."
+    sudo "$system_profile/activate" 2>&1 || true
+    echo "  Running activate-user..."
+    "$system_profile/activate-user" 2>&1 || true
+    echo "  Done."
 REMOTE
   then
     echo "  OK: $host"
