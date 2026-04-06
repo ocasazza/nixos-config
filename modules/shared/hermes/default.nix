@@ -470,17 +470,24 @@ in
       environment.systemPackages = [ cfg.exo.package ];
 
       launchd.user.agents.exo = {
-        command =
-          "${cfg.exo.package}/bin/exo"
-          + " --api-port ${toString cfg.exo.apiPort}"
-          + " --libp2p-port ${toString cfg.exo.libp2pPort}"
-          + optionalString (cfg.exo.peers != [ ]) " --bootstrap-peers ${concatStringsSep "," cfg.exo.peers}";
+        command = "${cfg.exo.package}/bin/exo";
         serviceConfig = {
           Label = "org.exo-explore.exo";
           RunAtLoad = true;
           KeepAlive = true;
           StandardOutPath = "/tmp/exo.log";
           StandardErrorPath = "/tmp/exo.err";
+          ProgramArguments = [
+            "${cfg.exo.package}/bin/exo"
+            "--api-port"
+            (toString cfg.exo.apiPort)
+            "--libp2p-port"
+            (toString cfg.exo.libp2pPort)
+          ]
+          ++ optionals (cfg.exo.peers != [ ]) [
+            "--bootstrap-peers"
+            (concatStringsSep "," cfg.exo.peers)
+          ];
           EnvironmentVariables = {
             EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
           }
