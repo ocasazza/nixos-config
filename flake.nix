@@ -99,7 +99,6 @@
       exoCluster = {
         "GN9CFLM92K-MBP" = 52416; # this machine
         "CK2Q9LN7PM-MBA" = 52416;
-        "C02FCCSWQ05D-MBP" = 52416;
         "L75T4YHXV7-MBA" = 52416;
         "GJHC5VVN49-MBP" = 52416;
       };
@@ -215,28 +214,32 @@
         colmenaHive =
           let
             clusterHosts = {
+              "GN9CFLM92K-MBP" = {
+                targetHost = "localhost";
+                allowLocalDeployment = true;
+              };
               "CK2Q9LN7PM-MBA" = {
                 targetHost = "192.168.1.3";
+                allowLocalDeployment = false;
               };
               "GJHC5VVN49-MBP" = {
                 targetHost = "192.168.1.56";
-              };
-              "C02FCCSWQ05D-MBP" = {
-                targetHost = "C02FCCSWQ05D-MBP.local";
+                allowLocalDeployment = false;
               };
               "L75T4YHXV7-MBA" = {
                 targetHost = "L75T4YHXV7-MBA.local";
+                allowLocalDeployment = false;
               };
             };
 
             mkColmenaNode =
               hostname:
-              { targetHost }:
+              { targetHost, allowLocalDeployment }:
               (mkMachineConfig hostname).extendModules {
                 modules = [
                   {
                     deployment = {
-                      inherit targetHost;
+                      inherit targetHost allowLocalDeployment;
                       targetUser = user.name;
                       buildOnTarget = false;
                       tags = [ "exo-cluster" ];
