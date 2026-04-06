@@ -2,6 +2,7 @@
   pkgs,
   user,
   config,
+  opencode,
   ...
 }:
 
@@ -13,7 +14,31 @@ in
     ../../modules/darwin/home-manager.nix
     ../../modules/shared
     ../../modules/shared/cachix
+    ../../modules/shared/hermes
   ];
+
+  local.hermes = {
+    enable = true;
+    claw3d.enable = true;
+  };
+
+  # Opencode + Claude Code Vertex AI proxy
+  programs.opencode = {
+    enable = true;
+    package = opencode.packages.${pkgs.system}.default;
+    managedConfig = {
+      share = "disabled";
+      enabled_providers = [ "anthropic" ];
+      provider.anthropic.options.baseURL = "https://vertex-proxy.sdgr.app/v1";
+    };
+    vertex = {
+      enable = true;
+      projectId = "vertex-code-454718";
+      region = "us-east5";
+      baseURL = "https://vertex-proxy.sdgr.app/v1";
+    };
+    apiKeyHelper = true;
+  };
 
   # Enable autopkgserver for Fleet GitOps package building
   services.autopkgserver = {
@@ -22,9 +47,20 @@ in
     recipeOverrideDirs = "/Users/${user.name}/Repositories/schrodinger/git-fleet/lib/software";
   };
 
-  # Set desktop wallpaper
+  # Set desktop wallpaper and Claude Code API key helper
   system.activationScripts.postActivation.text = ''
     sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"'
+
+    # Set up Claude Code get-iam-token.sh helper for Vertex AI proxy
+    echo "setting up Claude Code API key helper..." >&2
+    mkdir -p /Users/${user.name}/.claude
+    cat > /Users/${user.name}/.claude/get-iam-token.sh << 'TOKENHELPER'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo $(gcloud auth print-identity-token 2>/dev/null)
+    TOKENHELPER
+    chmod +x /Users/${user.name}/.claude/get-iam-token.sh
+    chown -R ${user.name} /Users/${user.name}/.claude
   '';
 
   # Load Fleet secrets into user's shell environment
@@ -61,6 +97,13 @@ in
     NIXPKGS_ALLOW_UNFREE = "1";
     # Git SSH configuration
     GIT_SSH_COMMAND = "ssh -i /Users/${user.name}/.ssh/id_ed25519 -o IdentitiesOnly=yes";
+    # Claude Code Vertex AI proxy
+    CLAUDE_CODE_USE_VERTEX = "1";
+    CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
+    CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
+    ANTHROPIC_VERTEX_PROJECT_ID = "vertex-code-454718";
+    ANTHROPIC_VERTEX_BASE_URL = "https://vertex-proxy.sdgr.app/v1";
+    CLOUD_ML_REGION = "us-east5";
   };
 
   # Auto-load direnv for Claude Code (avoids needing nix develop)
@@ -71,6 +114,11 @@ in
       set -a
       source "$HOME/.fleet_secrets"
       set +a
+    fi
+
+    # Set up Google Cloud credentials for Claude Code Vertex AI proxy
+    if command -v gcloud >/dev/null 2>&1; then
+      export GOOGLE_APPLICATION_CREDENTIALS_JSON="$(gcloud auth print-access-token 2>/dev/null || echo "")"
     fi
 
     if command -v direnv >/dev/null 2>&1; then
