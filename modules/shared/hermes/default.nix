@@ -461,72 +461,66 @@ in
     })
 
     # Darwin (macOS): Ollama via Homebrew cask (launchd-managed)
-    (optionalAttrs isDarwin (
-      mkIf (!cfg.exo.enable) {
-        homebrew.casks = [ "ollama" ];
-      }
-    ))
+    (mkIf (isDarwin && !cfg.exo.enable) {
+      homebrew.casks = [ "ollama" ];
+    })
 
     # exo: distributed inference cluster (Darwin launchd)
-    (optionalAttrs isDarwin (
-      mkIf cfg.exo.enable {
-        environment.systemPackages = [ cfg.exo.package ];
+    (mkIf (isDarwin && cfg.exo.enable) {
+      environment.systemPackages = [ cfg.exo.package ];
 
-        launchd.user.agents.exo = {
-          command =
-            "${cfg.exo.package}/bin/exo"
-            + " --api-port ${toString cfg.exo.apiPort}"
-            + " --libp2p-port ${toString cfg.exo.libp2pPort}"
-            + optionalString (cfg.exo.peers != [ ]) " --bootstrap-peers ${concatStringsSep "," cfg.exo.peers}";
-          serviceConfig = {
-            Label = "org.exo-explore.exo";
-            RunAtLoad = true;
-            KeepAlive = true;
-            StandardOutPath = "/tmp/exo.log";
-            StandardErrorPath = "/tmp/exo.err";
-            EnvironmentVariables = {
-              EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
-            }
-            // optionalAttrs (cfg.exo.listenInterfaces != [ ]) {
-              EXO_LISTEN_INTERFACES = concatStringsSep "," cfg.exo.listenInterfaces;
-            };
+      launchd.user.agents.exo = {
+        command =
+          "${cfg.exo.package}/bin/exo"
+          + " --api-port ${toString cfg.exo.apiPort}"
+          + " --libp2p-port ${toString cfg.exo.libp2pPort}"
+          + optionalString (cfg.exo.peers != [ ]) " --bootstrap-peers ${concatStringsSep "," cfg.exo.peers}";
+        serviceConfig = {
+          Label = "org.exo-explore.exo";
+          RunAtLoad = true;
+          KeepAlive = true;
+          StandardOutPath = "/tmp/exo.log";
+          StandardErrorPath = "/tmp/exo.err";
+          EnvironmentVariables = {
+            EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
+          }
+          // optionalAttrs (cfg.exo.listenInterfaces != [ ]) {
+            EXO_LISTEN_INTERFACES = concatStringsSep "," cfg.exo.listenInterfaces;
           };
         };
-      }
-    ))
+      };
+    })
 
     # exo: distributed inference cluster (Linux systemd)
-    (optionalAttrs isLinux (
-      mkIf cfg.exo.enable {
-        environment.systemPackages = [ cfg.exo.package ];
+    (mkIf (isLinux && cfg.exo.enable) {
+      environment.systemPackages = [ cfg.exo.package ];
 
-        systemd.user.services.exo = {
-          description = "exo distributed inference cluster";
-          wantedBy = [ "default.target" ];
-          after = [ "network.target" ];
-          path = [ cfg.exo.package ];
-          script = ''
-            ${optionalString (cfg.exo.listenInterfaces != [ ]) ''
-              _exo_listen_addrs=""
-              ${exoListenAddrsScript}
-              [ -n "$_exo_listen_addrs" ] && export EXO_LISTEN_ADDRS="$_exo_listen_addrs"
-              unset _exo_addr
-            ''}
-            exec ${cfg.exo.package}/bin/exo \
-              --api-port ${toString cfg.exo.apiPort} \
-              --libp2p-port ${toString cfg.exo.libp2pPort} \
-              ${optionalString (cfg.exo.peers != [ ]) "--bootstrap-peers ${concatStringsSep "," cfg.exo.peers}"}
-          '';
-          environment = {
-            EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
-          };
-          serviceConfig = {
-            Restart = "on-failure";
-            RestartSec = 5;
-          };
+      systemd.user.services.exo = {
+        description = "exo distributed inference cluster";
+        wantedBy = [ "default.target" ];
+        after = [ "network.target" ];
+        path = [ cfg.exo.package ];
+        script = ''
+          ${optionalString (cfg.exo.listenInterfaces != [ ]) ''
+            _exo_listen_addrs=""
+            ${exoListenAddrsScript}
+            [ -n "$_exo_listen_addrs" ] && export EXO_LISTEN_ADDRS="$_exo_listen_addrs"
+            unset _exo_addr
+          ''}
+          exec ${cfg.exo.package}/bin/exo \
+            --api-port ${toString cfg.exo.apiPort} \
+            --libp2p-port ${toString cfg.exo.libp2pPort} \
+            ${optionalString (cfg.exo.peers != [ ]) "--bootstrap-peers ${concatStringsSep "," cfg.exo.peers}"}
+        '';
+        environment = {
+          EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
         };
-      }
-    ))
+        serviceConfig = {
+          Restart = "on-failure";
+          RestartSec = 5;
+        };
+      };
+    })
 
     # Claw3D: 3D virtual office for Hermes agents
     (mkIf cfg.claw3d.enable {
