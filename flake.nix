@@ -141,6 +141,21 @@
       ]
       ++ nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.darwinModules.default
       ++ [ ./hosts/darwin ];
+
+      # Build a nix-darwin config for a given cluster hostname
+      mkMachineConfig =
+        hostname:
+        darwin.lib.darwinSystem {
+          system = "aarch64-darwin";
+          specialArgs = {
+            inherit user isDeterminate hermes;
+            system = "aarch64-darwin";
+            exoPeers = exoPeersFor hostname;
+            exoListenInterfaces = [ "en0" ];
+          }
+          // inputs;
+          modules = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
+        };
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ git-hooks-nix.flakeModule ];
@@ -175,20 +190,6 @@
       flake = {
         darwinConfigurations =
           let
-            # Build a darwin config for a given hostname with its exo peer list
-            mkMachineConfig =
-              hostname:
-              darwin.lib.darwinSystem {
-                system = "aarch64-darwin";
-                specialArgs = {
-                  inherit user isDeterminate hermes;
-                  system = "aarch64-darwin";
-                  exoPeers = exoPeersFor hostname;
-                  exoListenInterfaces = [ "en0" ];
-                }
-                // inputs;
-                modules = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
-              };
 
             # Non-cluster config (no exo) for backward-compat aliases
             macosConfig = darwin.lib.darwinSystem {
@@ -208,78 +209,45 @@
           # Generate a config for every cluster node
           // nixpkgs.lib.mapAttrs (hostname: _: mkMachineConfig hostname) exoCluster;
 
-        # Colmena hive for remote deployment to exo cluster nodes
-        colmenaHive = colmena.lib.makeHive {
-          meta = {
-            nixpkgs = import nixpkgs { system = "aarch64-darwin"; };
-            specialArgs = {
-              inherit user isDeterminate hermes;
-              system = "aarch64-darwin";
-            }
-            // inputs;
-          };
-
-          # One entry per cluster node — colmena merges meta.specialArgs with per-node overrides
-          "CK2Q9LN7PM-MBA" =
-            { name, ... }:
-            {
-              deployment = {
+        # Colmena hive for remote nix-darwin deployment to exo cluster nodes.
+        # Each node wraps mkMachineConfig and injects deployment metadata.
+        colmenaHive =
+          let
+            clusterHosts = {
+              "CK2Q9LN7PM-MBA" = {
                 targetHost = "192.168.1.3";
-                targetUser = user.name;
-                buildOnTarget = false;
               };
-              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
-              _module.args = {
-                exoPeers = exoPeersFor "CK2Q9LN7PM-MBA";
-                exoListenInterfaces = [ "en0" ];
-              };
-            };
-
-          "GJHC5VVN49-MBP" =
-            { name, ... }:
-            {
-              deployment = {
+              "GJHC5VVN49-MBP" = {
                 targetHost = "192.168.1.56";
-                targetUser = user.name;
-                buildOnTarget = false;
               };
-              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
-              _module.args = {
-                exoPeers = exoPeersFor "GJHC5VVN49-MBP";
-                exoListenInterfaces = [ "en0" ];
-              };
-            };
-
-          "C02FCCSWQ05D-MBP" =
-            { name, ... }:
-            {
-              deployment = {
+              "C02FCCSWQ05D-MBP" = {
                 targetHost = "C02FCCSWQ05D-MBP.local";
-                targetUser = user.name;
-                buildOnTarget = false;
               };
-              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
-              _module.args = {
-                exoPeers = exoPeersFor "C02FCCSWQ05D-MBP";
-                exoListenInterfaces = [ "en0" ];
+              "L75T4YHXV7-MBA" = {
+                targetHost = "L75T4YHXV7-MBA.local";
               };
             };
 
-          "L75T4YHXV7-MBA" =
-            { name, ... }:
-            {
-              deployment = {
-                targetHost = "L75T4YHXV7-MBA.local";
-                targetUser = user.name;
-                buildOnTarget = false;
+            mkColmenaNode =
+              hostname:
+              { targetHost }:
+              (mkMachineConfig hostname).extendModules {
+                modules = [
+                  {
+                    deployment = {
+                      inherit targetHost;
+                      targetUser = user.name;
+                      buildOnTarget = false;
+                      tags = [ "exo-cluster" ];
+                    };
+                  }
+                ];
               };
-              imports = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
-              _module.args = {
-                exoPeers = exoPeersFor "L75T4YHXV7-MBA";
-                exoListenInterfaces = [ "en0" ];
-              };
-            };
-        };
+          in
+          colmena.lib.makeHive {
+            meta.nixpkgs = import nixpkgs { system = "aarch64-darwin"; };
+          }
+          // nixpkgs.lib.mapAttrs mkColmenaNode clusterHosts;
 
         nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
           system:
