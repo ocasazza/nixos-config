@@ -492,35 +492,37 @@ in
     })
 
     # exo: distributed inference cluster (Linux systemd)
-    (mkIf (isLinux && cfg.exo.enable) {
-      environment.systemPackages = [ cfg.exo.package ];
+    (optionalAttrs isLinux (
+      mkIf cfg.exo.enable {
+        environment.systemPackages = [ cfg.exo.package ];
 
-      systemd.user.services.exo = {
-        description = "exo distributed inference cluster";
-        wantedBy = [ "default.target" ];
-        after = [ "network.target" ];
-        path = [ cfg.exo.package ];
-        script = ''
-          ${optionalString (cfg.exo.listenInterfaces != [ ]) ''
-            _exo_listen_addrs=""
-            ${exoListenAddrsScript}
-            [ -n "$_exo_listen_addrs" ] && export EXO_LISTEN_ADDRS="$_exo_listen_addrs"
-            unset _exo_addr
-          ''}
-          exec ${cfg.exo.package}/bin/exo \
-            --api-port ${toString cfg.exo.apiPort} \
-            --libp2p-port ${toString cfg.exo.libp2pPort} \
-            ${optionalString (cfg.exo.peers != [ ]) "--bootstrap-peers ${concatStringsSep "," cfg.exo.peers}"}
-        '';
-        environment = {
-          EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
+        systemd.user.services.exo = {
+          description = "exo distributed inference cluster";
+          wantedBy = [ "default.target" ];
+          after = [ "network.target" ];
+          path = [ cfg.exo.package ];
+          script = ''
+            ${optionalString (cfg.exo.listenInterfaces != [ ]) ''
+              _exo_listen_addrs=""
+              ${exoListenAddrsScript}
+              [ -n "$_exo_listen_addrs" ] && export EXO_LISTEN_ADDRS="$_exo_listen_addrs"
+              unset _exo_addr
+            ''}
+            exec ${cfg.exo.package}/bin/exo \
+              --api-port ${toString cfg.exo.apiPort} \
+              --libp2p-port ${toString cfg.exo.libp2pPort} \
+              ${optionalString (cfg.exo.peers != [ ]) "--bootstrap-peers ${concatStringsSep "," cfg.exo.peers}"}
+          '';
+          environment = {
+            EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
+          };
+          serviceConfig = {
+            Restart = "on-failure";
+            RestartSec = 5;
+          };
         };
-        serviceConfig = {
-          Restart = "on-failure";
-          RestartSec = 5;
-        };
-      };
-    })
+      }
+    ))
 
     # Claw3D: 3D virtual office for Hermes agents
     (mkIf cfg.claw3d.enable {
