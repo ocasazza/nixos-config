@@ -3,12 +3,14 @@
 # Each machine receives `exoPeers` and `exoListenInterfaces` via specialArgs.
 {
   exoPeers,
+  exoPackage,
   exoListenInterfaces ? [ "en0" ],
   ...
 }:
 {
   local.hermes.exo = {
     enable = true;
+    package = exoPackage;
     peers = exoPeers;
     listenInterfaces = exoListenInterfaces;
   };

@@ -53,6 +53,10 @@
     hermes = {
       url = "github:NousResearch/hermes-agent";
     };
+    exo = {
+      url = "github:exo-explore/exo";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     colmena = {
       url = "github:zhaofengli/colmena";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -76,6 +80,7 @@
       # We will find you
       git-fleet-runner,
       hermes,
+      exo,
       colmena,
       flake-parts,
       git-hooks-nix,
@@ -152,6 +157,7 @@
             system = "aarch64-darwin";
             exoPeers = exoPeersFor hostname;
             exoListenInterfaces = [ "en0" ];
+            exoPackage = exo.packages.aarch64-darwin.default;
           }
           // inputs;
           modules = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
