@@ -101,16 +101,30 @@
       darwinSystems = [ "aarch64-darwin" ];
 
       # ── Exo cluster ──────────────────────────────────────────────────────────
+      # hostname → { port, ip }  (IPs for reliable libp2p bootstrap; no mDNS needed)
       exoCluster = {
-        "GN9CFLM92K-MBP" = 52416; # this machine
-        "CK2Q9LN7PM-MBA" = 52416;
-        "L75T4YHXV7-MBA" = 52416;
-        "GJHC5VVN49-MBP" = 52416;
+        "GN9CFLM92K-MBP" = {
+          port = 52416;
+          ip = "192.168.1.23";
+        };
+        "CK2Q9LN7PM-MBA" = {
+          port = 52416;
+          ip = "192.168.1.3";
+        };
+        "L75T4YHXV7-MBA" = {
+          port = 52416;
+          ip = "L75T4YHXV7-MBA.local";
+        }; # no static IP yet
+        "GJHC5VVN49-MBP" = {
+          port = 52416;
+          ip = "192.168.1.56";
+        };
       };
 
+      # Peer list as /ip4/ip/tcp/port multiaddrs (no peer ID — libp2p negotiates on connect)
       exoPeersFor =
         hostname:
-        nixpkgs.lib.mapAttrsToList (host: port: "${host}.local:${toString port}") (
+        nixpkgs.lib.mapAttrsToList (host: cfg: "/ip4/${cfg.ip}/tcp/${toString cfg.port}") (
           nixpkgs.lib.filterAttrs (h: _: h != hostname) exoCluster
         );
 
