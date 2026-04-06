@@ -57,8 +57,8 @@
       url = "github:exo-explore/exo";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    colmena = {
-      url = "github:zhaofengli/colmena";
+    deploy-rs = {
+      url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -81,7 +81,7 @@
       git-fleet-runner,
       hermes,
       exo,
-      colmena,
+      deploy-rs,
       flake-parts,
       git-hooks-nix,
       ...
@@ -163,130 +163,122 @@
           modules = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
         };
     in
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [ git-hooks-nix.flakeModule ];
-      systems = linuxSystems ++ darwinSystems;
+    flake-parts.lib.mkFlake { inherit inputs; } (
+      { self, ... }:
+      {
+        imports = [ git-hooks-nix.flakeModule ];
+        systems = linuxSystems ++ darwinSystems;
 
-      perSystem =
-        { config, system, ... }:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          imports = [ ./nix/pre-commit.nix ];
-
-          devShells.default =
-            with pkgs;
-            mkShell {
-              nativeBuildInputs = with pkgs; [
-                bashInteractive
-                git
-                statix
-                deadnix
-                nh
-                colmena.packages.${system}.colmena
-              ];
-              shellHook = ''
-                export EDITOR=nvim
-                ${config.pre-commit.installationScript}
-              '';
-            };
-        };
-
-      flake = {
-        darwinConfigurations =
+        perSystem =
+          { config, system, ... }:
           let
-
-            # Non-cluster config (no exo) for backward-compat aliases
-            macosConfig = darwin.lib.darwinSystem {
-              system = "aarch64-darwin";
-              specialArgs = {
-                inherit user isDeterminate hermes;
-                system = "aarch64-darwin";
-              }
-              // inputs;
-              modules = baseModules;
-            };
+            pkgs = nixpkgs.legacyPackages.${system};
           in
           {
-            macos = macosConfig;
-          }
-          # Generate a config for every cluster node
-          // nixpkgs.lib.mapAttrs (hostname: _: mkMachineConfig hostname) exoCluster;
+            imports = [ ./nix/pre-commit.nix ];
 
-        # Colmena hive for remote nix-darwin deployment to exo cluster nodes.
-        # Each node wraps mkMachineConfig and injects deployment metadata.
-        colmenaHive =
-          let
-            clusterHosts = {
+            devShells.default =
+              with pkgs;
+              mkShell {
+                nativeBuildInputs = with pkgs; [
+                  bashInteractive
+                  git
+                  statix
+                  deadnix
+                  nh
+                  deploy-rs.packages.${system}.default
+                ];
+                shellHook = ''
+                  export EDITOR=nvim
+                  ${config.pre-commit.installationScript}
+                '';
+              };
+          };
+
+        flake = {
+          darwinConfigurations =
+            let
+
+              # Non-cluster config (no exo) for backward-compat aliases
+              macosConfig = darwin.lib.darwinSystem {
+                system = "aarch64-darwin";
+                specialArgs = {
+                  inherit user isDeterminate hermes;
+                  system = "aarch64-darwin";
+                }
+                // inputs;
+                modules = baseModules;
+              };
+            in
+            {
+              macos = macosConfig;
+            }
+            # Generate a config for every cluster node
+            // nixpkgs.lib.mapAttrs (hostname: _: mkMachineConfig hostname) exoCluster;
+
+          deploy = {
+            nodes = {
               "GN9CFLM92K-MBP" = {
-                targetHost = "localhost";
-                allowLocalDeployment = true;
+                hostname = "localhost";
+                profiles.system = {
+                  user = "root";
+                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."GN9CFLM92K-MBP";
+                };
               };
               "CK2Q9LN7PM-MBA" = {
-                targetHost = "192.168.1.3";
-                allowLocalDeployment = false;
+                hostname = "192.168.1.3";
+                profiles.system = {
+                  user = "root";
+                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."CK2Q9LN7PM-MBA";
+                };
               };
               "GJHC5VVN49-MBP" = {
-                targetHost = "192.168.1.56";
-                allowLocalDeployment = false;
+                hostname = "192.168.1.56";
+                profiles.system = {
+                  user = "root";
+                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."GJHC5VVN49-MBP";
+                };
               };
               "L75T4YHXV7-MBA" = {
-                targetHost = "L75T4YHXV7-MBA.local";
-                allowLocalDeployment = false;
+                hostname = "L75T4YHXV7-MBA.local";
+                profiles.system = {
+                  user = "root";
+                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."L75T4YHXV7-MBA";
+                };
               };
             };
+          };
 
-            mkColmenaNode =
-              hostname:
-              { targetHost, allowLocalDeployment }:
-              (mkMachineConfig hostname).extendModules {
-                modules = [
-                  {
-                    deployment = {
-                      inherit targetHost allowLocalDeployment;
-                      targetUser = user.name;
-                      buildOnTarget = false;
-                      tags = [ "exo-cluster" ];
-                    };
-                  }
-                ];
-              };
-          in
-          colmena.lib.makeHive {
-            meta.nixpkgs = import nixpkgs { system = "aarch64-darwin"; };
-          }
-          // nixpkgs.lib.mapAttrs mkColmenaNode clusterHosts;
-
-        nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
-          system:
-          nixpkgs.lib.nixosSystem {
-            inherit system;
-            specialArgs = {
-              inherit user isDeterminate;
-            }
-            // inputs;
-            modules = [
-              disko.nixosModules.disko
-              home-manager.nixosModules.home-manager
-              {
-                home-manager = {
-                  extraSpecialArgs = {
-                    user = user;
-                    inherit inputs;
-                  };
-                  useGlobalPkgs = true;
-                  useUserPackages = true;
-                  users.${user.name} = import ./modules/nixos/home-manager.nix;
-                };
-                environment.systemPackages = [
-                  ghostty.packages.x86_64-linux.default
-                ];
+          nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
+            system:
+            nixpkgs.lib.nixosSystem {
+              inherit system;
+              specialArgs = {
+                inherit user isDeterminate;
               }
-              ./hosts/nixos
-            ];
-          }
-        );
-      };
-    };
+              // inputs;
+              modules = [
+                disko.nixosModules.disko
+                home-manager.nixosModules.home-manager
+                {
+                  home-manager = {
+                    extraSpecialArgs = {
+                      user = user;
+                      inherit inputs;
+                    };
+                    useGlobalPkgs = true;
+                    useUserPackages = true;
+                    users.${user.name} = import ./modules/nixos/home-manager.nix;
+                  };
+                  environment.systemPackages = [
+                    ghostty.packages.x86_64-linux.default
+                  ];
+                }
+                ./hosts/nixos
+              ];
+            }
+          );
+        };
+      }
+    );
 }

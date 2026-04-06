@@ -469,31 +469,45 @@ in
     (mkIf (isDarwin && cfg.exo.enable) {
       environment.systemPackages = [ cfg.exo.package ];
 
-      launchd.user.agents.exo = {
-        command = "${cfg.exo.package}/bin/exo";
-        serviceConfig = {
-          Label = "org.exo-explore.exo";
-          RunAtLoad = true;
-          KeepAlive = true;
-          StandardOutPath = "/tmp/exo.log";
-          StandardErrorPath = "/tmp/exo.err";
-          ProgramArguments = [
-            "${cfg.exo.package}/bin/exo"
-            "--api-port"
-            (toString cfg.exo.apiPort)
-            "--libp2p-port"
-            (toString cfg.exo.libp2pPort)
-          ]
-          ++ optionals (cfg.exo.peers != [ ]) [
-            "--bootstrap-peers"
-            (concatStringsSep "," cfg.exo.peers)
-          ];
-          EnvironmentVariables = {
-            EXO_BOOTSTRAP_PEERS = concatStringsSep "," cfg.exo.peers;
-          }
-          // optionalAttrs (cfg.exo.listenInterfaces != [ ]) {
-            EXO_LISTEN_INTERFACES = concatStringsSep "," cfg.exo.listenInterfaces;
-          };
+      environment.userLaunchAgents."org.exo-explore.exo.plist".text = ''
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>Label</key>
+          <string>org.exo-explore.exo</string>
+          <key>ProgramArguments</key>
+          <array>
+            <string>${cfg.exo.package}/bin/exo</string>
+            <string>--api-port</string>
+            <string>${toString cfg.exo.apiPort}</string>
+            <string>--libp2p-port</string>
+            <string>${toString cfg.exo.libp2pPort}</string>
+            ${optionalString (cfg.exo.peers != [ ]) ''
+            <string>--bootstrap-peers</string>
+            <string>${concatStringsSep "," cfg.exo.peers}</string>
+            ''}
+          </array>
+          <key>RunAtLoad</key>
+          <true/>
+          <key>KeepAlive</key>
+          <true/>
+          <key>StandardOutPath</key>
+          <string>/tmp/exo.log</string>
+          <key>StandardErrorPath</key>
+          <string>/tmp/exo.err</string>
+          <key>EnvironmentVariables</key>
+          <dict>
+            <key>EXO_BOOTSTRAP_PEERS</key>
+            <string>${concatStringsSep "," cfg.exo.peers}</string>
+            ${optionalString (cfg.exo.listenInterfaces != [ ]) ''
+            <key>EXO_LISTEN_INTERFACES</key>
+            <string>${concatStringsSep "," cfg.exo.listenInterfaces}</string>
+            ''}
+          </dict>
+        </dict>
+        </plist>
+      '';
         };
       };
     })
