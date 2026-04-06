@@ -210,7 +210,6 @@
           in
           {
             macos = macosConfig;
-            GN9CFLM92K-MBP = macosConfig; # non-cluster alias
           }
           # Generate a config for every cluster node
           // nixpkgs.lib.mapAttrs (hostname: _: mkMachineConfig hostname) exoCluster;
