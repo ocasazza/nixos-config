@@ -484,8 +484,8 @@ in
             <string>--libp2p-port</string>
             <string>${toString cfg.exo.libp2pPort}</string>
             ${optionalString (cfg.exo.peers != [ ]) ''
-            <string>--bootstrap-peers</string>
-            <string>${concatStringsSep "," cfg.exo.peers}</string>
+              <string>--bootstrap-peers</string>
+              <string>${concatStringsSep "," cfg.exo.peers}</string>
             ''}
           </array>
           <key>RunAtLoad</key>
@@ -501,15 +501,13 @@ in
             <key>EXO_BOOTSTRAP_PEERS</key>
             <string>${concatStringsSep "," cfg.exo.peers}</string>
             ${optionalString (cfg.exo.listenInterfaces != [ ]) ''
-            <key>EXO_LISTEN_INTERFACES</key>
-            <string>${concatStringsSep "," cfg.exo.listenInterfaces}</string>
+              <key>EXO_LISTEN_INTERFACES</key>
+              <string>${concatStringsSep "," cfg.exo.listenInterfaces}</string>
             ''}
           </dict>
         </dict>
         </plist>
       '';
-        };
-      };
     })
 
     # exo: distributed inference cluster (Linux systemd)
