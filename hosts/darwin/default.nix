@@ -14,6 +14,7 @@ in
     ../../modules/darwin/home-manager.nix
     ../../modules/shared
     ../../modules/shared/cachix
+    ../../modules/shared/distributed-builds
     ../../modules/shared/hermes
   ];
 

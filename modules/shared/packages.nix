@@ -84,4 +84,5 @@ with pkgs;
   nixfmt-rfc-style
   nix-tree
   nh
+  cachix
 ]
