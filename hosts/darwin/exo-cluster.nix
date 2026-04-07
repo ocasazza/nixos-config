@@ -1,10 +1,12 @@
 # Exo distributed inference cluster configuration.
 # Imported by per-machine darwin configs that participate in the cluster.
-# Each machine receives `exoPeers` and `exoListenInterfaces` via specialArgs.
+# Each machine receives exoPeers, exoPackage, and exoNetwork via specialArgs.
+# exoListenInterfaces is kept for backwards compat but unused when network != "auto".
 {
   exoPeers,
   exoPackage,
-  exoListenInterfaces ? [ "en0" ],
+  exoNetwork ? "thunderbolt",
+  exoListenInterfaces ? [ ],
   ...
 }:
 {
@@ -13,5 +15,6 @@
     package = exoPackage;
     peers = exoPeers;
     listenInterfaces = exoListenInterfaces;
+    network = exoNetwork;
   };
 }

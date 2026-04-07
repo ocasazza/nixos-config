@@ -22,6 +22,70 @@ let
     _exo_addr=$(ipconfig getifaddr ${iface} 2>/dev/null || ip -4 addr show ${iface} 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1)
     [ -n "$_exo_addr" ] && _exo_listen_addrs="$_exo_listen_addrs /ip4/$_exo_addr/tcp/${toString cfg.exo.libp2pPort}"
   '') cfg.exo.listenInterfaces;
+
+  # Wrapper script for the exo launchd service.
+  # - auto: exec exo directly, let it handle discovery
+  # - lan:  exec exo with EXO_LIBP2P_NAMESPACE for cluster isolation, no interface pinning
+  # - thunderbolt: wait for bridge0 IPv6 link-local, seed NDP via all-nodes multicast,
+  #   read back discovered peer fe80:: addresses, build EXO_BOOTSTRAP_PEERS, then exec exo.
+  #   All logic is gated on network = "thunderbolt" so it never runs on lan/auto configs.
+  exoLaunchScript = pkgs.writeShellScript "exo-launch" (
+    ''
+      set -euo pipefail
+    ''
+    + (
+      if cfg.exo.network == "thunderbolt" then
+        ''
+          # ── Thunderbolt-only peer discovery ─────────────────────────────────────
+          # Wait for bridge0 to acquire its IPv6 link-local address (up to 30s at boot).
+          MY_ADDR=""
+          for _i in $(seq 1 30); do
+            MY_ADDR=$(ifconfig bridge0 2>/dev/null \
+              | awk '/inet6 fe80/{gsub(/%.*/, "", $2); print $2; exit}')
+            [ -n "$MY_ADDR" ] && break
+            sleep 1
+          done
+
+          if [ -n "$MY_ADDR" ]; then
+            # Stimulate NDP responses from all bridge0 peers (one packet, non-fatal).
+            ping6 -c 1 -W 500 ff02::1%bridge0 >/dev/null 2>&1 || true
+            sleep 0.5
+
+            # Read NDP neighbor cache: bridge0 peers, exclude ourselves, exclude incomplete/permanent entries.
+            TB_PEERS=$(ndp -a 2>/dev/null \
+              | awk '/bridge0/ && !/permanent/ && !/incomplete/' \
+              | awk '{gsub(/%.*/, "", $1); print $1}' \
+              | grep -v "^''${MY_ADDR}$" || true)
+
+            # Build comma-separated libp2p multiaddrs from discovered IPv6 peers.
+            if [ -n "$TB_PEERS" ]; then
+              DISCOVERED=$(echo "$TB_PEERS" \
+                | awk -v port="${toString cfg.exo.libp2pPort}" \
+                    '{printf "/ip6/%s/tcp/%s", $1, port; if (NR > 1) printf ","}' \
+                | awk '{print $0}')
+              export EXO_BOOTSTRAP_PEERS="$DISCOVERED"
+            fi
+          fi
+
+          export EXO_LIBP2P_NAMESPACE="${cfg.exo.libp2pNamespace}"
+          # ────────────────────────────────────────────────────────────────────────
+        ''
+      else if cfg.exo.network == "lan" then
+        ''
+          export EXO_LIBP2P_NAMESPACE="${cfg.exo.libp2pNamespace}"
+        ''
+      else
+        ''
+          # auto: no interface pinning, no namespace override
+        ''
+    )
+    + ''
+      exec ${cfg.exo.package}/bin/exo \
+        --api-port ${toString cfg.exo.apiPort} \
+        --libp2p-port ${toString cfg.exo.libp2pPort} \
+        ${optionalString (cfg.exo.peers != [ ]) "--bootstrap-peers ${concatStringsSep "," cfg.exo.peers}"}
+    ''
+  );
   isDarwin = builtins.elem system [
     "aarch64-darwin"
     "x86_64-darwin"
@@ -420,6 +484,54 @@ in
           Leave empty to let exo auto-detect.
         '';
       };
+
+      network = mkOption {
+        type = types.enum [
+          "auto"
+          "lan"
+          "thunderbolt"
+        ];
+        default = "auto";
+        description = ''
+          Network transport for exo cluster communication.
+
+          - auto:        Let exo auto-detect all interfaces. No namespace isolation.
+          - lan:         WiFi/Ethernet. Sets EXO_LIBP2P_NAMESPACE for cluster
+                         isolation but does not pin to specific interfaces.
+          - thunderbolt: Thunderbolt Bridge (bridge0) only. At service startup the
+                         wrapper script waits for bridge0 to acquire its IPv6
+                         link-local address, seeds NDP via all-nodes multicast
+                         (ff02::1%bridge0), reads back discovered peer fe80::
+                         addresses, and sets EXO_BOOTSTRAP_PEERS accordingly.
+                         Also sets EXO_LIBP2P_NAMESPACE for cluster isolation.
+                         This logic is strictly gated on network = "thunderbolt"
+                         and never runs on lan or auto configs.
+
+          All cluster nodes must use the same network value.
+        '';
+      };
+
+      libp2pNamespace = mkOption {
+        type = types.str;
+        default =
+          if cfg.exo.network == "thunderbolt" then
+            "schrodinger-tb"
+          else if cfg.exo.network == "lan" then
+            "schrodinger-lan"
+          else
+            "";
+        defaultText = ''
+          "schrodinger-tb"  when network = "thunderbolt"
+          "schrodinger-lan" when network = "lan"
+          ""                when network = "auto"
+        '';
+        description = ''
+          EXO_LIBP2P_NAMESPACE value for cluster isolation.
+          Prevents accidental peering with other exo clusters on the same network.
+          Derived automatically from network but can be overridden.
+          Only set in the environment when non-empty.
+        '';
+      };
     };
 
     voice = {
@@ -689,15 +801,7 @@ in
           <string>org.exo-explore.exo</string>
           <key>ProgramArguments</key>
           <array>
-            <string>${cfg.exo.package}/bin/exo</string>
-            <string>--api-port</string>
-            <string>${toString cfg.exo.apiPort}</string>
-            <string>--libp2p-port</string>
-            <string>${toString cfg.exo.libp2pPort}</string>
-            ${optionalString (cfg.exo.peers != [ ]) ''
-              <string>--bootstrap-peers</string>
-              <string>${concatStringsSep "," cfg.exo.peers}</string>
-            ''}
+            <string>${exoLaunchScript}</string>
           </array>
           <key>RunAtLoad</key>
           <true/>
@@ -707,15 +811,6 @@ in
           <string>/tmp/exo.log</string>
           <key>StandardErrorPath</key>
           <string>/tmp/exo.err</string>
-          <key>EnvironmentVariables</key>
-          <dict>
-            <key>EXO_BOOTSTRAP_PEERS</key>
-            <string>${concatStringsSep "," cfg.exo.peers}</string>
-            ${optionalString (cfg.exo.listenInterfaces != [ ]) ''
-              <key>EXO_LISTEN_INTERFACES</key>
-              <string>${concatStringsSep "," cfg.exo.listenInterfaces}</string>
-            ''}
-          </dict>
         </dict>
         </plist>
       '';

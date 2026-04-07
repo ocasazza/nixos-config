@@ -170,7 +170,8 @@
             inherit user isDeterminate hermes;
             system = "aarch64-darwin";
             exoPeers = exoPeersFor hostname;
-            exoListenInterfaces = [ "en0" ];
+            exoNetwork = "thunderbolt";
+            exoListenInterfaces = [ ]; # unused when exoNetwork = "thunderbolt"
             exoPackage = nixpkgs.legacyPackages.aarch64-darwin.exo;
           }
           // inputs;
