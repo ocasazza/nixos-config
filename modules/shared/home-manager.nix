@@ -340,7 +340,7 @@
       }
     '';
     extraPackages = with pkgs; [
-      nodePackages.bash-language-server
+      bash-language-server
       nixd
       #(python3.withPackages(ps: with ps; [
       #  python-lsp-server
