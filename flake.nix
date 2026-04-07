@@ -191,6 +191,30 @@
           {
             imports = [ ./nix/pre-commit.nix ];
 
+            packages.deploy-cluster =
+              let
+                deps = [
+                  pkgs.git
+                  pkgs.nh
+                  pkgs.mprocs
+                  pkgs.openssh
+                  deploy-rs.packages.${system}.default
+                  (pkgs.writeShellScriptBin "colmena" ''
+                    exec ${pkgs.nix}/bin/nix run github:zhaofengli/colmena -- "$@"
+                  '')
+                ];
+              in
+              pkgs.writeShellApplication {
+                name = "deploy-cluster";
+                runtimeInputs = deps;
+                text = builtins.readFile ./scripts/deploy-cluster.sh;
+              };
+
+            apps.deploy-cluster = {
+              type = "app";
+              program = "${config.packages.deploy-cluster}/bin/deploy-cluster";
+            };
+
             devShells.default =
               with pkgs;
               mkShell {
