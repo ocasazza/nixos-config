@@ -64,7 +64,6 @@ in
       {
         imports = [
           inputs.nix4nvchad.homeManagerModule
-          ../shared/syncthing.nix
         ];
         home = {
           packages = pkgs.callPackage ./packages.nix { };

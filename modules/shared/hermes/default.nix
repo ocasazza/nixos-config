@@ -4,6 +4,7 @@
   pkgs,
   user,
   hermes,
+  hippo,
   system,
   ...
 }:
@@ -30,15 +31,15 @@ let
     "aarch64-linux"
   ];
 
-  # Patch hermes source to add Vertex proxy rawPredict URL translation
-  patchedHermesSource = pkgs.applyPatches {
-    src = hermes.outPath;
-    name = "hermes-source-patched";
-    patches = [ ./vertex-proxy.patch ];
-  };
-
-  # On Darwin, rebuild hermes venv with onnxruntime arm64 wheel
-  # (upstream uv.lock doesn't include the macosx_14_0_arm64 wheel hash)
+  # On Darwin, rebuild hermes venv from the fork source.
+  # The fork (~/Repositories/schrodinger/hermes-agent, schrodinger branch) carries
+  # all Schrodinger changes as proper commits — no patches needed here.
+  #
+  # Two wheel overrides are still required because uv.lock doesn't include
+  # macOS ARM64 variants for these packages:
+  #   - onnxruntime: missing macosx_14_0_arm64 wheel
+  #   - cffi: 2.0.0 regresses callback thread-safety on macOS (segfault in
+  #     CoreAudio callback); pinned to 1.17.1
   hermesVenvDarwin = pkgs.callPackage (
     {
       python311,
@@ -47,17 +48,24 @@ let
     }:
     let
       workspace = hermes.inputs.uv2nix.lib.workspace.loadWorkspace {
-        workspaceRoot = patchedHermesSource;
+        workspaceRoot = hermes.outPath;
       };
       projectOverlay = workspace.mkPyprojectOverlay {
         sourcePreference = "wheel";
       };
-      # Provide the official onnxruntime macOS ARM64 wheel that uv.lock is missing
       onnxruntimeOverlay = final: prev: {
         onnxruntime = prev.onnxruntime.overrideAttrs (_old: {
           src = pkgs.fetchurl {
             url = "https://files.pythonhosted.org/packages/60/69/6c40720201012c6af9aa7d4ecdd620e521bd806dc6269d636fdd5c5aeebe/onnxruntime-1.24.4-cp311-cp311-macosx_14_0_arm64.whl";
             hash = "sha256-C9/Ojppkl87FhKq0B7cb9pfaxeG3t5dK3FC/dTO9s6I=";
+          };
+        });
+      };
+      cffiOverlay = final: prev: {
+        cffi = prev.cffi.overrideAttrs (_old: {
+          src = pkgs.fetchurl {
+            url = "https://files.pythonhosted.org/packages/6c/f5/6c3a8efe5f503175aaddcbea6ad0d2c96dad6f5abb205750d1b3df44ef29/cffi-1.17.1-cp311-cp311-macosx_11_0_arm64.whl";
+            hash = "sha256-MMXgy1rkk8BMi0KRblLKOAefGyNcL4rl9FJ7ljxAHK8=";
           };
         });
       };
@@ -70,6 +78,7 @@ let
               hermes.inputs.pyproject-build-systems.overlays.default
               projectOverlay
               onnxruntimeOverlay
+              cffiOverlay
             ]
           );
     in
@@ -78,7 +87,8 @@ let
     }
   ) { };
 
-  # Repackage hermes with the patched venv on Darwin
+  # Repackage hermes from the Schrodinger fork with the rebuilt venv on Darwin.
+  # pname includes -schrodinger for FleetDM build identification (ITHELP-46694).
   hermesPackageDarwin =
     let
       skillsSrc = "${hermes.outPath}/skills";
@@ -99,7 +109,7 @@ let
       runtimePath = lib.makeBinPath runtimeDeps;
     in
     pkgs.stdenv.mkDerivation {
-      pname = "hermes-agent";
+      pname = "hermes-agent-schrodinger";
       version = "0.1.0";
       dontUnpack = true;
       dontBuild = true;
@@ -208,6 +218,70 @@ let
     };
   };
 
+  # Pre-fetched ONNX Runtime for hippo (ort-sys 2.0.0-rc.10 expects 1.22.0)
+  # pkgs.onnxruntime is broken on nixpkgs-unstable (removed darwin.apple_sdk_11_0)
+  onnxruntimeVersion = "1.22.0";
+  onnxruntimePrebuilt =
+    let
+      srcs = {
+        "aarch64-darwin" = pkgs.fetchzip {
+          url = "https://github.com/microsoft/onnxruntime/releases/download/v${onnxruntimeVersion}/onnxruntime-osx-arm64-${onnxruntimeVersion}.tgz";
+          hash = "sha256-RQITtO4v6S5nB5B+sOkQignjHM/l7ja+hVDLvKQ1oAw=";
+        };
+        "x86_64-linux" = pkgs.fetchzip {
+          url = "https://github.com/microsoft/onnxruntime/releases/download/v${onnxruntimeVersion}/onnxruntime-linux-x64-${onnxruntimeVersion}.tgz";
+          hash = lib.fakeHash;
+        };
+      };
+    in
+    srcs.${system} or (throw "unsupported system for onnxruntime: ${system}");
+  onnxruntimeDylibName = if isDarwin then "libonnxruntime.dylib" else "libonnxruntime.so";
+
+  # Hippo: AI-generated insights memory system (MCP server)
+  hippoPackage = pkgs.rustPlatform.buildRustPackage {
+    pname = "hippo-server";
+    version = "0.1.0";
+    src = hippo;
+
+    cargoLock.lockFile = "${hippo}/Cargo.lock";
+
+    # Only build the hippo crate (produces hippo-server binary)
+    cargoBuildFlags = [
+      "-p"
+      "hippo"
+    ];
+
+    nativeBuildInputs = with pkgs; [
+      pkg-config
+      makeWrapper
+    ];
+
+    # Frameworks (Security, SystemConfiguration, CoreFoundation) are provided
+    # by apple-sdk through stdenv automatically on modern nixpkgs.
+
+    # Point ort-sys to pre-fetched ONNX Runtime (prevents download in Nix sandbox)
+    env.ORT_LIB_LOCATION = "${onnxruntimePrebuilt}/lib";
+
+    # Tests require the fastembed model (downloaded lazily) — skip in sandbox
+    doCheck = false;
+
+    postInstall = ''
+      wrapProgram $out/bin/hippo-server \
+        --set ORT_DYLIB_PATH "${onnxruntimePrebuilt}/lib/${onnxruntimeDylibName}" \
+        --prefix DYLD_LIBRARY_PATH : "${onnxruntimePrebuilt}/lib"
+    '';
+
+    meta = with lib; {
+      description = "AI-generated insights memory system via MCP";
+      homepage = "https://github.com/symposium-dev/hippo";
+      license = with licenses; [
+        mit
+        asl20
+      ];
+      mainProgram = "hippo-server";
+    };
+  };
+
   defaultPackage = if isDarwin then hermesPackageDarwin else hermes.packages.${system}.default;
 in
 {
@@ -302,7 +376,7 @@ in
 
       package = mkOption {
         type = types.package;
-        default = pkgs.exo or (throw "exo not in nixpkgs; set local.hermes.exo.package explicitly");
+        default = pkgs.exo;
         defaultText = "pkgs.exo";
         description = "The exo package to use.";
       };
@@ -348,6 +422,67 @@ in
       };
     };
 
+    voice = {
+      enable = mkEnableOption "Hermes CLI voice mode (microphone input + TTS output)";
+
+      recordKey = mkOption {
+        type = types.str;
+        default = "ctrl+b";
+        description = "Key binding to start/stop voice recording in the TUI";
+      };
+
+      autoTts = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Automatically enable TTS when voice mode starts";
+      };
+
+      silenceThreshold = mkOption {
+        type = types.int;
+        default = 200;
+        description = "RMS level (0-32767) below which audio counts as silence";
+      };
+
+      silenceDuration = mkOption {
+        type = types.float;
+        default = 3.0;
+        description = "Seconds of silence before recording auto-stops";
+      };
+
+      sttProvider = mkOption {
+        type = types.enum [
+          "local"
+          "groq"
+          "openai"
+        ];
+        default = "local";
+        description = "Speech-to-text provider. 'local' uses faster-whisper with no API key";
+      };
+
+      sttModel = mkOption {
+        type = types.str;
+        default = "base";
+        description = "Whisper model for local STT (tiny, base, small, medium, large-v3)";
+      };
+
+      ttsProvider = mkOption {
+        type = types.enum [
+          "edge"
+          "elevenlabs"
+          "openai"
+          "neutts"
+        ];
+        default = "edge";
+        description = "Text-to-speech provider. 'edge' is free with no API key";
+      };
+
+      ttsVoice = mkOption {
+        type = types.str;
+        default = "en-US-AriaNeural";
+        description = "Voice name for Edge TTS (ignored for other providers)";
+      };
+    };
+
     claw3d = {
       enable = mkEnableOption "Claw3D 3D virtual office for Hermes agents";
 
@@ -381,12 +516,39 @@ in
         description = "Shared secret token for gateway authentication between studio, adapter, and browser";
       };
     };
+
+    hippo = {
+      enable = mkEnableOption "Hippo AI-generated insights memory system (MCP server for Hermes)";
+
+      package = mkOption {
+        type = types.package;
+        default = hippoPackage;
+        description = "The hippo-server package";
+      };
+
+      memoryDir = mkOption {
+        type = types.str;
+        default = "~/.hippo";
+        description = "Directory for storing hippo memory/insight files";
+      };
+
+      logLevel = mkOption {
+        type = types.enum [
+          "error"
+          "warning"
+          "info"
+          "debug"
+        ];
+        default = "info";
+        description = "Hippo server log level";
+      };
+    };
   };
 
   config = mkIf cfg.enable (mkMerge [
     # Common config: package, config file, shell init
     {
-      environment.systemPackages = [ cfg.package ];
+      environment.systemPackages = [ cfg.package ] ++ optional cfg.hippo.enable cfg.hippo.package;
 
       home-manager.users.${user.name}.home.file.".hermes/config.yaml".text = concatStringsSep "\n" (
         [
@@ -422,6 +584,37 @@ in
           "    api_key: \"ollama\""
           ""
         ]
+        ++ optionals cfg.voice.enable [
+          "# Voice mode: microphone input + TTS output"
+          "voice:"
+          "  record_key: \"${cfg.voice.recordKey}\""
+          "  auto_tts: ${if cfg.voice.autoTts then "true" else "false"}"
+          "  silence_threshold: ${toString cfg.voice.silenceThreshold}"
+          "  silence_duration: ${toString cfg.voice.silenceDuration}"
+          ""
+          "stt:"
+          "  provider: \"${cfg.voice.sttProvider}\""
+          "  local:"
+          "    model: \"${cfg.voice.sttModel}\""
+          ""
+          "tts:"
+          "  provider: \"${cfg.voice.ttsProvider}\""
+          "  edge:"
+          "    voice: \"${cfg.voice.ttsVoice}\""
+          ""
+        ]
+        ++ optionals cfg.hippo.enable [
+          "# MCP Servers"
+          "mcp_servers:"
+          "  hippo:"
+          "    command: \"${cfg.hippo.package}/bin/hippo-server\""
+          "    args:"
+          "      - \"--memory-dir\""
+          "      - \"${cfg.hippo.memoryDir}\""
+          "    env:"
+          "      HIPPO_LOG: \"${cfg.hippo.logLevel}\""
+          ""
+        ]
         ++ [
           "agent:"
           "  tool_use_enforcement: \"auto\""
@@ -439,6 +632,10 @@ in
         # Hermes Agent: Vertex proxy env vars and auth
         export ANTHROPIC_VERTEX_PROJECT_ID="vertex-code-454718"
         export CLOUD_ML_REGION="us-east5"
+
+        # faster-whisper model is already cached locally; suppress the
+        # huggingface_hub unauthenticated-request warning at transcription time.
+        export HF_HUB_OFFLINE=1
 
         if command -v gcloud >/dev/null 2>&1; then
           _hermes_token="$(gcloud auth print-identity-token 2>/dev/null || echo "")"
@@ -460,10 +657,24 @@ in
       };
     })
 
+    # NixOS (Linux): portaudio for CLI voice mode microphone input
+    (optionalAttrs isLinux (
+      mkIf cfg.voice.enable {
+        environment.systemPackages = [ pkgs.portaudio ];
+      }
+    ))
+
     # Darwin (macOS): Ollama via Homebrew cask (launchd-managed)
     (mkIf (isDarwin && !cfg.exo.enable) {
       homebrew.casks = [ "ollama" ];
     })
+
+    # Darwin (macOS): portaudio for CLI voice mode microphone input
+    (optionalAttrs isDarwin (
+      mkIf cfg.voice.enable {
+        homebrew.brews = [ "portaudio" ];
+      }
+    ))
 
     # exo: distributed inference cluster (Darwin launchd)
     (mkIf (isDarwin && cfg.exo.enable) {

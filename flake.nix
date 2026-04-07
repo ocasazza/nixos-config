@@ -51,12 +51,13 @@
       url = "git+file:///Users/casazza/Repositories/schrodinger/opencode";
     };
     hermes = {
-      url = "github:NousResearch/hermes-agent";
+      url = "git+file:///Users/casazza/Repositories/schrodinger/hermes-agent?ref=schrodinger";
     };
-    exo = {
-      url = "github:exo-explore/exo";
-      inputs.nixpkgs.follows = "nixpkgs";
+    hippo = {
+      url = "github:symposium-dev/hippo";
+      flake = false;
     };
+    # exo is in nixpkgs (v1.0.69) — no separate flake input needed
     deploy-rs = {
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -80,7 +81,6 @@
       # We will find you
       git-fleet-runner,
       hermes,
-      exo,
       deploy-rs,
       flake-parts,
       git-hooks-nix,
@@ -171,7 +171,7 @@
             system = "aarch64-darwin";
             exoPeers = exoPeersFor hostname;
             exoListenInterfaces = [ "en0" ];
-            exoPackage = exo.packages.aarch64-darwin.default;
+            exoPackage = nixpkgs.legacyPackages.aarch64-darwin.exo;
           }
           // inputs;
           modules = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
@@ -200,6 +200,7 @@
                   statix
                   deadnix
                   nh
+                  mprocs
                   deploy-rs.packages.${system}.default
                 ];
                 shellHook = ''

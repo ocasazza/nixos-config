@@ -20,6 +20,8 @@ in
   local.hermes = {
     enable = true;
     claw3d.enable = true;
+    voice.enable = true;
+    hippo.enable = true;
   };
 
   # Opencode + Claude Code Vertex AI proxy
@@ -89,8 +91,9 @@ in
 
   # Set system-wide environment variables
   environment.variables = {
-    # NH Darwin flake configuration
-    NH_DARWIN_FLAKE = ".#darwinConfigurations.macos";
+    # NH Darwin flake configuration — use the hostname-specific config
+    # which includes exo cluster membership and all Schrodinger overrides
+    NH_DARWIN_FLAKE = ".#darwinConfigurations.GN9CFLM92K-MBP";
     # SOPS key file location
     SOPS_AGE_KEY_FILE = "/Users/${user.name}/.config/sops/age/keys.txt";
     # Nix configuration
