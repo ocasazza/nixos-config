@@ -61,7 +61,6 @@ with pkgs;
   tio # serial console
   silver-searcher
   vscode
-  crush
   claude-code
 
   # Rust
