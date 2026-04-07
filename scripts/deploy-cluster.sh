@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
-# deploy-cluster.sh — commit, push via colmena, then activate on all nodes in parallel.
-# Usage: ./scripts/deploy-cluster.sh [hostname...]
+# deploy-cluster.sh — commit, build closures, then activate all nodes in parallel.
+# Usage: nix run .#deploy-cluster [hostname...]
 #   If no hostnames are given, deploys to all reachable cluster nodes.
-#
-# Requires: colmena, mprocs (nix run nixpkgs#mprocs), nh, ssh
 set -euo pipefail
 
 # When run as a Nix app the script lives in the store, not the repo.
 # Fall back to $PWD (user must run from repo root) or accept REPO_DIR env override.
 if [[ -n "${REPO_DIR:-}" ]]; then
   : # already set
-elif git -C "$(dirname "$0")" rev-parse --show-toplevel &>/dev/null; then
-  REPO_DIR="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 elif git -C "$PWD" rev-parse --show-toplevel &>/dev/null; then
   REPO_DIR="$(git -C "$PWD" rev-parse --show-toplevel)"
 else
   echo "error: cannot find nixos-config repo. Run from the repo root or set REPO_DIR." >&2
   exit 1
 fi
+
 LOCAL_HOSTNAME="$(hostname -s)"
 
 CLUSTER_NODES=(
@@ -48,19 +45,31 @@ fi
 echo "==> Pushing..."
 git push
 
-# ── 2. Colmena: build & push closures ───────────────────────────────────────
-COLMENA_TARGETS=$(IFS=,; echo "${TARGETS[*]}")
-echo "==> Colmena push to: $COLMENA_TARGETS"
-nix run github:zhaofengli/colmena -- apply \
-  --on "$COLMENA_TARGETS" \
-  --no-substitute \
-  push 2>&1
+# ── 2. Build all closures in parallel (Nix handles concurrency via max-jobs) ─
+echo "==> Building closures for: ${TARGETS[*]}"
+BUILD_ATTRS=()
+for host in "${TARGETS[@]}"; do
+  BUILD_ATTRS+=(".#darwinConfigurations.${host}.system")
+done
+nix build --no-link "${BUILD_ATTRS[@]}"
 
-# ── 3. Activate on all nodes in parallel via mprocs ─────────────────────────
-# Each node gets a per-process activation script written to a temp file.
-# mprocs runs them all concurrently with a per-node output panel.
-# Exit codes are captured via sentinel files for the summary.
+# ── 3. Copy closures to remote nodes in parallel ─────────────────────────────
+echo "==> Copying closures to remote nodes..."
+COPY_PIDS=()
+for host in "${TARGETS[@]}"; do
+  ip="${NODE_IPS[$host]:-}"
+  [[ "$host" == "$LOCAL_HOSTNAME" || "$ip" == "localhost" ]] && continue
+  if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "casazza@${ip}" true &>/dev/null; then
+    echo "  SKIP (unreachable): $host"
+    continue
+  fi
+  closure="$(nix path-info ".#darwinConfigurations.${host}.system")"
+  nix copy --to "ssh://casazza@${ip}" "$closure" &
+  COPY_PIDS+=($!)
+done
+for pid in "${COPY_PIDS[@]}"; do wait "$pid"; done
 
+# ── 4. Activate on all nodes in parallel via mprocs ──────────────────────────
 echo ""
 echo "==> Activating ${#TARGETS[@]} nodes in parallel..."
 
@@ -69,78 +78,70 @@ MPROCS_CMDS=()
 for host in "${TARGETS[@]}"; do
   ip="${NODE_IPS[$host]:-}"
   status_file="$LOG_DIR/${host}.status"
-
-  # Write a self-contained activation script for this node
   activate_script="$LOG_DIR/${host}.sh"
-  cat > "$activate_script" << SCRIPT
+  closure="$(nix path-info ".#darwinConfigurations.${host}.system" 2>/dev/null || echo "")"
+
+  if [[ "$host" == "$LOCAL_HOSTNAME" || "$ip" == "localhost" ]]; then
+    cat > "$activate_script" << SCRIPT
 #!/usr/bin/env bash
 set -euo pipefail
-STATUS_FILE="${status_file}"
-
-_fail() { echo "FAILED" > "\$STATUS_FILE"; echo "  FAILED: $host: \$1" >&2; exit 1; }
-_ok()   { echo "OK"     > "\$STATUS_FILE"; echo "  OK: $host"; }
-
-$(if [ "$host" = "$LOCAL_HOSTNAME" ] || [ "$ip" = "localhost" ]; then
-cat << 'LOCAL'
 echo "==> $host (local)"
-if nh darwin switch ".#${host}"; then
-  _ok
+if sudo "${closure}/sw/bin/darwin-rebuild" activate 2>&1; then
+  echo "OK" > "${status_file}"
+  echo "  OK: $host"
 else
-  _fail "local activation failed"
+  echo "FAILED" > "${status_file}"
+  echo "  FAILED: $host"
+  exit 1
 fi
-LOCAL
-else
-cat << REMOTE
+SCRIPT
+  else
+    cat > "$activate_script" << SCRIPT
+#!/usr/bin/env bash
+set -euo pipefail
 echo "==> $host ($ip)"
 if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "casazza@${ip}" true 2>/dev/null; then
-  echo "SKIP" > "\$STATUS_FILE"
-  echo "  SKIP: $host ($ip) unreachable"
+  echo "SKIP" > "${status_file}"
+  echo "  SKIP: $host unreachable"
   exit 0
 fi
-
-ssh "casazza@${ip}" bash -s << 'INNEREOF' || _fail "activation failed"
+ssh "casazza@${ip}" bash -s << 'INNEREOF' || { echo "FAILED" > "${status_file}"; exit 1; }
 set -euo pipefail
-system_profile="/nix/var/nix/profiles/system"
-[ -L "\$system_profile" ] || { echo "ERROR: no system profile"; exit 1; }
-echo "  Running activate..."
-sudo "\$system_profile/activate" 2>&1 || true
-echo "  Running activate-user..."
-"\$system_profile/activate-user" 2>&1 || true
+profile="${closure}"
+[ -e "\$profile" ] || { echo "closure not found on remote"; exit 1; }
+sudo "\$profile/activate" 2>&1
+"\$profile/activate-user" 2>&1
 INNEREOF
-_ok
-REMOTE
-fi)
+echo "OK" > "${status_file}"
+echo "  OK: $host"
 SCRIPT
-  chmod +x "$activate_script"
+  fi
 
-  # mprocs expects "name=command" pairs
+  chmod +x "$activate_script"
   MPROCS_CMDS+=("$host=$activate_script")
 done
 
-# Run all activations in parallel with mprocs
-# --no-docs: skip the key-binding help line  --hide-keymap: cleaner output
 mprocs --no-docs "${MPROCS_CMDS[@]}"
 
-# ── 4. Summary ───────────────────────────────────────────────────────────────
+# ── 5. Summary ───────────────────────────────────────────────────────────────
 echo ""
 FAILED=()
 SKIPPED=()
 for host in "${TARGETS[@]}"; do
-  status_file="$LOG_DIR/${host}.status"
-  status="$(cat "$status_file" 2>/dev/null || echo "UNKNOWN")"
+  status="$(cat "$LOG_DIR/${host}.status" 2>/dev/null || echo "UNKNOWN")"
   case "$status" in
     OK)      echo "  [OK]   $host" ;;
     SKIP)    echo "  [SKIP] $host (unreachable)"; SKIPPED+=("$host") ;;
     FAILED)  echo "  [FAIL] $host"; FAILED+=("$host") ;;
-    UNKNOWN) echo "  [???]  $host (no status written)"; FAILED+=("$host") ;;
+    UNKNOWN) echo "  [???]  $host"; FAILED+=("$host") ;;
   esac
 done
 
 echo ""
-[ ${#SKIPPED[@]} -gt 0 ] && echo "==> Skipped (unreachable): ${SKIPPED[*]}"
-if [ ${#FAILED[@]} -eq 0 ]; then
+[[ ${#SKIPPED[@]} -gt 0 ]] && echo "==> Skipped: ${SKIPPED[*]}"
+if [[ ${#FAILED[@]} -eq 0 ]]; then
   echo "==> All reachable nodes deployed and activated."
 else
-  echo "==> Failed nodes: ${FAILED[*]}"
+  echo "==> Failed: ${FAILED[*]}"
   exit 1
 fi
