@@ -48,7 +48,7 @@
       url = "git+ssh://git@github.com/schrodinger/git-fleet-runner";
     };
     opencode = {
-      url = "git+file:///Users/casazza/Repositories/schrodinger/opencode";
+      url = "git+file:///Users/casazza/Repositories/schrodinger/opencode?ref=dev";
     };
     hermes = {
       url = "git+file:///Users/casazza/Repositories/schrodinger/hermes-agent?ref=schrodinger";
