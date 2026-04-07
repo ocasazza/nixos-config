@@ -6,7 +6,18 @@
 # Requires: colmena, mprocs (nix run nixpkgs#mprocs), nh, ssh
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# When run as a Nix app the script lives in the store, not the repo.
+# Fall back to $PWD (user must run from repo root) or accept REPO_DIR env override.
+if [[ -n "${REPO_DIR:-}" ]]; then
+  : # already set
+elif git -C "$(dirname "$0")" rev-parse --show-toplevel &>/dev/null; then
+  REPO_DIR="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+elif git -C "$PWD" rev-parse --show-toplevel &>/dev/null; then
+  REPO_DIR="$(git -C "$PWD" rev-parse --show-toplevel)"
+else
+  echo "error: cannot find nixos-config repo. Run from the repo root or set REPO_DIR." >&2
+  exit 1
+fi
 LOCAL_HOSTNAME="$(hostname -s)"
 
 CLUSTER_NODES=(
