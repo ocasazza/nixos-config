@@ -6,7 +6,8 @@
   # nix-darwin native power options
   power = {
     restartAfterFreeze = true;
-    restartAfterPowerFailure = true;
+    # restartAfterPowerFailure: not supported on all Macs (e.g. laptops)
+    # restartAfterPowerFailure = true;
     sleep = {
       computer = "never";
       display = "never";
