@@ -15,7 +15,7 @@
                   pkgs.treefmt
                   pkgs.nixfmt-rfc-style
                   pkgs.shfmt
-                  pkgs.nodePackages.prettier
+                  pkgs.prettier
                 ]
               }:$PATH"
               exec ${pkgs.treefmt}/bin/treefmt --fail-on-change
