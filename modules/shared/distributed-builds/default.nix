@@ -13,6 +13,7 @@
   lib,
   isDeterminate,
   user,
+  exoThunderboltHostname ? null,
   ...
 }:
 let
@@ -20,7 +21,7 @@ let
   # system = aarch64-darwin for all Apple Silicon Macs.
   # maxJobs: leave 2 cores free for the local machine's own work.
   # speedFactor: all nodes treated equally — adjust if one is significantly faster.
-  builders = [
+  allBuilders = [
     {
       hostName = "GN9CFLM92K-MBP.local";
       system = "aarch64-darwin";
@@ -75,6 +76,11 @@ let
       ];
     }
   ];
+
+  # Exclude this machine from its own builder list to avoid SSH-to-localhost.
+  builders = builtins.filter (
+    b: exoThunderboltHostname == null || b.hostName != "${exoThunderboltHostname}.local"
+  ) allBuilders;
 
   # Format a builder attrset as a nix.conf builders line:
   # ssh://user@host system key maxJobs speed features
