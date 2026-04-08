@@ -117,7 +117,7 @@
         }; # no static IP yet
         "GJHC5VVN49-MBP" = {
           port = 52416;
-          ip = "192.168.1.56";
+          ip = "192.168.1.29";
         };
       };
 
@@ -273,7 +273,7 @@
                 };
               };
               "GJHC5VVN49-MBP" = {
-                hostname = "192.168.1.56";
+                hostname = "192.168.1.29";
                 profiles.system = {
                   user = "root";
                   path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."GJHC5VVN49-MBP";

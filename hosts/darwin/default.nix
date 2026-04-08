@@ -12,6 +12,7 @@ in
 {
   imports = [
     ../../modules/darwin/home-manager.nix
+    ../../modules/darwin/power
     ../../modules/shared
     ../../modules/shared/cachix
     ../../modules/shared/distributed-builds
