@@ -26,8 +26,8 @@ let
   # Wrapper script for the exo launchd service.
   # - auto: exec exo directly, let it handle discovery
   # - lan:  exec exo with EXO_LIBP2P_NAMESPACE for cluster isolation, no interface pinning
-  # - thunderbolt: wait for bridge0 IPv6 link-local, seed NDP via all-nodes multicast,
-  #   read back discovered peer fe80:: addresses, build EXO_BOOTSTRAP_PEERS, then exec exo.
+  # - thunderbolt: wait for P2P link IPs on raw en* interfaces, build EXO_BOOTSTRAP_PEERS
+  #   from peer /30 IPs, then exec exo.
   #   All logic is gated on network = "thunderbolt" so it never runs on lan/auto configs.
   exoLaunchScript = pkgs.writeShellScript "exo-launch" (
     ''
@@ -35,38 +35,42 @@ let
     ''
     + (
       if cfg.exo.network == "thunderbolt" then
+        let
+          # Build bootstrap peers from P2P link IPs to each directly-connected peer
+          tbPeerAddrs =
+            if myLinks != [ ] then
+              lib.concatStringsSep "," (
+                map (link: "/ip4/${link.peerIp}/tcp/${toString cfg.exo.libp2pPort}") myLinks
+              )
+            else
+              "";
+          # Interfaces to check for readiness
+          myIfaces = lib.unique (map (l: l.iface) myLinks);
+          ifaceChecks = lib.concatMapStringsSep " " (iface: iface) myIfaces;
+        in
         ''
-          # ── Thunderbolt-only peer discovery ─────────────────────────────────────
-          # Wait for bridge0 to acquire its IPv6 link-local address (up to 30s at boot).
-          MY_ADDR=""
+          # ── Thunderbolt L3 mesh peer discovery ──────────────────────────────────
+          # Wait for at least one P2P interface to have a 10.99.x.x IP
+          READY=0
           for _i in $(seq 1 30); do
-            MY_ADDR=$(ifconfig bridge0 2>/dev/null \
-              | awk '/inet6 fe80/{gsub(/%.*/, "", $2); print $2; exit}')
-            [ -n "$MY_ADDR" ] && break
+            for iface in ${ifaceChecks}; do
+              if ifconfig "$iface" 2>/dev/null | grep -q 'inet 10\.99\.'; then
+                READY=1
+                break 2
+              fi
+            done
             sleep 1
           done
 
-          if [ -n "$MY_ADDR" ]; then
-            # Stimulate NDP responses from all bridge0 peers (one packet, non-fatal).
-            ping6 -c 1 -W 500 ff02::1%bridge0 >/dev/null 2>&1 || true
-            sleep 0.5
-
-            # Read NDP neighbor cache: bridge0 peers, exclude ourselves, exclude incomplete/permanent entries.
-            TB_PEERS=$(ndp -a 2>/dev/null \
-              | awk '/bridge0/ && !/permanent/ && !/incomplete/' \
-              | awk '{gsub(/%.*/, "", $1); print $1}' \
-              | grep -v "^''${MY_ADDR}$" || true)
-
-            # Build comma-separated libp2p multiaddrs from discovered IPv6 peers.
-            if [ -n "$TB_PEERS" ]; then
-              DISCOVERED=$(echo "$TB_PEERS" \
-                | awk -v port="${toString cfg.exo.libp2pPort}" \
-                    '{printf "/ip6/%s/tcp/%s", $1, port; if (NR > 1) printf ","}' \
-                | awk '{print $0}')
-              export EXO_BOOTSTRAP_PEERS="$DISCOVERED"
-            fi
+          if [ "$READY" -eq 0 ]; then
+            echo "WARNING: no TB P2P interface has a 10.99.x.x IP — falling back to auto discovery" >&2
           fi
 
+        ''
+        + lib.optionalString (tbPeerAddrs != "") ''
+          export EXO_BOOTSTRAP_PEERS="${tbPeerAddrs}"
+        ''
+        + ''
           export EXO_LIBP2P_NAMESPACE="${cfg.exo.libp2pNamespace}"
           # ────────────────────────────────────────────────────────────────────────
         ''
@@ -95,6 +99,89 @@ let
     "aarch64-linux"
   ];
 
+  # ── Thunderbolt L3 mesh helpers ───────────────────────────────────────────
+  # Each cable is a /30 point-to-point link.  No bridge0 — pure L3.
+  # thunderboltLinks is passed from the flake via exo-cluster.nix.
+
+  # All links where this host is an endpoint
+  myLinks = lib.concatMap (
+    link:
+    if link.a.host == cfg.exo.thunderboltHostname then
+      [
+        {
+          ip = "${link.subnet}.1";
+          peerIp = "${link.subnet}.2";
+          peerHost = link.b.host;
+          iface = link.a.iface;
+          subnet = link.subnet;
+        }
+      ]
+    else if link.b.host == cfg.exo.thunderboltHostname then
+      [
+        {
+          ip = "${link.subnet}.2";
+          peerIp = "${link.subnet}.1";
+          peerHost = link.a.host;
+          iface = link.b.iface;
+          subnet = link.subnet;
+        }
+      ]
+    else
+      [ ]
+  ) cfg.exo.thunderboltLinks;
+
+  # Subnets this host is directly connected to
+  mySubnets = map (l: l.subnet) myLinks;
+
+  # All subnets in the mesh
+  allSubnets = lib.unique (map (link: link.subnet) cfg.exo.thunderboltLinks);
+
+  # Subnets we need a route to (not directly connected)
+  indirectSubnets = lib.filter (s: !(builtins.elem s mySubnets)) allSubnets;
+
+  # For each indirect subnet, find a gateway (a directly-connected peer
+  # that IS on that subnet).  Pick the first match.
+  routesForHost = map (
+    subnet:
+    let
+      # Find ANY link endpoint on the target subnet that is also our direct peer
+      peerOnSubnet = lib.findFirst (
+        myLink:
+        builtins.any (
+          tbLink:
+          tbLink.subnet == subnet && (tbLink.a.host == myLink.peerHost || tbLink.b.host == myLink.peerHost)
+        ) cfg.exo.thunderboltLinks
+      ) null myLinks;
+    in
+    if peerOnSubnet != null then
+      {
+        inherit subnet;
+        gateway = peerOnSubnet.peerIp;
+      }
+    else
+      null
+  ) indirectSubnets;
+
+  # /etc/hosts: map each peer to its IP on the link connecting us to it
+  # If no direct link, use the IP reachable via routing (peer's IP on any link)
+  tbHostsEntries = lib.concatMap (
+    link:
+    let
+      peerHost = link.peerHost;
+      peerIp = link.peerIp;
+    in
+    [ "${peerIp} ${peerHost}.tb ${peerHost}.thunderbolt" ]
+  ) myLinks;
+
+  # This host's own .tb entry (use the IP from the first link, sorted for stability)
+  tbMyIP = if myLinks != [ ] then (builtins.head myLinks).ip else null;
+
+  tbEnabled =
+    cfg.exo.network == "thunderbolt"
+    && cfg.exo.thunderboltLinks != [ ]
+    && cfg.exo.thunderboltHostname != null
+    && myLinks != [ ];
+
   # On Darwin, rebuild hermes venv from the fork source.
   # The fork (~/Repositories/schrodinger/hermes-agent, schrodinger branch) carries
   # all Schrodinger changes as proper commits — no patches needed here.
@@ -117,7 +204,7 @@ let
       projectOverlay = workspace.mkPyprojectOverlay {
         sourcePreference = "wheel";
       };
-      onnxruntimeOverlay = final: prev: {
+      onnxruntimeOverlay = _final: prev: {
         onnxruntime = prev.onnxruntime.overrideAttrs (_old: {
           src = pkgs.fetchurl {
             url = "https://files.pythonhosted.org/packages/60/69/6c40720201012c6af9aa7d4ecdd620e521bd806dc6269d636fdd5c5aeebe/onnxruntime-1.24.4-cp311-cp311-macosx_14_0_arm64.whl";
@@ -125,7 +212,7 @@ let
           };
         });
       };
-      cffiOverlay = final: prev: {
+      cffiOverlay = _final: prev: {
         cffi = prev.cffi.overrideAttrs (_old: {
           src = pkgs.fetchurl {
             url = "https://files.pythonhosted.org/packages/6c/f5/6c3a8efe5f503175aaddcbea6ad0d2c96dad6f5abb205750d1b3df44ef29/cffi-1.17.1-cp311-cp311-macosx_11_0_arm64.whl";
@@ -511,6 +598,58 @@ in
         '';
       };
 
+      thunderboltHostname = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          This machine's hostname within the Thunderbolt cluster.
+          Must match one of the keys in thunderboltCluster.
+          Passed via specialArgs from the flake (derived from thunderboltLinks).
+        '';
+      };
+
+      thunderboltCluster = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = ''
+          Hostnames of all machines in the Thunderbolt cluster.
+          Used for exo peer discovery.  The actual IP assignment
+          comes from thunderboltLinks, not from sorted position.
+        '';
+      };
+
+      thunderboltLinks = mkOption {
+        type = types.listOf (types.attrsOf types.anything);
+        default = [ ];
+        example = [
+          {
+            subnet = "10.99.1";
+            a = {
+              host = "GN9CFLM92K-MBP";
+              iface = "en1";
+            };
+            b = {
+              host = "GJHC5VVN49-MBP";
+              iface = "en2";
+            };
+          }
+        ];
+        description = ''
+          Point-to-point Thunderbolt cable definitions.
+          Each entry describes a /30 subnet between two endpoints.
+          Side "a" gets .1, side "b" gets .2.  No L2 bridging — pure L3.
+
+          The activation script:
+          - Removes all en* interfaces from bridge0
+          - Assigns /30 IPs to the raw en* interfaces
+          - Adds static routes for non-directly-connected /30 subnets
+          - Writes /etc/hosts with .tb hostnames → peer P2P IPs
+          - Sets MTU 9000 (jumbo frames) on all TB interfaces
+
+          Only takes effect when network = "thunderbolt".
+        '';
+      };
+
       libp2pNamespace = mkOption {
         type = types.str;
         default =
@@ -787,6 +926,67 @@ in
         homebrew.brews = [ "portaudio" ];
       }
     ))
+
+    # Thunderbolt L3 mesh: /30 P2P IPs on raw en* + static routes + /etc/hosts
+    (mkIf (cfg.exo.enable && tbEnabled) {
+      system.activationScripts.postActivation.text = lib.mkAfter (
+        let
+          # Interface configuration commands
+          ifaceCommands = lib.concatMapStringsSep "\n" (link: ''
+            echo "Configuring ${link.iface} → ${link.ip}/30 (peer: ${link.peerHost})"
+            # Remove from bridge0 if present (no L2 bridging)
+            if /sbin/ifconfig bridge0 2>/dev/null | grep -q "member: ${link.iface}"; then
+              /sbin/ifconfig bridge0 deletem "${link.iface}" 2>/dev/null || true
+              echo "  Removed ${link.iface} from bridge0"
+            fi
+            # Assign /30 IP
+            /sbin/ifconfig "${link.iface}" inet "${link.ip}" netmask 255.255.255.252
+            # Jumbo frames
+            /sbin/ifconfig "${link.iface}" mtu 9000 2>/dev/null || true
+          '') myLinks;
+
+          # Static route commands for non-directly-connected subnets
+          routeCommands = lib.concatMapStringsSep "\n" (
+            route:
+            if route != null then
+              ''
+                /sbin/route delete -net "${route.subnet}.0/30" 2>/dev/null || true
+                /sbin/route add -net "${route.subnet}.0/30" "${route.gateway}"
+                echo "Route: ${route.subnet}.0/30 via ${route.gateway}"
+              ''
+            else
+              ""
+          ) routesForHost;
+
+          # /etc/hosts block: peers → their P2P IPs on the link to us
+          # Plus our own .tb entry
+          hostsBlock = lib.concatStringsSep "\n" (
+            [ "${tbMyIP} ${cfg.exo.thunderboltHostname}.tb ${cfg.exo.thunderboltHostname}.thunderbolt" ]
+            ++ tbHostsEntries
+          );
+          marker = "# --- TB cluster (managed by nix-darwin) ---";
+        in
+        ''
+          echo "==> Thunderbolt L3 mesh: configuring point-to-point links..."
+
+          # 1. Configure interfaces with /30 IPs
+          ${ifaceCommands}
+
+          # 2. Add static routes for indirect subnets
+          ${routeCommands}
+
+          # 3. Idempotent /etc/hosts management (replace existing block)
+          if grep -q '${marker}' /etc/hosts 2>/dev/null; then
+            # Remove old block and rewrite
+            sed -i.bak '/${marker}/,/${marker} end/d' /etc/hosts
+          fi
+          printf '\n${marker}\n${hostsBlock}\n${marker} end\n' >> /etc/hosts
+          echo "Updated TB cluster entries in /etc/hosts"
+
+          echo "==> Thunderbolt L3 mesh configured."
+        ''
+      );
+    })
 
     # exo: distributed inference cluster (Darwin launchd)
     (mkIf (isDarwin && cfg.exo.enable) {

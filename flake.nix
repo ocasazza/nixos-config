@@ -58,10 +58,6 @@
       flake = false;
     };
     # exo is in nixpkgs (v1.0.69) — no separate flake input needed
-    deploy-rs = {
-      url = "github:serokell/deploy-rs";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
@@ -81,7 +77,6 @@
       # We will find you
       git-fleet-runner,
       hermes,
-      deploy-rs,
       flake-parts,
       git-hooks-nix,
       ...
@@ -100,33 +95,95 @@
       ];
       darwinSystems = [ "aarch64-darwin" ];
 
-      # ── Exo cluster ──────────────────────────────────────────────────────────
-      # hostname → { port, ip }  (IPs for reliable libp2p bootstrap; no mDNS needed)
-      exoCluster = {
-        "GN9CFLM92K-MBP" = {
-          port = 52416;
-          ip = "192.168.1.23";
-        };
-        "CK2Q9LN7PM-MBA" = {
-          port = 52416;
-          ip = "192.168.1.3";
-        };
-        "L75T4YHXV7-MBA" = {
-          port = 52416;
-          ip = "L75T4YHXV7-MBA.local";
-        }; # no static IP yet
-        "GJHC5VVN49-MBP" = {
-          port = 52416;
-          ip = "192.168.1.29";
-        };
-      };
+      # ── Thunderbolt point-to-point links ────────────────────────────────────
+      # Each cable is a /30 subnet between two (host, interface) endpoints.
+      # Side "a" gets .1, side "b" gets .2.  No L2 bridging — pure L3.
+      # Subnet base is the first 3 octets; the 4th octet is always .0/30.
+      thunderboltLinks = [
+        {
+          subnet = "10.99.1"; # 10.99.1.0/30
+          a = {
+            host = "GN9CFLM92K-MBP";
+            iface = "en1";
+          };
+          b = {
+            host = "GJHC5VVN49-MBP";
+            iface = "en2";
+          };
+        }
+        {
+          subnet = "10.99.2"; # 10.99.2.0/30
+          a = {
+            host = "GN9CFLM92K-MBP";
+            iface = "en2";
+          };
+          b = {
+            host = "CK2Q9LN7PM-MBA";
+            iface = "en2";
+          };
+        }
+        {
+          subnet = "10.99.3"; # 10.99.3.0/30
+          a = {
+            host = "CK2Q9LN7PM-MBA";
+            iface = "en1";
+          };
+          b = {
+            host = "GJHC5VVN49-MBP";
+            iface = "en1";
+          };
+        }
+      ];
 
-      # Peer list as /ip4/ip/tcp/port multiaddrs (no peer ID — libp2p negotiates on connect)
+      # All hostnames participating in the TB mesh
+      thunderboltHosts = nixpkgs.lib.unique (
+        nixpkgs.lib.concatMap (link: [
+          link.a.host
+          link.b.host
+        ]) thunderboltLinks
+      );
+
+      # exo libp2p port (shared across cluster)
+      exoPort = 52416;
+
+      # For a given hostname, collect all its directly-connected link IPs
+      # Returns: [ { ip, peerIp, peerHost, iface, subnet } ]
+      linksForHost =
+        hostname:
+        nixpkgs.lib.concatMap (
+          link:
+          if link.a.host == hostname then
+            [
+              {
+                ip = "${link.subnet}.1";
+                peerIp = "${link.subnet}.2";
+                peerHost = link.b.host;
+                iface = link.a.iface;
+                subnet = link.subnet;
+              }
+            ]
+          else if link.b.host == hostname then
+            [
+              {
+                ip = "${link.subnet}.2";
+                peerIp = "${link.subnet}.1";
+                peerHost = link.a.host;
+                iface = link.b.iface;
+                subnet = link.subnet;
+              }
+            ]
+          else
+            [ ]
+        ) thunderboltLinks;
+
+      # Build exo bootstrap peers for a host: /ip4/<peerTbIp>/tcp/<port>
+      # Uses the first link IP to each peer (deterministic because thunderboltLinks is ordered)
       exoPeersFor =
         hostname:
-        nixpkgs.lib.mapAttrsToList (host: cfg: "/ip4/${cfg.ip}/tcp/${toString cfg.port}") (
-          nixpkgs.lib.filterAttrs (h: _: h != hostname) exoCluster
-        );
+        let
+          links = linksForHost hostname;
+        in
+        map (l: "/ip4/${l.peerIp}/tcp/${toString exoPort}") links;
 
       # ── Shared nix-darwin base modules ───────────────────────────────────────
       baseModules = [
@@ -167,19 +224,26 @@
         darwin.lib.darwinSystem {
           system = "aarch64-darwin";
           specialArgs = {
-            inherit user isDeterminate hermes;
+            inherit
+              user
+              isDeterminate
+              hermes
+              thunderboltLinks
+              ;
             system = "aarch64-darwin";
             exoPeers = exoPeersFor hostname;
             exoNetwork = "thunderbolt";
             exoListenInterfaces = [ ]; # unused when exoNetwork = "thunderbolt"
             exoPackage = nixpkgs.legacyPackages.aarch64-darwin.exo;
+            exoThunderboltHostname = hostname;
+            exoThunderboltCluster = thunderboltHosts;
           }
           // inputs;
           modules = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
         };
     in
     flake-parts.lib.mkFlake { inherit inputs; } (
-      { self, ... }:
+      { ... }:
       {
         imports = [ git-hooks-nix.flakeModule ];
         systems = linuxSystems ++ darwinSystems;
@@ -197,12 +261,7 @@
                 deps = [
                   pkgs.git
                   pkgs.nh
-                  pkgs.mprocs
                   pkgs.openssh
-                  deploy-rs.packages.${system}.default
-                  (pkgs.writeShellScriptBin "colmena" ''
-                    exec ${pkgs.nix}/bin/nix run github:zhaofengli/colmena -- "$@"
-                  '')
                 ];
               in
               pkgs.writeShellApplication {
@@ -225,8 +284,6 @@
                   statix
                   deadnix
                   nh
-                  mprocs
-                  deploy-rs.packages.${system}.default
                 ];
                 shellHook = ''
                   export EDITOR=nvim
@@ -254,40 +311,7 @@
               macos = macosConfig;
             }
             # Generate a config for every cluster node
-            // nixpkgs.lib.mapAttrs (hostname: _: mkMachineConfig hostname) exoCluster;
-
-          deploy = {
-            nodes = {
-              "GN9CFLM92K-MBP" = {
-                hostname = "localhost";
-                profiles.system = {
-                  user = "root";
-                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."GN9CFLM92K-MBP";
-                };
-              };
-              "CK2Q9LN7PM-MBA" = {
-                hostname = "192.168.1.3";
-                profiles.system = {
-                  user = "root";
-                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."CK2Q9LN7PM-MBA";
-                };
-              };
-              "GJHC5VVN49-MBP" = {
-                hostname = "192.168.1.29";
-                profiles.system = {
-                  user = "root";
-                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."GJHC5VVN49-MBP";
-                };
-              };
-              "L75T4YHXV7-MBA" = {
-                hostname = "L75T4YHXV7-MBA.local";
-                profiles.system = {
-                  user = "root";
-                  path = deploy-rs.lib.aarch64-darwin.activate.darwin self.darwinConfigurations."L75T4YHXV7-MBA";
-                };
-              };
-            };
-          };
+            // nixpkgs.lib.genAttrs thunderboltHosts (hostname: mkMachineConfig hostname);
 
           nixosConfigurations = nixpkgs.lib.genAttrs linuxSystems (
             system:
