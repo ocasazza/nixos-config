@@ -239,7 +239,10 @@
             exoThunderboltCluster = thunderboltHosts;
           }
           // inputs;
-          modules = baseModules ++ [ ./hosts/darwin/exo-cluster.nix ];
+          modules = baseModules ++ [
+            ./hosts/darwin/exo-cluster.nix
+            { networking.hostName = hostname; }
+          ];
         };
     in
     flake-parts.lib.mkFlake { inherit inputs; } (

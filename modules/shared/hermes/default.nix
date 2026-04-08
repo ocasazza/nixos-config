@@ -510,7 +510,41 @@ in
       enable = mkOption {
         type = types.bool;
         default = true;
-        description = "Route subtasks to local LLM";
+        description = "Route subtasks to a dedicated subagent model";
+      };
+
+      model = mkOption {
+        type = types.str;
+        default = "claude-haiku-4-5";
+        description = "Model to use for subagent delegation";
+      };
+
+      provider = mkOption {
+        type = types.str;
+        default = "anthropic";
+        description = "Provider for subagent delegation (anthropic uses the Vertex proxy)";
+      };
+
+      useVertexProxy = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Route subagent delegation through the Vertex AI proxy (uses vertexProxy.baseURL)";
+      };
+
+      maxIterations = mkOption {
+        type = types.int;
+        default = 50;
+        description = "Per-subagent iteration cap";
+      };
+
+      defaultToolsets = mkOption {
+        type = types.listOf types.str;
+        default = [
+          "terminal"
+          "file"
+          "web"
+        ];
+        description = "Default toolsets available to subagents";
       };
     };
 
@@ -518,8 +552,121 @@ in
       enable = mkOption {
         type = types.bool;
         default = true;
-        description = "Route vision/web/compression to local LLM";
+        description = "Enable auxiliary model configuration for side tasks";
       };
+
+      useVertexProxy = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Route auxiliary tasks (vision, web_extract, approval, etc.) through Vertex proxy with Haiku instead of local LLM";
+      };
+
+      model = mkOption {
+        type = types.str;
+        default = "claude-haiku-4-5";
+        description = "Model for auxiliary tasks when useVertexProxy is true";
+      };
+    };
+
+    agent = {
+      maxTurns = mkOption {
+        type = types.int;
+        default = 90;
+        description = "Maximum tool-calling iterations per conversation";
+      };
+
+      reasoningEffort = mkOption {
+        type = types.str;
+        default = "";
+        description = "Reasoning effort level: empty (medium), xhigh, high, medium, low, minimal, none";
+      };
+
+      gatewayTimeout = mkOption {
+        type = types.int;
+        default = 1800;
+        description = "Gateway agent inactivity timeout in seconds (0 = unlimited)";
+      };
+    };
+
+    compression = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Enable automatic context compression when nearing model context limit";
+      };
+
+      threshold = mkOption {
+        type = types.str;
+        default = "0.70";
+        description = "Compress when prompt tokens reach this ratio of the model context window";
+      };
+
+      protectLastN = mkOption {
+        type = types.int;
+        default = 20;
+        description = "Always keep at least this many recent messages uncompressed";
+      };
+
+      summaryModel = mkOption {
+        type = types.str;
+        default = "claude-haiku-4-5";
+        description = "Model used for compression summarisation (should be fast/cheap)";
+      };
+    };
+
+    display = {
+      streaming = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Stream tokens to the terminal as they arrive";
+      };
+
+      showCost = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Show estimated cost in the CLI status bar";
+      };
+
+      bellOnComplete = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Play terminal bell when the agent finishes a task";
+      };
+
+      showReasoning = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Show model reasoning/thinking blocks above each response";
+      };
+
+      toolProgress = mkOption {
+        type = types.enum [
+          "off"
+          "new"
+          "all"
+          "verbose"
+        ];
+        default = "all";
+        description = "Tool call progress verbosity: off, new, all, verbose";
+      };
+    };
+
+    approvals = {
+      mode = mkOption {
+        type = types.enum [
+          "manual"
+          "smart"
+          "off"
+        ];
+        default = "smart";
+        description = "Dangerous command approval mode: manual, smart (auto-approve low-risk), off";
+      };
+    };
+
+    fileReadMaxChars = mkOption {
+      type = types.int;
+      default = 200000;
+      description = "Maximum characters per read_file call — increase for large-context models like Claude";
     };
 
     exo = {
@@ -810,29 +957,96 @@ in
           "  base_url: \"${cfg.vertexProxy.baseURL}\""
           ""
         ]
-        ++ optionals cfg.delegation.enable [
-          "# Delegate small tasks / tool calls to local LLM"
-          "delegation:"
-          "  base_url: \"${localBaseUrl}\""
-          "  model: \"${cfg.localModel}\""
-          "  api_key: \"ollama\""
-          ""
-        ]
-        ++ optionals cfg.auxiliary.enable [
-          "# Auxiliary models use local LLM"
-          "auxiliary:"
-          "  vision:"
-          "    base_url: \"${localBaseUrl}\""
-          "    model: \"${cfg.localModel}\""
-          "    api_key: \"ollama\""
-          "  web_extract:"
-          "    base_url: \"${localBaseUrl}\""
-          "    model: \"${cfg.localModel}\""
-          "    api_key: \"ollama\""
-          "  compression:"
-          "    base_url: \"${localBaseUrl}\""
-          "    model: \"${cfg.localModel}\""
-          "    api_key: \"ollama\""
+        ++ optionals cfg.delegation.enable (
+          if cfg.delegation.useVertexProxy then
+            [
+              "# Subagent delegation: Haiku via Vertex proxy (fast + cheap)"
+              "delegation:"
+              "  model: \"${cfg.delegation.model}\""
+              "  provider: \"${cfg.delegation.provider}\""
+              "  base_url: \"${cfg.vertexProxy.baseURL}\""
+              "  max_iterations: ${toString cfg.delegation.maxIterations}"
+              "  default_toolsets: [${
+                  concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
+                }]"
+              ""
+            ]
+          else
+            [
+              "# Subagent delegation: local LLM"
+              "delegation:"
+              "  base_url: \"${localBaseUrl}\""
+              "  model: \"${cfg.localModel}\""
+              "  api_key: \"ollama\""
+              "  max_iterations: ${toString cfg.delegation.maxIterations}"
+              "  default_toolsets: [${
+                  concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
+                }]"
+              ""
+            ]
+        )
+        ++ optionals cfg.auxiliary.enable (
+          if cfg.auxiliary.useVertexProxy then
+            [
+              "# Auxiliary tasks: Haiku via Vertex proxy (vision, web, approval, memory)"
+              "auxiliary:"
+              "  vision:"
+              "    provider: \"${cfg.delegation.provider}\""
+              "    model: \"${cfg.auxiliary.model}\""
+              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    timeout: 60"
+              "    download_timeout: 30"
+              "  web_extract:"
+              "    provider: \"${cfg.delegation.provider}\""
+              "    model: \"${cfg.auxiliary.model}\""
+              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    timeout: 120"
+              "  approval:"
+              "    provider: \"${cfg.delegation.provider}\""
+              "    model: \"${cfg.auxiliary.model}\""
+              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    timeout: 30"
+              "  session_search:"
+              "    provider: \"${cfg.delegation.provider}\""
+              "    model: \"${cfg.auxiliary.model}\""
+              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    timeout: 30"
+              "  flush_memories:"
+              "    provider: \"${cfg.delegation.provider}\""
+              "    model: \"${cfg.auxiliary.model}\""
+              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    timeout: 60"
+              "  compression:"
+              "    timeout: 120"
+              ""
+            ]
+          else
+            [
+              "# Auxiliary tasks: local LLM"
+              "auxiliary:"
+              "  vision:"
+              "    base_url: \"${localBaseUrl}\""
+              "    model: \"${cfg.localModel}\""
+              "    api_key: \"ollama\""
+              "  web_extract:"
+              "    base_url: \"${localBaseUrl}\""
+              "    model: \"${cfg.localModel}\""
+              "    api_key: \"ollama\""
+              "  compression:"
+              "    timeout: 120"
+              ""
+            ]
+        )
+        ++ optionals cfg.compression.enable [
+          "# Context compression: Haiku for fast cheap summaries"
+          "compression:"
+          "  enabled: true"
+          "  threshold: ${cfg.compression.threshold}"
+          "  target_ratio: 0.25"
+          "  protect_last_n: ${toString cfg.compression.protectLastN}"
+          "  summary_model: \"${cfg.compression.summaryModel}\""
+          "  summary_provider: \"${cfg.delegation.provider}\""
+          "  summary_base_url: \"${cfg.vertexProxy.baseURL}\""
           ""
         ]
         ++ optionals cfg.voice.enable [
@@ -869,13 +1083,50 @@ in
         ++ [
           "agent:"
           "  tool_use_enforcement: \"auto\""
+          "  max_turns: ${toString cfg.agent.maxTurns}"
+          "  gateway_timeout: ${toString cfg.agent.gatewayTimeout}"
+        ]
+        ++ optionals (cfg.agent.reasoningEffort != "") [
+          "  reasoning_effort: \"${cfg.agent.reasoningEffort}\""
+        ]
+        ++ [
           ""
           "terminal:"
           "  backend: local"
           "  persistent_shell: true"
+          "  timeout: 180"
           ""
           "memory:"
           "  memory_enabled: true"
+          "  user_profile_enabled: true"
+          "  memory_char_limit: 2200"
+          "  user_char_limit: 1375"
+          "  nudge_interval: 10"
+          "  flush_min_turns: 6"
+          ""
+          "skills:"
+          "  creation_nudge_interval: 15"
+          ""
+          "checkpoints:"
+          "  enabled: true"
+          "  max_snapshots: 50"
+          ""
+          "approvals:"
+          "  mode: \"${cfg.approvals.mode}\""
+          ""
+          "display:"
+          "  streaming: ${if cfg.display.streaming then "true" else "false"}"
+          "  show_cost: ${if cfg.display.showCost then "true" else "false"}"
+          "  bell_on_complete: ${if cfg.display.bellOnComplete then "true" else "false"}"
+          "  show_reasoning: ${if cfg.display.showReasoning then "true" else "false"}"
+          "  tool_progress: \"${cfg.display.toolProgress}\""
+          "  inline_diffs: true"
+          ""
+          "security:"
+          "  redact_secrets: true"
+          "  tirith_enabled: false"
+          ""
+          "file_read_max_chars: ${toString cfg.fileReadMaxChars}"
         ]
       );
 
