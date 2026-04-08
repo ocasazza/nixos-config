@@ -2,8 +2,13 @@
 #
 # Each cluster node acts as a remote builder for the others, offloading
 # long builds (node_modules, Python venvs, etc.) across all machines.
-# SSH uses .local mDNS names so macOS routes over the fastest available
-# interface (Thunderbolt Bridge when connected, WiFi fallback otherwise).
+#
+# Each machine is listed twice:
+#   1. .tb hostname (speedFactor=2) — Thunderbolt Bridge, preferred
+#   2. .local hostname (speedFactor=1) — mDNS/WiFi, fallback
+#
+# Nix will use whichever builders are reachable. If TB is disconnected
+# on a node, .local picks up the slack automatically.
 #
 # Requirements on each builder node:
 #   - The initiating machine's SSH public key in ~/.ssh/authorized_keys
@@ -17,18 +22,14 @@
   ...
 }:
 let
-  # All cluster nodes as potential builders.
-  # system = aarch64-darwin for all Apple Silicon Macs.
-  # maxJobs: leave 2 cores free for the local machine's own work.
-  # speedFactor: all nodes treated equally — adjust if one is significantly faster.
-  allBuilders = [
+  sshKey = "/Users/casazza/.ssh/id_ed25519";
+  sshUser = "casazza";
+
+  # Define cluster nodes. Each gets two builder entries: TB (preferred) + .local (fallback).
+  clusterNodes = [
     {
-      hostName = "GN9CFLM92K-MBP.local";
-      system = "aarch64-darwin";
-      sshUser = "casazza";
-      sshKey = "/Users/casazza/.ssh/id_ed25519";
+      hostname = "GN9CFLM92K-MBP";
       maxJobs = 6;
-      speedFactor = 1;
       supportedFeatures = [
         "nixos-test"
         "benchmark"
@@ -37,12 +38,8 @@ let
       ];
     }
     {
-      hostName = "CK2Q9LN7PM-MBA.local";
-      system = "aarch64-darwin";
-      sshUser = "casazza";
-      sshKey = "/Users/casazza/.ssh/id_ed25519";
+      hostname = "CK2Q9LN7PM-MBA";
       maxJobs = 6;
-      speedFactor = 1;
       supportedFeatures = [
         "nixos-test"
         "benchmark"
@@ -50,12 +47,8 @@ let
       ];
     }
     {
-      hostName = "GJHC5VVN49-MBP.local";
-      system = "aarch64-darwin";
-      sshUser = "casazza";
-      sshKey = "/Users/casazza/.ssh/id_ed25519";
+      hostname = "GJHC5VVN49-MBP";
       maxJobs = 6;
-      speedFactor = 1;
       supportedFeatures = [
         "nixos-test"
         "benchmark"
@@ -63,12 +56,8 @@ let
       ];
     }
     {
-      hostName = "L75T4YHXV7-MBA.local";
-      system = "aarch64-darwin";
-      sshUser = "casazza";
-      sshKey = "/Users/casazza/.ssh/id_ed25519";
+      hostname = "L75T4YHXV7-MBA";
       maxJobs = 6;
-      speedFactor = 1;
       supportedFeatures = [
         "nixos-test"
         "benchmark"
@@ -77,16 +66,38 @@ let
     }
   ];
 
-  # Exclude this machine from its own builder list to avoid SSH-to-localhost.
+  # Expand each node into two builder entries: TB first (higher speedFactor), then .local.
+  allBuilders = lib.concatMap (node: [
+    {
+      hostName = "${node.hostname}.tb";
+      system = "aarch64-darwin";
+      inherit sshUser sshKey;
+      maxJobs = node.maxJobs;
+      speedFactor = 2;
+      supportedFeatures = node.supportedFeatures;
+    }
+    {
+      hostName = "${node.hostname}.local";
+      system = "aarch64-darwin";
+      inherit sshUser sshKey;
+      maxJobs = node.maxJobs;
+      speedFactor = 1;
+      supportedFeatures = node.supportedFeatures;
+    }
+  ]) clusterNodes;
+
+  # Exclude both .tb and .local entries for this machine to avoid SSH-to-localhost.
   builders = builtins.filter (
-    b: exoThunderboltHostname == null || b.hostName != "${exoThunderboltHostname}.local"
+    b:
+    exoThunderboltHostname == null
+    || (b.hostName != "${exoThunderboltHostname}.tb" && b.hostName != "${exoThunderboltHostname}.local")
   ) allBuilders;
 
   # Format a builder attrset as a nix.conf builders line:
   # ssh://user@host system key maxJobs speed features
   builderLine =
     b:
-    "ssh://${b.sshUser}@${b.hostName} ${b.system} ${b.sshKey} ${toString b.maxJobs} ${toString b.speedFactor} ${lib.concatStringsSep "," b.supportedFeatures}";
+    "ssh-ng://${b.sshUser}@${b.hostName} ${b.system} ${b.sshKey} ${toString b.maxJobs} ${toString b.speedFactor} ${lib.concatStringsSep "," b.supportedFeatures}";
 
   buildersConf = lib.concatMapStringsSep " ; " builderLine builders;
 in
