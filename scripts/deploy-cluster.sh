@@ -64,7 +64,7 @@ for host in "${TARGETS[@]}"; do
     continue
   fi
   closure="$(nix path-info ".#darwinConfigurations.${host}.system")"
-  nix copy --to "ssh://casazza@${ip}" "$closure" &
+  nix copy --no-check-sigs --to "ssh-ng://casazza@${ip}" "$closure" &
   COPY_PIDS+=($!)
 done
 for pid in "${COPY_PIDS[@]}"; do wait "$pid"; done
