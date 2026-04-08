@@ -1,7 +1,7 @@
 # Prevent sleep, hibernate, and power-off on cluster nodes.
 # Keeps machines awake even with the lid closed (clamshell mode)
 # so they remain available as distributed Nix builders and exo peers.
-{ pkgs, ... }:
+{ ... }:
 {
   # nix-darwin native power options
   power = {
@@ -28,6 +28,7 @@
   #   - standby / autopoweroff / hibernatemode: disable all hibernation
   system.activationScripts.postActivation.text = ''
     echo "Configuring power management for always-on cluster node..." >&2
+    sudo pmset -a disablesleep 1
     sudo pmset -a lidwake 1
     sudo pmset -a acwake 1
     sudo pmset -a standby 0
