@@ -82,7 +82,7 @@ let
     b:
     "ssh://${b.sshUser}@${b.hostName} ${b.system} ${b.sshKey} ${toString b.maxJobs} ${toString b.speedFactor} ${lib.concatStringsSep "," b.supportedFeatures}";
 
-  buildersConf = lib.concatMapStringsSep "\n" builderLine builders;
+  buildersConf = lib.concatMapStringsSep " ; " builderLine builders;
 in
 {
   # Determinate Nix: append builder config to nix.custom.conf.
