@@ -669,6 +669,16 @@ in
       description = "Maximum characters per read_file call — increase for large-context models like Claude";
     };
 
+    soulMd = mkOption {
+      type = types.lines;
+      default = "";
+      description = ''
+        Content for ~/.hermes/SOUL.md — global agent identity injected into every session
+        regardless of working directory (slot #1 in system prompt, before project context).
+        Leave empty to keep the built-in Hermes default.
+      '';
+    };
+
     exo = {
       enable = mkEnableOption "exo distributed inference cluster (alternative to Ollama)";
 
@@ -1149,6 +1159,11 @@ in
         fi
       '';
     }
+
+    # SOUL.md: global agent identity (only written when soulMd option is set)
+    (mkIf (cfg.soulMd != "") {
+      home-manager.users.${user.name}.home.file.".hermes/SOUL.md".text = cfg.soulMd;
+    })
 
     # NixOS (Linux): Ollama as a systemd service
     (optionalAttrs isLinux {

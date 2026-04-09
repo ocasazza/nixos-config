@@ -28,6 +28,11 @@
   #   - standby / autopoweroff / hibernatemode: disable all hibernation
   system.activationScripts.postActivation.text = ''
     echo "Configuring power management for always-on cluster node..." >&2
+
+    # Disable beta/pre-release macOS updates — stay on stable channel only
+    sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AllowPreReleaseInstallation -bool false
+    sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate SeedProgram -string ""
+
     sudo pmset -a disablesleep 1
     sudo pmset -a lidwake 1
     sudo pmset -a acwake 1
