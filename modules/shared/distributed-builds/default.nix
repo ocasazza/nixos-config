@@ -55,27 +55,29 @@ let
         "big-parallel"
       ];
     }
-    {
-      hostname = "L75T4YHXV7-MBA";
-      maxJobs = 6;
-      supportedFeatures = [
-        "nixos-test"
-        "benchmark"
-        "big-parallel"
-      ];
-    }
+    # L75T4YHXV7-MBA — not yet bootstrapped, re-enable when ready
+    # {
+    #   hostname = "L75T4YHXV7-MBA";
+    #   maxJobs = 6;
+    #   supportedFeatures = [
+    #     "nixos-test"
+    #     "benchmark"
+    #     "big-parallel"
+    #   ];
+    # }
   ];
 
-  # Expand each node into two builder entries: TB first (higher speedFactor), then .local.
+  # Expand each node into builder entries.
+  # TB entries are commented out until Thunderbolt cables are connected.
   allBuilders = lib.concatMap (node: [
-    {
-      hostName = "${node.hostname}.tb";
-      system = "aarch64-darwin";
-      inherit sshUser sshKey;
-      maxJobs = node.maxJobs;
-      speedFactor = 2;
-      supportedFeatures = node.supportedFeatures;
-    }
+    # {
+    #   hostName = "${node.hostname}.tb";
+    #   system = "aarch64-darwin";
+    #   inherit sshUser sshKey;
+    #   maxJobs = node.maxJobs;
+    #   speedFactor = 2;
+    #   supportedFeatures = node.supportedFeatures;
+    # }
     {
       hostName = "${node.hostname}.local";
       system = "aarch64-darwin";

@@ -111,7 +111,8 @@ in
 
   # Set desktop wallpaper and Claude Code API key helper
   system.activationScripts.postActivation.text = ''
-    sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"'
+    # Set wallpaper (timeout to avoid hanging on headless/lid-closed machines)
+    timeout 5 sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"' 2>/dev/null || true
 
     # Set up Claude Code get-iam-token.sh helper for Vertex AI proxy
     echo "setting up Claude Code API key helper..." >&2
@@ -153,7 +154,7 @@ in
   environment.variables = {
     # NH Darwin flake configuration — use the hostname-specific config
     # which includes exo cluster membership and all Schrodinger overrides
-    NH_DARWIN_FLAKE = ".#darwinConfigurations.GN9CFLM92K-MBP";
+    NH_DARWIN_FLAKE = ".#darwinConfigurations.${config.networking.hostName}";
     # SOPS key file location
     SOPS_AGE_KEY_FILE = "/Users/${user.name}/.config/sops/age/keys.txt";
     # Nix configuration
@@ -196,6 +197,9 @@ in
   '';
 
   security.pam.services.sudo_local.enable = false;
+
+  # Passwordless sudo for casazza — enables non-interactive cluster deploys
+  environment.etc."sudoers.d/casazza-nopasswd".text = "${user.name} ALL=(ALL) NOPASSWD: ALL\n";
 
   # BeyondTrust blocks /etc/pam.d writes
   # security.pam.services.sudo_local = {

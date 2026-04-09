@@ -380,6 +380,14 @@
           Hostname github.com
           IdentitiesOnly yes
 
+        Host CK2Q9LN7PM-MBA.local CK2Q9LN7PM-MBA.tb
+          Hostname 192.168.1.3
+          ConnectTimeout 5
+
+        Host GJHC5VVN49-MBP.local GJHC5VVN49-MBP.tb
+          Hostname 192.168.1.29
+          ConnectTimeout 5
+
         Host desk-nxst-*
           CanonicalizeHostname yes
           CanonicalDomains schrodinger.com
