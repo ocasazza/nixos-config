@@ -48,27 +48,33 @@ let
           myIfaces = lib.unique (map (l: l.iface) myLinks);
           ifaceChecks = lib.concatMapStringsSep " " (iface: iface) myIfaces;
         in
-        ''
-          # ── Thunderbolt L3 mesh peer discovery ──────────────────────────────────
-          # Wait for at least one P2P interface to have a 10.99.x.x IP
-          READY=0
-          for _i in $(seq 1 30); do
-            for iface in ${ifaceChecks}; do
-              if ifconfig "$iface" 2>/dev/null | grep -q 'inet 10\.99\.'; then
-                READY=1
-                break 2
+        (
+          if myLinks != [ ] then
+            ''
+              # ── Thunderbolt L3 mesh peer discovery ──────────────────────────────────
+              # Wait for at least one P2P interface to have a 10.99.x.x IP
+              READY=0
+              for _i in $(seq 1 30); do
+                for iface in ${ifaceChecks}; do
+                  if ifconfig "$iface" 2>/dev/null | grep -q 'inet 10\.99\.'; then
+                    READY=1
+                    break 2
+                  fi
+                done
+                sleep 1
+              done
+
+              if [ "$READY" -eq 0 ]; then
+                echo "WARNING: no TB P2P interface has a 10.99.x.x IP — falling back to mDNS discovery" >&2
+              else
+                export EXO_BOOTSTRAP_PEERS="${tbPeerAddrs}"
               fi
-            done
-            sleep 1
-          done
-
-          if [ "$READY" -eq 0 ]; then
-            echo "WARNING: no TB P2P interface has a 10.99.x.x IP — falling back to mDNS discovery" >&2
+            ''
           else
-            ${lib.optionalString (tbPeerAddrs != "") ''export EXO_BOOTSTRAP_PEERS="${tbPeerAddrs}"''}
-          fi
-
-        ''
+            ''
+              # No TB links — rely on mDNS discovery
+            ''
+        )
         + ''
           export EXO_LIBP2P_NAMESPACE="${cfg.exo.libp2pNamespace}"
           # ────────────────────────────────────────────────────────────────────────

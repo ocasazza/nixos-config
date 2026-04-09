@@ -100,28 +100,17 @@
       # Side "a" gets .1, side "b" gets .2.  No L2 bridging — pure L3.
       # Subnet base is the first 3 octets; the 4th octet is always .0/30.
       thunderboltLinks = [
-        {
-          subnet = "10.99.1"; # 10.99.1.0/30
-          a = {
-            host = "GN9CFLM92K-MBP";
-            iface = "en1";
-          };
-          b = {
-            host = "GJHC5VVN49-MBP";
-            iface = "en2";
-          };
-        }
-        {
-          subnet = "10.99.2"; # 10.99.2.0/30
-          a = {
-            host = "GN9CFLM92K-MBP";
-            iface = "en2";
-          };
-          b = {
-            host = "CK2Q9LN7PM-MBA";
-            iface = "en2";
-          };
-        }
+        # GN9 has no TB cables connected — re-enable these when cabled
+        # {
+        #   subnet = "10.99.1"; # 10.99.1.0/30
+        #   a = { host = "GN9CFLM92K-MBP"; iface = "en1"; };
+        #   b = { host = "GJHC5VVN49-MBP"; iface = "en1"; };
+        # }
+        # {
+        #   subnet = "10.99.2"; # 10.99.2.0/30
+        #   a = { host = "GN9CFLM92K-MBP"; iface = "en2"; };
+        #   b = { host = "CK2Q9LN7PM-MBA"; iface = "en2"; };
+        # }
         {
           subnet = "10.99.3"; # 10.99.3.0/30
           a = {
@@ -135,9 +124,12 @@
         }
       ];
 
-      # All hostnames participating in the TB mesh
+      # All hostnames participating in the cluster (includes WiFi-only nodes)
       thunderboltHosts = nixpkgs.lib.unique (
-        nixpkgs.lib.concatMap (link: [
+        [
+          "GN9CFLM92K-MBP" # WiFi-only (no TB cables), re-add to links when cabled
+        ]
+        ++ nixpkgs.lib.concatMap (link: [
           link.a.host
           link.b.host
         ]) thunderboltLinks
