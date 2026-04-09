@@ -63,12 +63,11 @@ let
           done
 
           if [ "$READY" -eq 0 ]; then
-            echo "WARNING: no TB P2P interface has a 10.99.x.x IP — falling back to auto discovery" >&2
+            echo "WARNING: no TB P2P interface has a 10.99.x.x IP — falling back to mDNS discovery" >&2
+          else
+            ${lib.optionalString (tbPeerAddrs != "") ''export EXO_BOOTSTRAP_PEERS="${tbPeerAddrs}"''}
           fi
 
-        ''
-        + lib.optionalString (tbPeerAddrs != "") ''
-          export EXO_BOOTSTRAP_PEERS="${tbPeerAddrs}"
         ''
         + ''
           export EXO_LIBP2P_NAMESPACE="${cfg.exo.libp2pNamespace}"
@@ -87,7 +86,7 @@ let
       exec ${cfg.exo.package}/bin/exo \
         --api-port ${toString cfg.exo.apiPort} \
         --libp2p-port ${toString cfg.exo.libp2pPort} \
-        ${optionalString (cfg.exo.peers != [ ]) "--bootstrap-peers ${concatStringsSep "," cfg.exo.peers}"}
+        ''${EXO_BOOTSTRAP_PEERS:+--bootstrap-peers "$EXO_BOOTSTRAP_PEERS"}
     ''
   );
   isDarwin = builtins.elem system [

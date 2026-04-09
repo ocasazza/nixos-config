@@ -130,7 +130,7 @@
           };
           b = {
             host = "GJHC5VVN49-MBP";
-            iface = "en1";
+            iface = "en2"; # Receptacle 2 — physically connected to CK2 Receptacle 1
           };
         }
       ];
