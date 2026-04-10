@@ -96,12 +96,11 @@ let
   ) allBuilders;
 
   # Format a builder attrset as a nix.conf builders line:
-  # ssh://user@host system key maxJobs speed features
   # ssh-ng://... format: user@host system key maxJobs speed features - - ssh-options
-  # ConnectTimeout=5 prevents builds from hanging when a builder is offline.
+  # ConnectTimeout=5 + BatchMode=yes: fail fast if builder is offline or needs a password.
   builderLine =
     b:
-    "ssh-ng://${b.sshUser}@${b.hostName} ${b.system} ${b.sshKey} ${toString b.maxJobs} ${toString b.speedFactor} ${lib.concatStringsSep "," b.supportedFeatures} - - ConnectTimeout=5";
+    "ssh-ng://${b.sshUser}@${b.hostName} ${b.system} ${b.sshKey} ${toString b.maxJobs} ${toString b.speedFactor} ${lib.concatStringsSep "," b.supportedFeatures} - - ConnectTimeout=5,BatchMode=yes";
 
   buildersConf = lib.concatMapStringsSep " ; " builderLine builders;
 in
