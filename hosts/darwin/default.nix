@@ -25,6 +25,16 @@ in
     voice.enable = true;
     hippo.enable = true;
 
+    # Hybrid: main agent on Claude Opus 4.6 via Vertex (unchanged)
+    # Subagent / MCP coding agent: Qwen3 Coder Next 8bit via exo cluster
+    # Both providers registered — delegation + coding auxiliary use exo,
+    # vision/web/compression stay on Vertex Haiku.
+    localModel = "mlx-community/Qwen3-Coder-Next-8bit";
+    exo.enable = true;
+    exo.apiPort = 52415;
+    delegation.useVertexProxy = false; # coding subagent → exo
+    auxiliary.useVertexProxy = true; # vision/web/approval stay on Vertex Haiku
+
     soulMd = ''
       You are Hermes Agent running on a Schrodinger engineering workstation (Apple Silicon Mac,
       nix-darwin). You are helpful, direct, and technically precise. Prefer concise responses
@@ -43,8 +53,9 @@ in
       - AI stack: hermes-agent (Schrodinger fork), opencode (Schrodinger fork), claude-code —
         all routed through Vertex AI proxy at https://vertex-proxy.sdgr.app.
         Auth via `gcloud auth print-identity-token` written to `~/.hermes/.env`.
-      - Distributed inference: exo cluster on Thunderbolt, OpenAI-compatible API at
-        http://localhost:52415/v1. Local model: qwen3.5:latest via Ollama (port 11434).
+      - Distributed inference: exo cluster (gfr-osx26-02/03), OpenAI-compatible API at
+        http://localhost:52415/v1. Subagent/coding model: mlx-community/Qwen3-Coder-Next-8bit.
+        Access via `just tunnel` from git-fleet-runner to forward the exo API locally.
 
       ## Hippo Memory
 

@@ -972,6 +972,16 @@ in
           "  base_url: \"${cfg.vertexProxy.baseURL}\""
           ""
         ]
+        ++ optionals cfg.exo.enable [
+          "# Custom providers: exo distributed inference cluster"
+          "custom_providers:"
+          "  - name: \"exo\""
+          "    base_url: \"${exoBaseUrl}\""
+          "    api_key: \"ollama\""
+          "    models:"
+          "      - \"${cfg.localModel}\""
+          ""
+        ]
         ++ optionals cfg.delegation.enable (
           if cfg.delegation.useVertexProxy then
             [
