@@ -154,6 +154,10 @@ in
     fi
   '';
 
+  # Enable SSH (Remote Login) so this machine is reachable as a remote builder
+  # and discoverable via mDNS (.local) by other cluster nodes.
+  services.openssh.enable = true;
+
   # Determinate Nix manages the daemon, nix binary, and nix.conf.
   # Don't let nix-darwin override it with a nixpkgs nix package.
   # See: https://docs.determinate.systems/getting-started/individual-install/#with-nix-darwin
