@@ -1164,14 +1164,25 @@ in
         # huggingface_hub unauthenticated-request warning at transcription time.
         export HF_HUB_OFFLINE=1
 
-        if command -v gcloud >/dev/null 2>&1; then
-          _hermes_token="$(gcloud auth print-identity-token 2>/dev/null || echo "")"
-          if [ -n "$_hermes_token" ]; then
-            mkdir -p "$HOME/.hermes"
-            echo "ANTHROPIC_API_KEY=$_hermes_token" > "$HOME/.hermes/.env"
+        # Refresh hermes token using the same get-iam-token.sh helper as Claude Code.
+        # Called as a shell function so it runs fresh on every `hermes` invocation.
+        _hermes_refresh_token() {
+          local _tok=""
+          if [ -f "$HOME/.claude/get-iam-token.sh" ]; then
+            _tok="$($HOME/.claude/get-iam-token.sh 2>/dev/null || echo "")"
+          elif command -v gcloud >/dev/null 2>&1; then
+            _tok="$(gcloud auth print-identity-token 2>/dev/null || echo "")"
           fi
-          unset _hermes_token
-        fi
+          if [ -n "$_tok" ]; then
+            mkdir -p "$HOME/.hermes"
+            echo "ANTHROPIC_API_KEY=$_tok" > "$HOME/.hermes/.env"
+          fi
+        }
+
+        # Wrap hermes binaries to refresh token before each run
+        hermes() { _hermes_refresh_token; command hermes "$@"; }
+        hermes-agent() { _hermes_refresh_token; command hermes-agent "$@"; }
+        hermes-acp() { _hermes_refresh_token; command hermes-acp "$@"; }
       '';
     }
 
