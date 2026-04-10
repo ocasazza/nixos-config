@@ -2,6 +2,7 @@
   pkgs,
   lib,
   user,
+  hostName ? null,
   ...
 }:
 {
@@ -68,11 +69,42 @@
 
   zsh = {
     enable = true;
-    initExtraBeforeCompInit = ''
-      # Add custom completions directory to fpath before compinit runs
+    completionInit = ''
+      # extra completion definitions (nix, docker, git, etc.)
+      fpath=(${pkgs.zsh-completions}/share/zsh/site-functions $fpath)
+      fpath=(${pkgs.nix-zsh-completions}/share/zsh/site-functions $fpath)
       fpath=(~/.zsh/completions $fpath)
+      autoload -Uz compinit && compinit
     '';
     initExtra = ''
+      # ── completion system tuning ──────────────────────────────
+      # case-insensitive, partial-word, and substring completion
+      zstyle ':completion:*' matcher-list \
+        'm:{a-zA-Z}={A-Za-z}' \
+        'r:|[._-]=* r:|=*' \
+        'l:|=* r:|=*'
+      # menu-driven completion with selection highlight
+      zstyle ':completion:*' menu select
+      # group completions by category with headers
+      zstyle ':completion:*' group-name '''
+      zstyle ':completion:*:descriptions' format '%F{yellow}── %d ──%f'
+      # colorize file completions like ls
+      zstyle ':completion:*' list-colors ''${(s.:.)LS_COLORS}
+
+      # ── fzf-tab settings ──────────────────────────────────────
+      # use tmux popup if available, otherwise default fzf
+      zstyle ':fzf-tab:*' fzf-flags --height=40% --layout=reverse --border
+      # preview directory contents and file heads
+      zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls -1 --color=always $realpath'
+      zstyle ':fzf-tab:complete:ls:*' fzf-preview 'ls -1 --color=always $realpath'
+      zstyle ':fzf-tab:complete:*:*' fzf-preview \
+        '[[ -d $realpath ]] && ls -1 --color=always $realpath || [[ -f $realpath ]] && bat --style=numbers --color=always --line-range :50 $realpath 2>/dev/null || echo $realpath'
+      # switch groups with < and >
+      zstyle ':fzf-tab:*' switch-group '<' '>'
+      # accept selection on enter instead of just inserting
+      zstyle ':fzf-tab:*' fzf-bindings 'enter:accept'
+
+      # ── custom functions ──────────────────────────────────────
       # Wrapper for just package command with path completion
       pkg() {
         local env="''${1:-prod}"
@@ -140,14 +172,30 @@
     shellAliases = {
       cat = "bat";
       ls = "ls --color=auto";
+      nds = "nh darwin switch ~/.config/nixos-config#${hostName}";
     };
     sessionVariables = {
       EDITOR = "nvim";
       CLICOLOR = "1";
-      # tfenv stuff
-      # TFENV_CONFIG_DIR = "$HOME/.local/share/tfenv";
-      # PATH = "$HOME/.tfenv/bin:$PATH";
     };
+  };
+
+  # fzf integration: Ctrl-R (history), Ctrl-T (files), Alt-C (cd)
+  fzf = {
+    enable = true;
+    enableZshIntegration = true;
+    defaultOptions = [
+      "--height=40%"
+      "--layout=reverse"
+      "--border"
+      "--info=inline"
+    ];
+    # use fd for faster file/directory traversal if available
+    defaultCommand = "fd --type f --hidden --follow --exclude .git";
+    fileWidgetCommand = "fd --type f --hidden --follow --exclude .git";
+    changeDirWidgetCommand = "fd --type d --hidden --follow --exclude .git";
+    fileWidgetOptions = [ "--preview 'bat --style=numbers --color=always --line-range :100 {}'" ];
+    changeDirWidgetOptions = [ "--preview 'ls -1 --color=always {}'" ];
   };
 
   starship = {
@@ -381,11 +429,9 @@
           IdentitiesOnly yes
 
         Host CK2Q9LN7PM-MBA.local CK2Q9LN7PM-MBA.tb
-          Hostname 192.168.1.3
           ConnectTimeout 5
 
         Host GJHC5VVN49-MBP.local GJHC5VVN49-MBP.tb
-          Hostname 192.168.1.29
           ConnectTimeout 5
 
         Host desk-nxst-*
