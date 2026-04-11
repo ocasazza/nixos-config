@@ -3,6 +3,7 @@
   user,
   config,
   opencode,
+  consortium,
   ...
 }:
 
@@ -213,6 +214,13 @@ in
         "alt-shift-3" = "move-node-to-workspace 3";
         "alt-shift-4" = "move-node-to-workspace 4";
         "alt-shift-5" = "move-node-to-workspace 5";
+        # Tile halves
+        "ctrl-alt-left" = "move left";
+        "ctrl-alt-right" = "move right";
+        "ctrl-alt-up" = "move up";
+        "ctrl-alt-down" = "move down";
+        # Cycle windows in workspace
+        "alt-backtick" = "focus --boundaries workspace --boundaries-action wrap-around-the-workspace next";
         # Service
         "alt-shift-semicolon" = "mode service";
       };
@@ -254,7 +262,9 @@ in
   # See: https://docs.determinate.systems/getting-started/individual-install/#with-nix-darwin
   nix.enable = false;
 
-  environment.systemPackages = with pkgs; import ../../modules/shared/packages.nix { inherit pkgs; };
+  environment.systemPackages = (import ../../modules/shared/packages.nix { inherit pkgs; }) ++ [
+    consortium.packages.${pkgs.system}.consortium-cli
+  ];
 
   # Set system-wide environment variables
   environment.variables = {
@@ -349,6 +359,8 @@ in
         NSGlobalDomain = {
           # Add a context menu item for showing the Web Inspector in web views
           WebKitDeveloperExtras = true;
+          # Prevent double-click title bar from filling screen (fights AeroSpace)
+          AppleActionOnDoubleClick = "None";
         };
         "com.apple.desktopservices" = {
           # Avoid creating .DS_Store files on network or USB volumes
@@ -369,6 +381,9 @@ in
           EnableTilingOptionAccelerator = false;
           EnableTopTilingByEdgeDrag = false;
           EnableTiledWindowMargins = false;
+          HideDesktop = false;
+          AppWindowGroupingBehavior = false;
+          AutoHide = false;
         };
         "com.apple.TimeMachine".DoNotOfferNewDisksForBackup = true;
         # Prevent Photos from opening automatically when devices are plugged in
