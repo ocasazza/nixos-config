@@ -113,6 +113,7 @@ in
       builders-use-substitutes = true
       max-jobs = auto
       connect-timeout = 5
+      trusted-users = root ${user.name}
     '';
   };
 
