@@ -55,16 +55,15 @@ let
         "big-parallel"
       ];
     }
-    # L75T4YHXV7-MBA — not yet bootstrapped, re-enable when ready
-    # {
-    #   hostname = "L75T4YHXV7-MBA";
-    #   maxJobs = 6;
-    #   supportedFeatures = [
-    #     "nixos-test"
-    #     "benchmark"
-    #     "big-parallel"
-    #   ];
-    # }
+    {
+      hostname = "L75T4YHXV7-MBA";
+      maxJobs = 6;
+      supportedFeatures = [
+        "nixos-test"
+        "benchmark"
+        "big-parallel"
+      ];
+    }
   ];
 
   # Expand each node into builder entries.

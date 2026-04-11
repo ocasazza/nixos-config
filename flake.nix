@@ -131,6 +131,7 @@
       thunderboltHosts = nixpkgs.lib.unique (
         [
           "GN9CFLM92K-MBP" # WiFi-only (no TB cables), re-add to links when cabled
+          "L75T4YHXV7-MBA" # WiFi-only (no TB cables), re-add to links when cabled
         ]
         ++ nixpkgs.lib.concatMap (link: [
           link.a.host
@@ -287,9 +288,22 @@
                   "CK2Q9LN7PM-MBA"
                   "GJHC5VVN49-MBP"
                   "GN9CFLM92K-MBP"
+                  "L75T4YHXV7-MBA"
                 )
 
                 tb_host() { echo "''${1}.tb"; }
+
+                # Resolve reachable SSH target: prefer .tb, fall back to .local
+                resolve_host() {
+                  local tb; tb="$(tb_host "$1")"
+                  if ssh -o ConnectTimeout=3 -o BatchMode=yes "''${SSH_USER}@''${tb}" true &> /dev/null; then
+                    echo "$tb"
+                  elif ssh -o ConnectTimeout=3 -o BatchMode=yes "''${SSH_USER}@''${1}.local" true &> /dev/null; then
+                    echo "''${1}.local"
+                  else
+                    echo ""
+                  fi
+                }
 
                 TARGETS=("''${@:-''${CLUSTER_NODES[@]}}")
                 LOG_DIR="$(mktemp -d /tmp/deploy-cluster.XXXXXX)"
@@ -321,18 +335,29 @@
                 nix build --no-link "''${BUILD_ATTRS[@]}"
 
                 # ── 3. Copy closures to remote nodes over TB in parallel ───────────────────
+                # Resolve SSH targets for all remote nodes (prefer .tb, fall back .local)
+                declare -A RESOLVED_HOSTS
                 if [[ ''${#REMOTE_NODES[@]} -gt 0 ]]; then
-                  echo "==> Copying closures to remote nodes over Thunderbolt..."
-                  COPY_PIDS=()
+                  echo "==> Resolving remote node connectivity..."
                   for host in "''${REMOTE_NODES[@]}"; do
-                    tb="$(tb_host "$host")"
-                    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "''${SSH_USER}@''${tb}" true &> /dev/null; then
-                      echo "  SKIP (unreachable over TB): $host"
-                      continue
+                    resolved="$(resolve_host "$host")"
+                    if [[ -z $resolved ]]; then
+                      echo "  SKIP (unreachable): $host"
+                    else
+                      RESOLVED_HOSTS["$host"]="$resolved"
+                      echo "  $host → $resolved"
                     fi
+                  done
+                fi
+
+                if [[ ''${#RESOLVED_HOSTS[@]} -gt 0 ]]; then
+                  echo "==> Copying closures to remote nodes..."
+                  COPY_PIDS=()
+                  for host in "''${!RESOLVED_HOSTS[@]}"; do
+                    target="''${RESOLVED_HOSTS[$host]}"
                     closure="$(nix path-info ".#darwinConfigurations.''${host}.system")"
-                    echo "  copying ''${host} → ''${tb} ..."
-                    nix copy --no-check-sigs --to "ssh-ng://''${SSH_USER}@''${tb}" "$closure" \
+                    echo "  copying ''${host} → ''${target} ..."
+                    nix copy --no-check-sigs --to "ssh-ng://''${SSH_USER}@''${target}" "$closure" \
                       > "$LOG_DIR/''${host}.copy.log" 2>&1 &
                     COPY_PIDS+=($!)
                   done
@@ -353,21 +378,21 @@
                 done
 
                 # Remote activation via claw (consortium)
-                if [[ ''${#REMOTE_NODES[@]} -gt 0 ]]; then
+                if [[ ''${#RESOLVED_HOSTS[@]} -gt 0 ]]; then
                   echo "==> Activating remote nodes..."
                   ACTIVATE_PIDS=()
-                  for host in "''${REMOTE_NODES[@]}"; do
-                    tb="$(tb_host "$host")"
+                  for host in "''${!RESOLVED_HOSTS[@]}"; do
+                    target="''${RESOLVED_HOSTS[$host]}"
                     closure="$(nix path-info ".#darwinConfigurations.''${host}.system" 2> /dev/null || echo "")"
                     if [[ -z $closure ]]; then
                       echo "  SKIP (no closure): $host"
                       echo "SKIP" > "$LOG_DIR/''${host}.status"
                       continue
                     fi
-                    echo "  → $host ($tb): $closure"
+                    echo "  → $host ($target): $closure"
                     ACTIVATE_CMD="set -euo pipefail; [ -e ''${closure} ] || { echo closure not found; exit 1; }; sudo ''${closure}/activate; ''${closure}/activate-user"
                     (
-                      if claw -w "$tb" -l "$SSH_USER" \
+                      if claw -w "$target" -l "$SSH_USER" \
                         -t 5 -o "-o BatchMode=yes" \
                         -b -- bash -c "$ACTIVATE_CMD" \
                         > "$LOG_DIR/''${host}.log" 2>&1; then
