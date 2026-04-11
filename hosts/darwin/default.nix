@@ -338,6 +338,8 @@ in
         "com.apple.mouse.tapBehavior" = 1;
         "com.apple.sound.beep.volume" = 0.0;
         "com.apple.sound.beep.feedback" = 0;
+        # Prevent double-click title bar from filling screen (fights AeroSpace)
+        # AppleActionOnDoubleClick removed — option no longer exists in nix-darwin
       };
 
       CustomUserPreferences = {
