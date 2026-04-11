@@ -85,13 +85,24 @@ in
       - Private flake inputs (git-fleet, git-fleet-runner, opencode, hermes) require SSH
         agent with `~/.ssh/id_ed25519` loaded.
 
-      ## Skills and Delegation
+       ## File System
 
-      - Use `delegate_task` for parallel workstreams or tasks that benefit from a fresh
-        isolated context (refactoring, research, code review). Subagents run Haiku.
-      - Use skills when available: github-pr-workflow, systematic-debugging,
-        subagent-driven-development, plan, research-paper-writing.
-      - Save reusable workflows as skills via `skill_manage` rather than repeating them.
+       - HOME is `/Users/casazza`. NEVER use `/root/` — it does not exist on macOS.
+       - Write temporary files to `/tmp/` or `~/` — never to `/root/`, `/home/`, or
+         Linux-style paths.
+       - When writing analysis output, use `~/` prefix or the current project directory.
+       - macOS does not have `/usr/local/bin` by default under nix-darwin — use
+         `$(which cmd)` or full nix store paths if a command isn't on PATH.
+
+       ## Skills and Delegation
+
+       - Use `delegate_task` for parallel workstreams or tasks that benefit from a fresh
+         isolated context (refactoring, research, code review). Subagents run Haiku.
+       - Subagents also run on macOS — pass the same filesystem constraints above when
+         delegating: no /root/, use ~/tmp/ or /tmp/ for scratch files.
+       - Use skills when available: github-pr-workflow, systematic-debugging,
+         subagent-driven-development, plan, research-paper-writing.
+       - Save reusable workflows as skills via `skill_manage` rather than repeating them.
     '';
   };
 
@@ -153,6 +164,86 @@ in
       echo "Warning: Fleet secrets file not found at $FLEET_SECRETS_FILE"
     fi
   '';
+
+  # Tiling window manager (no SIP disable needed)
+  services.aerospace = {
+    enable = true;
+    settings = {
+      # Normalizations
+      enable-normalization-flatten-containers = true;
+      enable-normalization-opposite-orientation-for-nested-containers = true;
+      # Mouse follows focus
+      on-focused-monitor-changed = [ "move-mouse monitor-lazy-center" ];
+      # Gaps
+      gaps = {
+        inner.horizontal = 1;
+        inner.vertical = 1;
+        outer.left = 1;
+        outer.right = 1;
+        outer.top = 1;
+        outer.bottom = 1;
+      };
+      mode.main.binding = {
+        # Focus
+        "alt-h" = "focus left";
+        "alt-j" = "focus down";
+        "alt-k" = "focus up";
+        "alt-l" = "focus right";
+        # Move windows
+        "alt-shift-h" = "move left";
+        "alt-shift-j" = "move down";
+        "alt-shift-k" = "move up";
+        "alt-shift-l" = "move right";
+        # Resize
+        "alt-shift-minus" = "resize smart -50";
+        "alt-shift-equal" = "resize smart +50";
+        # Layout
+        "alt-slash" = "layout tiles horizontal vertical";
+        "alt-comma" = "layout accordion horizontal vertical";
+        "alt-f" = "fullscreen";
+        # Workspaces
+        "alt-1" = "workspace 1";
+        "alt-2" = "workspace 2";
+        "alt-3" = "workspace 3";
+        "alt-4" = "workspace 4";
+        "alt-5" = "workspace 5";
+        # Move to workspace
+        "alt-shift-1" = "move-node-to-workspace 1";
+        "alt-shift-2" = "move-node-to-workspace 2";
+        "alt-shift-3" = "move-node-to-workspace 3";
+        "alt-shift-4" = "move-node-to-workspace 4";
+        "alt-shift-5" = "move-node-to-workspace 5";
+        # Service
+        "alt-shift-semicolon" = "mode service";
+      };
+      mode.service.binding = {
+        "esc" = [
+          "reload-config"
+          "mode main"
+        ];
+        "r" = [
+          "flatten-workspace-tree"
+          "mode main"
+        ];
+        "f" = [
+          "layout floating tiling"
+          "mode main"
+        ];
+        "backspace" = [
+          "close-all-windows-but-current"
+          "mode main"
+        ];
+      };
+    };
+  };
+
+  # Pastel purple window borders
+  services.jankyborders = {
+    enable = true;
+    active_color = "0xffb4a7d6";
+    inactive_color = "0x00000000";
+    width = 5.0;
+  };
 
   # Enable SSH (Remote Login) so this machine is reachable as a remote builder
   # and discoverable via mDNS (.local) by other cluster nodes.
@@ -268,6 +359,14 @@ in
         };
         "com.apple.AdLib" = {
           allowApplePersonalizedAdvertising = false;
+        };
+        "com.apple.WindowManager" = {
+          GloballyEnabled = false;
+          EnableStandardClickToShowDesktop = false;
+          EnableTilingByEdgeDrag = false;
+          EnableTilingOptionAccelerator = false;
+          EnableTopTilingByEdgeDrag = false;
+          EnableTiledWindowMargins = false;
         };
         "com.apple.TimeMachine".DoNotOfferNewDisksForBackup = true;
         # Prevent Photos from opening automatically when devices are plugged in
