@@ -58,7 +58,7 @@
       flake = false;
     };
     consortium = {
-      url = "git+file:///Users/casazza/Repositories/olivecasazza/consortium";
+      url = "github:olivecasazza/consortium";
     };
     # exo is in nixpkgs (v1.0.69) — no separate flake input needed
   };

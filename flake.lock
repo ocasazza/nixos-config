@@ -60,15 +60,15 @@
       "locked": {
         "lastModified": 1775881948,
         "narHash": "sha256-ezeSWAtJyxV+ECRlT9aKemCFQunZmYC/H4JD6ZvOk7U=",
-        "ref": "refs/heads/master",
+        "owner": "olivecasazza",
+        "repo": "consortium",
         "rev": "5543ad00ca2fd0e95cc3e3631f6c6194bdd4a017",
-        "revCount": 898,
-        "type": "git",
-        "url": "file:///Users/casazza/Repositories/olivecasazza/consortium"
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:///Users/casazza/Repositories/olivecasazza/consortium"
+        "owner": "olivecasazza",
+        "repo": "consortium",
+        "type": "github"
       }
     },
     "crane": {
