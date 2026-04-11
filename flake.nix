@@ -293,13 +293,15 @@
 
                 tb_host() { echo "''${1}.tb"; }
 
-                # Resolve reachable SSH target: prefer .tb, fall back to .local
+                # Resolve reachable SSH target: prefer .tb, fall back to .local, then bare hostname (SSH config)
                 resolve_host() {
                   local tb; tb="$(tb_host "$1")"
                   if ssh -o ConnectTimeout=3 -o BatchMode=yes "''${SSH_USER}@''${tb}" true &> /dev/null; then
                     echo "$tb"
                   elif ssh -o ConnectTimeout=3 -o BatchMode=yes "''${SSH_USER}@''${1}.local" true &> /dev/null; then
                     echo "''${1}.local"
+                  elif ssh -o ConnectTimeout=3 -o BatchMode=yes "''${SSH_USER}@''${1}" true &> /dev/null; then
+                    echo "''${1}"
                   else
                     echo ""
                   fi

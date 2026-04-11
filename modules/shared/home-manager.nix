@@ -280,6 +280,11 @@
       copy-on-select = true;
       term = "xterm-256color";
       macos-titlebar-proxy-icon = "hidden";
+      # Window border
+      window-padding-color = "extend";
+      window-padding-x = 4;
+      window-padding-y = 4;
+      unfocused-split-fill = "#b4a7d6";
       # Shader effects
       background-opacity = 0.95;
       background-blur-radius = 20;

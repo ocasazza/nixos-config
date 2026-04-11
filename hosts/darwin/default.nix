@@ -253,6 +253,144 @@ in
     width = 5.0;
   };
 
+  # Custom menu bar
+  services.sketchybar = {
+    enable = true;
+    extraPackages = with pkgs; [
+      jq
+      aerospace
+    ];
+    config = ''
+      # ── Colors (pastel purple palette) ─────────────────────────
+      BAR_COLOR=0xee1e1e2e
+      ITEM_BG=0xff313244
+      ACCENT=0xffb4a7d6
+      TEXT=0xffcdd6f4
+      SUBTEXT=0xffa6adc8
+
+      # ── Bar appearance ─────────────────────────────────────────
+      sketchybar --bar \
+        height=36 \
+        color=$BAR_COLOR \
+        border_width=0 \
+        shadow=on \
+        position=top \
+        sticky=on \
+        padding_left=8 \
+        padding_right=8 \
+        topmost=window \
+        y_offset=0 \
+        margin=0 \
+        corner_radius=0
+
+      # ── Defaults ───────────────────────────────────────────────
+      sketchybar --default \
+        icon.font="JetBrainsMono Nerd Font Mono:Bold:14.0" \
+        icon.color=$TEXT \
+        label.font="JetBrainsMono Nerd Font Mono:Regular:13.0" \
+        label.color=$TEXT \
+        background.color=$ITEM_BG \
+        background.corner_radius=6 \
+        background.height=28 \
+        background.padding_left=4 \
+        background.padding_right=4 \
+        padding_left=4 \
+        padding_right=4
+
+      # ── AeroSpace workspaces ───────────────────────────────────
+      for sid in 1 2 3 4 5; do
+        sketchybar --add item space.$sid left \
+          --set space.$sid \
+            associated_space=$sid \
+            icon=$sid \
+            icon.padding_left=10 \
+            icon.padding_right=10 \
+            background.color=$ITEM_BG \
+            background.drawing=on \
+            label.drawing=off \
+            click_script="aerospace workspace $sid" \
+            script='
+              if [ "$SELECTED" = "true" ]; then
+                sketchybar --set $NAME icon.color=0xffb4a7d6 background.color=0xff45475a
+              else
+                sketchybar --set $NAME icon.color=0xffa6adc8 background.color=0xff313244
+              fi
+            '
+      done
+
+      # ── Separator ──────────────────────────────────────────────
+      sketchybar --add item separator left \
+        --set separator \
+          icon="│" \
+          icon.color=$ACCENT \
+          icon.padding_left=4 \
+          label.drawing=off \
+          background.drawing=off
+
+      # ── Front app ──────────────────────────────────────────────
+      sketchybar --add item front_app left \
+        --set front_app \
+          icon.drawing=off \
+          label.color=$TEXT \
+          label.font="JetBrainsMono Nerd Font Mono:Bold:13.0" \
+          background.drawing=off \
+          script='sketchybar --set $NAME label="$INFO"' \
+        --subscribe front_app front_app_switched
+
+      # ── Clock ──────────────────────────────────────────────────
+      sketchybar --add item clock right \
+        --set clock \
+          update_freq=30 \
+          icon="" \
+          icon.color=$ACCENT \
+          icon.padding_left=8 \
+          label.padding_right=8 \
+          background.drawing=on \
+          script='sketchybar --set $NAME label="$(date "+%H:%M")"'
+
+      # ── Date ───────────────────────────────────────────────────
+      sketchybar --add item date right \
+        --set date \
+          update_freq=3600 \
+          icon="" \
+          icon.color=$ACCENT \
+          icon.padding_left=8 \
+          label.padding_right=8 \
+          background.drawing=on \
+          script='sketchybar --set $NAME label="$(date "+%a %d %b")"'
+
+      # ── Battery ────────────────────────────────────────────────
+      sketchybar --add item battery right \
+        --set battery \
+          update_freq=120 \
+          icon.color=$ACCENT \
+          icon.padding_left=8 \
+          label.padding_right=8 \
+          background.drawing=on \
+          script='
+            PERCENTAGE=$(pmset -g batt | grep -Eo "\d+%" | head -1 | tr -d "%")
+            CHARGING=$(pmset -g batt | grep -c "AC Power")
+            if [ "$CHARGING" -gt 0 ]; then
+              ICON=""
+            elif [ "$PERCENTAGE" -gt 80 ]; then
+              ICON=""
+            elif [ "$PERCENTAGE" -gt 60 ]; then
+              ICON=""
+            elif [ "$PERCENTAGE" -gt 40 ]; then
+              ICON=""
+            elif [ "$PERCENTAGE" -gt 20 ]; then
+              ICON=""
+            else
+              ICON=""
+            fi
+            sketchybar --set $NAME icon="$ICON" label="''${PERCENTAGE}%"
+          '
+
+      # ── Force initial update ───────────────────────────────────
+      sketchybar --update
+    '';
+  };
+
   # Enable SSH (Remote Login) so this machine is reachable as a remote builder
   # and discoverable via mDNS (.local) by other cluster nodes.
   services.openssh.enable = true;
