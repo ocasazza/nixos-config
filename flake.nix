@@ -392,7 +392,7 @@
                       continue
                     fi
                     echo "  → $host ($target): $closure"
-                    ACTIVATE_CMD="set -euo pipefail; [ -e ''${closure} ] || { echo closure not found; exit 1; }; sudo ''${closure}/activate; ''${closure}/activate-user"
+                    ACTIVATE_CMD="set -euo pipefail; [ -e ''${closure} ] || { echo closure not found; exit 1; }; sudo ''${closure}/sw/bin/darwin-rebuild activate"
                     (
                       if claw -w "$target" -l "$SSH_USER" \
                         -t 5 -o "-o BatchMode=yes" \
