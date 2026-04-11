@@ -57,6 +57,9 @@
       url = "github:symposium-dev/hippo";
       flake = false;
     };
+    consortium = {
+      url = "git+file:///Users/casazza/Repositories/olivecasazza/consortium";
+    };
     # exo is in nixpkgs (v1.0.69) — no separate flake input needed
   };
 
@@ -257,22 +260,14 @@
                 pkgs.git
                 pkgs.nh
                 pkgs.openssh
+                inputs.consortium.packages.${system}.consortium-cli
               ];
               text = ''
-                # deploy-cluster — build closures, copy via nix copy, activate via clush.
+                # deploy-cluster — build closures, copy via nix copy, activate via claw (consortium).
                 # All remote traffic goes over Thunderbolt Bridge (*.tb hostnames).
                 #
                 # Usage: nix run .#deploy-cluster [hostname...]
                 #   If no hostnames given, deploys to all cluster nodes.
-
-                # ClusterShell is broken in nixpkgs — pick it up from pip install location.
-                for p in "$HOME/Library/Python/3.9/bin" "$HOME/.local/bin" "/usr/local/bin"; do
-                  [[ -d $p ]] && export PATH="$p:$PATH"
-                done
-                if ! command -v clush &> /dev/null; then
-                  echo "error: clush not found. Install it: pip3 install clustershell" >&2
-                  exit 1
-                fi
 
                 # ── Repo root ───────────────────────────────────────────────────────────
                 if [[ -n ''${REPO_DIR:-} ]]; then
@@ -357,8 +352,8 @@
                   fi
                 done
 
-                # Remote activation via clush
-                if [[ ''${#REMOTE_NODES[@]} -gt 0 ]]; do
+                # Remote activation via claw (consortium)
+                if [[ ''${#REMOTE_NODES[@]} -gt 0 ]]; then
                   echo "==> Activating remote nodes..."
                   ACTIVATE_PIDS=()
                   for host in "''${REMOTE_NODES[@]}"; do
@@ -370,16 +365,11 @@
                       continue
                     fi
                     echo "  → $host ($tb): $closure"
-                    cat > "$LOG_DIR/''${host}.activate.sh" << EOF
-                set -euo pipefail
-                [ -e "''${closure}" ] || { echo "closure not found"; exit 1; }
-                sudo "''${closure}/activate"
-                "''${closure}/activate-user"
-                EOF
+                    ACTIVATE_CMD="set -euo pipefail; [ -e ''${closure} ] || { echo closure not found; exit 1; }; sudo ''${closure}/activate; ''${closure}/activate-user"
                     (
-                      if clush -w "$tb" -l "$SSH_USER" \
-                        -o "-o ConnectTimeout=5 -o BatchMode=yes" \
-                        -b < "$LOG_DIR/''${host}.activate.sh" \
+                      if claw -w "$tb" -l "$SSH_USER" \
+                        -t 5 -o "-o BatchMode=yes" \
+                        -b -- bash -c "$ACTIVATE_CMD" \
                         > "$LOG_DIR/''${host}.log" 2>&1; then
                         echo "OK" > "$LOG_DIR/''${host}.status"
                       else

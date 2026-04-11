@@ -10,3 +10,9 @@
 2026-04-08T04:28:48.051719Z  INFO hippo_server: Starting Hippo MCP Server v0.1.0
 2026-04-08T04:28:48.051730Z  INFO hippo_server: Memory directory: ~/.hippo
 2026-04-08T04:28:48.054160Z  INFO hippo_server: Hippo MCP Server ready
+2026-04-10T00:35:25.794589Z  INFO hippo_server: Starting Hippo MCP Server v0.1.0
+2026-04-10T00:35:25.794598Z  INFO hippo_server: Memory directory: ~/.hippo
+2026-04-10T00:35:25.796233Z  INFO hippo_server: Hippo MCP Server ready
+2026-04-10T04:07:31.362549Z  INFO hippo_server: Starting Hippo MCP Server v0.1.0
+2026-04-10T04:07:31.362569Z  INFO hippo_server: Memory directory: ~/.hippo
+2026-04-10T04:07:31.365081Z  INFO hippo_server: Hippo MCP Server ready

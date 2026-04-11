@@ -6,6 +6,7 @@
 }:
 
 let
+  hostName = config.networking.hostName;
   sharedFiles = import ../shared/files { inherit config pkgs user; };
   additionalFiles = import ./files { inherit config pkgs user; };
 in
@@ -80,6 +81,7 @@ in
               pkgs
               lib
               user
+              hostName
               ;
           })
           {
