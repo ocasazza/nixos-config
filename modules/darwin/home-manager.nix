@@ -8,13 +8,9 @@
 let
   hostName = config.networking.hostName;
   sharedFiles = import ../shared/files { inherit config pkgs user; };
-  additionalFiles = import ./files { inherit config pkgs user; };
+  additionalFiles = import ../_darwin-support/files { inherit config pkgs user; };
 in
 {
-  imports = [
-    ./dock
-  ];
-
   users.users.${user.name} = {
     name = "${user.name}";
     home = "/Users/${user.name}";
@@ -67,7 +63,13 @@ in
           inputs.nix4nvchad.homeManagerModule
         ];
         home = {
-          packages = pkgs.callPackage ./packages.nix { };
+          packages =
+            (pkgs.callPackage ./packages.nix { })
+            # Schrodinger opencode fork — exposed via the `opencode` flake
+            # input (see flake.nix). Adding to home.packages so the binary is
+            # on PATH in every shell, not just inside the wrapper environments
+            # built by `programs.opencode`.
+            ++ lib.optional (inputs ? opencode) inputs.opencode.packages.${pkgs.system}.default;
           file = lib.mkMerge [
             sharedFiles
             additionalFiles

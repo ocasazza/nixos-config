@@ -8,7 +8,11 @@
 }:
 
 let
-  wallpaper = ../../modules/darwin/files/AFRC2017-0233-007-large.jpg;
+  wallpaper = ../../modules/_darwin-support/files/AFRC2017-0233-007-large.jpg;
+  # Sketchybar's pixel height. AeroSpace's `gaps.outer.top` is set to
+  # this same value so tiled windows start beneath the bar instead of
+  # being clipped by it. Adjust here to keep both in sync.
+  sketchybarHeight = 28;
 in
 {
   imports = [
@@ -132,21 +136,11 @@ in
     recipeOverrideDirs = "/Users/${user.name}/Repositories/schrodinger/git-fleet/lib/software";
   };
 
-  # Set desktop wallpaper and Claude Code API key helper
+  # Set desktop wallpaper
+  # Claude Code API key helper now managed by programs.claude-code module
   system.activationScripts.postActivation.text = ''
     # Set wallpaper (timeout to avoid hanging on headless/lid-closed machines)
     timeout 5 sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"' 2>/dev/null || true
-
-    # Set up Claude Code get-iam-token.sh helper for Vertex AI proxy
-    echo "setting up Claude Code API key helper..." >&2
-    mkdir -p /Users/${user.name}/.claude
-    cat > /Users/${user.name}/.claude/get-iam-token.sh << 'TOKENHELPER'
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo $(gcloud auth print-identity-token 2>/dev/null)
-    TOKENHELPER
-    chmod +x /Users/${user.name}/.claude/get-iam-token.sh
-    chown -R ${user.name} /Users/${user.name}/.claude
   '';
 
   # Load Fleet secrets into user's shell environment
@@ -176,12 +170,16 @@ in
       # Mouse follows focus
       on-focused-monitor-changed = [ "move-mouse monitor-lazy-center" ];
       # Gaps
+      # `outer.top` matches `sketchybarHeight` (let-bound at the top of
+      # this file) so tiled windows clear the bar instead of being
+      # overlaid by it. The other gaps stay at 1px so the tiling itself
+      # still feels tight.
       gaps = {
         inner.horizontal = 1;
         inner.vertical = 1;
         outer.left = 1;
         outer.right = 1;
-        outer.top = 1;
+        outer.top = sketchybarHeight;
         outer.bottom = 1;
       };
       mode.main.binding = {
@@ -220,7 +218,8 @@ in
         "ctrl-alt-up" = "move up";
         "ctrl-alt-down" = "move down";
         # Cycle windows in workspace
-        "alt-backtick" = "focus --boundaries workspace --boundaries-action wrap-around-the-workspace next";
+        "alt-backtick" =
+          "focus --boundaries workspace --boundaries-action wrap-around-the-workspace dfs-next";
         # Service
         "alt-shift-semicolon" = "mode service";
       };
@@ -262,40 +261,55 @@ in
     ];
     config = ''
       # ── Colors (pastel purple palette) ─────────────────────────
-      BAR_COLOR=0xee1e1e2e
+      # BAR_COLOR is fully transparent so sketchybar visually merges
+      # with the macOS menu bar above it. Items still have ITEM_BG so
+      # they remain readable against window content. The bar itself
+      # only renders a 1px bottom BORDER_COLOR line as a divider.
+      BAR_COLOR=0x00000000
+      BORDER_COLOR=0x40b4a7d6
       ITEM_BG=0xff313244
       ACCENT=0xffb4a7d6
       TEXT=0xffcdd6f4
       SUBTEXT=0xffa6adc8
 
       # ── Bar appearance ─────────────────────────────────────────
+      # Height matches `sketchybarHeight` in the let-binding above; if
+      # you change one, change the other (or AeroSpace's outer.top will
+      # drift out of sync).
+      #
+      # The "bottom-border-only" trick: sketchybar only supports a
+      # 4-sided border, so we use `y_offset=-1` to push the bar 1px
+      # above the screen edge — the top/left/right borders fall off-
+      # screen and only the bottom border remains visible as a
+      # divider between the bar and tiled windows below.
       sketchybar --bar \
-        height=36 \
+        height=${toString sketchybarHeight} \
         color=$BAR_COLOR \
-        border_width=0 \
-        shadow=on \
+        border_width=1 \
+        border_color=$BORDER_COLOR \
+        shadow=off \
         position=top \
         sticky=on \
-        padding_left=8 \
-        padding_right=8 \
+        padding_left=6 \
+        padding_right=6 \
         topmost=window \
-        y_offset=0 \
+        y_offset=-1 \
         margin=0 \
         corner_radius=0
 
       # ── Defaults ───────────────────────────────────────────────
       sketchybar --default \
-        icon.font="JetBrainsMono Nerd Font Mono:Bold:14.0" \
+        icon.font="JetBrainsMono Nerd Font Mono:Bold:12.0" \
         icon.color=$TEXT \
-        label.font="JetBrainsMono Nerd Font Mono:Regular:13.0" \
+        label.font="JetBrainsMono Nerd Font Mono:Regular:11.0" \
         label.color=$TEXT \
         background.color=$ITEM_BG \
-        background.corner_radius=6 \
-        background.height=28 \
-        background.padding_left=4 \
-        background.padding_right=4 \
-        padding_left=4 \
-        padding_right=4
+        background.corner_radius=4 \
+        background.height=20 \
+        background.padding_left=3 \
+        background.padding_right=3 \
+        padding_left=3 \
+        padding_right=3
 
       # ── AeroSpace workspaces ───────────────────────────────────
       for sid in 1 2 3 4 5; do
@@ -386,6 +400,107 @@ in
             sketchybar --set $NAME icon="$ICON" label="''${PERCENTAGE}%"
           '
 
+      # ── Cheatsheet (popup of hotkeys) ──────────────────────────
+      # Click the keyboard glyph in the bar to drop down a popup of
+      # all AeroSpace + Ghostty + Zellij + system hotkeys. Toggle
+      # idempotently with `sketchybar --set cheatsheet popup.drawing=toggle`.
+      # This integrates natively with the existing bar instead of
+      # adding a second widget engine (\u00dcbersicht/SwiftBar).
+      sketchybar --add item cheatsheet right \
+        --set cheatsheet \
+          icon="" \
+          icon.color=$ACCENT \
+          icon.padding_left=8 \
+          icon.padding_right=8 \
+          label.drawing=off \
+          background.drawing=on \
+          click_script="sketchybar --set cheatsheet popup.drawing=toggle" \
+          popup.background.color=$BAR_COLOR \
+          popup.background.corner_radius=10 \
+          popup.background.border_color=$ACCENT \
+          popup.background.border_width=1 \
+          popup.background.shadow.drawing=on \
+          popup.horizontal=off \
+          popup.align=right \
+          popup.y_offset=4
+
+      # Helper to add a section header row
+      add_cheat_header() {
+        local name="$1"
+        local title="$2"
+        sketchybar --add item "$name" popup.cheatsheet \
+          --set "$name" \
+            icon="$title" \
+            icon.color=$ACCENT \
+            icon.font="JetBrainsMono Nerd Font Mono:Bold:13.0" \
+            icon.padding_left=12 \
+            icon.padding_right=12 \
+            label.drawing=off \
+            background.drawing=off \
+            background.padding_left=0 \
+            background.padding_right=0
+      }
+
+      # Helper to add a key/description row
+      add_cheat_row() {
+        local name="$1"
+        local key="$2"
+        local desc="$3"
+        sketchybar --add item "$name" popup.cheatsheet \
+          --set "$name" \
+            icon="$key" \
+            icon.color=0xfff4bf75 \
+            icon.font="JetBrainsMono Nerd Font Mono:Regular:12.0" \
+            icon.padding_left=14 \
+            icon.padding_right=10 \
+            icon.width=180 \
+            icon.align=left \
+            label="$desc" \
+            label.color=$TEXT \
+            label.font="JetBrainsMono Nerd Font Mono:Regular:12.0" \
+            label.padding_right=14 \
+            background.drawing=off
+      }
+
+      # ── AeroSpace ─────────────────────────────────────────────
+      add_cheat_header  cheat_aero_h     "── AeroSpace ──"
+      add_cheat_row     cheat_aero_focus "alt + h/j/k/l"          "Focus left/down/up/right"
+      add_cheat_row     cheat_aero_move  "alt + shift + h/j/k/l"  "Move window"
+      add_cheat_row     cheat_aero_resize "alt + shift + - / ="    "Resize -50 / +50"
+      add_cheat_row     cheat_aero_tiles "alt + /"                 "Layout tiles"
+      add_cheat_row     cheat_aero_acc   "alt + ,"                 "Layout accordion"
+      add_cheat_row     cheat_aero_full  "alt + f"                 "Fullscreen"
+      add_cheat_row     cheat_aero_ws    "alt + 1..5"              "Switch workspace"
+      add_cheat_row     cheat_aero_mvws  "alt + shift + 1..5"      "Move window to workspace"
+      add_cheat_row     cheat_aero_arrow "ctrl + alt + arrows"     "Move window (arrow keys)"
+      add_cheat_row     cheat_aero_cyc   "alt + \\\`"              "Cycle windows in workspace"
+      add_cheat_row     cheat_aero_svc   "alt + shift + ;"         "Service mode"
+      add_cheat_row     cheat_aero_svr   "  service: r / f / esc"  "Flatten / float / reload"
+
+      # ── Ghostty ───────────────────────────────────────────────
+      add_cheat_header  cheat_gh_h       "── Ghostty ──"
+      add_cheat_row     cheat_gh_n       "cmd + n / t / w"         "Window / tab / close"
+      add_cheat_row     cheat_gh_z       "cmd + +/- / 0"           "Zoom in / out / reset"
+      add_cheat_row     cheat_gh_k       "cmd + k"                 "Clear screen"
+      add_cheat_row     cheat_gh_split   "cmd + shift + d/e/o"     "(unbound — Zellij owns splits)"
+
+      # ── Zellij ────────────────────────────────────────────────
+      add_cheat_header  cheat_zj_h       "── Zellij ──"
+      add_cheat_row     cheat_zj_pane    "alt + ] / ["             "Next / prev pane"
+      add_cheat_row     cheat_zj_tab     "alt + o / i"             "Next / prev tab"
+      add_cheat_row     cheat_zj_new     "alt + n"                 "New pane"
+      add_cheat_row     cheat_zj_p       "ctrl + p"                "PANE mode (d/r/x/f/w/e)"
+      add_cheat_row     cheat_zj_n_mode  "ctrl + n / h / t"        "Resize / move / tab modes"
+      add_cheat_row     cheat_zj_s       "ctrl + s / o / g / q"    "Scroll / session / lock / quit"
+
+      # ── System ────────────────────────────────────────────────
+      add_cheat_header  cheat_sys_h      "── System ──"
+      add_cheat_row     cheat_sys_caps   "caps lock"               "→ Control"
+      add_cheat_row     cheat_sys_spot   "cmd + space"             "Spotlight"
+      add_cheat_row     cheat_sys_tab    "cmd + tab / \\\`"        "App / window cycle"
+      add_cheat_row     cheat_sys_mc     "ctrl + ↑ / ←/→"          "Mission Control / desktops"
+      add_cheat_row     cheat_sys_shot   "cmd + shift + 3/4/5"     "Screenshot full/region/tools"
+
       # ── Force initial update ───────────────────────────────────
       sketchybar --update
     '';
@@ -415,13 +530,7 @@ in
     NIXPKGS_ALLOW_UNFREE = "1";
     # Git SSH configuration
     GIT_SSH_COMMAND = "ssh -i /Users/${user.name}/.ssh/id_ed25519 -o IdentitiesOnly=yes";
-    # Claude Code Vertex AI proxy
-    CLAUDE_CODE_USE_VERTEX = "1";
-    CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
-    CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
-    ANTHROPIC_VERTEX_PROJECT_ID = "vertex-code-454718";
-    ANTHROPIC_VERTEX_BASE_URL = "https://vertex-proxy.sdgr.app/v1";
-    CLOUD_ML_REGION = "us-east5";
+    # Claude Code env vars now managed by programs.claude-code module
   };
 
   # Auto-load direnv for Claude Code (avoids needing nix develop)
@@ -434,10 +543,7 @@ in
       set +a
     fi
 
-    # Set up Google Cloud credentials for Claude Code Vertex AI proxy
-    if command -v gcloud >/dev/null 2>&1; then
-      export GOOGLE_APPLICATION_CREDENTIALS_JSON="$(gcloud auth print-access-token 2>/dev/null || echo "")"
-    fi
+    # Google Cloud credentials for Vertex AI now managed by programs.claude-code module
 
     if command -v direnv >/dev/null 2>&1; then
       if [ -n "$CLAUDECODE" ]; then
@@ -481,6 +587,13 @@ in
 
         KeyRepeat = 2; # 120, 90, 60, 30, 12, 6, 2
         InitialKeyRepeat = 15; # 120, 94, 68, 35, 25, 15
+
+        # Always show the menu bar (don't auto-hide). When the menu bar
+        # auto-hides, macOS reports the full screen frame to AeroSpace
+        # which then can't account for the menu bar zone, so the bar
+        # pops over tiled windows on hover. Always-visible means
+        # AeroSpace's `gaps.outer.top` only needs to clear sketchybar.
+        _HIHideMenuBar = false;
 
         # unavailable preferences can be accessed using quotes
         "com.apple.mouse.tapBehavior" = 1;

@@ -1,10 +1,11 @@
 {
   pkgs,
-  user,
+  lib,
   ...
 }:
 
 let
+  user = lib.salt.user;
   keys = [
     "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKoLhJuOE878n9BaTFAAmGgmGjztT61HsMRJOU+uKf/t+pJLxUOn3Or2CLMG5EkfKiTZzLFRQ9y1IvHPvmrM5QB5obJP6mJm2xNlL6wmDBKF0qpcXCU5nX3SmFJdbLg5a4FRWLSdMifWK75kvOSBskTYv81W5ncsbRdHK67AciarHYbkPoktoJpJE4EpEPMrPGLS7AaRo1zfbrIfOJJc4LzX2jBzNg1gw0/iPX39KPB/F+N6DzEh8cd43B3dKlqHscHCerpsHVF0EIgFkGm76MrgoJO92qAjeln9ibVSjU9ysS0YP7Z5khyyd19HQFiMQ6Dvp5cmUxndgvKdHooGE/"
   ];
@@ -139,11 +140,10 @@ in
       # intel AV stuff
       extraPackages = with pkgs; [
         intel-media-driver
-        vaapiIntel
-        vaapiVdpau
+        intel-vaapi-driver # was vaapiIntel
+        libva-vdpau-driver # was vaapiVdpau
         libvdpau-va-gl
         intel-ocl
-        intel-vaapi-driver
       ];
     };
 
@@ -181,8 +181,8 @@ in
 
   security.sudo = {
     enable = true;
-    security.sudo.extraConfig = ''
-      ${user.username} ALL=(ALL) NOPASSWD: ALL
+    extraConfig = ''
+      ${user.name} ALL=(ALL) NOPASSWD: ALL
     '';
     extraRules = [
       {
@@ -190,9 +190,6 @@ in
           {
             command = "${pkgs.systemd}/bin/reboot";
             options = [ "NOPASSWD" ];
-          }
-          {
-
           }
         ];
         groups = [ "wheel" ];
@@ -207,7 +204,7 @@ in
   ];
 
   environment.systemPackages = with pkgs; [
-    gitAndTools.gitFull
+    gitFull
     inetutils
   ];
 

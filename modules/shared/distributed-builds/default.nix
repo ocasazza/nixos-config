@@ -111,6 +111,7 @@ in
     text = ''
       builders = ${buildersConf}
       builders-use-substitutes = true
+      fallback = true
       max-jobs = auto
       connect-timeout = 5
       trusted-users = root ${user.name}
@@ -122,6 +123,7 @@ in
   nix.buildMachines = lib.mkIf (!isDeterminate) builders;
   nix.settings = lib.mkIf (!isDeterminate) {
     builders-use-substitutes = true;
+    fallback = true;
     max-jobs = "auto";
     trusted-users = [
       "root"
