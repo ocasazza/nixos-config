@@ -136,6 +136,14 @@
       # history substring search keybindings (up/down arrows)
       bindkey '^[[A' history-substring-search-up
       bindkey '^[[B' history-substring-search-down
+
+      # ── Cheatsheet toggle ────────────────────────────────────
+      # Lives as a sketchybar popup item (`cheatsheet`) on the right
+      # side of the bar. `cheat` flips its visibility; click the
+      # keyboard glyph in the bar for the same effect.
+      if [[ "$OSTYPE" == "darwin"* ]] && command -v sketchybar >/dev/null 2>&1; then
+        cheat() { sketchybar --set cheatsheet popup.drawing=toggle; }
+      fi
     '';
     autosuggestion = {
       enable = true;
@@ -172,11 +180,21 @@
     shellAliases = {
       cat = "bat";
       ls = "ls --color=auto";
-      nds = "nh darwin switch ~/.config/nixos-config#${hostName}";
+    }
+    # `nds` (nh darwin switch) is darwin-only and depends on hostName,
+    # so only emit it when the caller passed a hostName (i.e. from the
+    # darwin HM module). NixOS callers omit hostName → no nds alias.
+    // lib.optionalAttrs (hostName != null) {
+      nds = "nh darwin switch --elevation-strategy /usr/bin/sudo ~/.config/nixos-config#${hostName}";
     };
     sessionVariables = {
       EDITOR = "nvim";
       CLICOLOR = "1";
+      # Zellij auto-start (interactive shells only): attach to existing
+      # session if one exists, otherwise create a new one. Exit shell
+      # when zellij detaches/exits so Ghostty surfaces close cleanly.
+      ZELLIJ_AUTO_ATTACH = "true";
+      ZELLIJ_AUTO_EXIT = "true";
     };
   };
 
@@ -290,11 +308,98 @@
       background-blur-radius = 20;
       config-file = "~/.config/ghostty/extra"; # for testing custom shaders
       command = "/etc/profiles/per-user/${user.name}/bin/zsh";
+      # Pane/split management is owned by Zellij — explicitly unbind
+      # Ghostty's defaults so cmd+shift+{d,e,o} pass through to the
+      # shell (and so muscle memory doesn't accidentally create a
+      # Ghostty split inside an existing Zellij session).
       keybind = [
-        "cmd+shift+d=close_surface"
-        "cmd+shift+e=new_split:down"
-        "cmd+shift+o=new_split:right"
+        "cmd+shift+d=unbind"
+        "cmd+shift+e=unbind"
+        "cmd+shift+o=unbind"
+        "cmd+d=unbind"
       ];
+    };
+  };
+
+  zellij = {
+    enable = true;
+    # HM's zsh integration injects an auto-start snippet that honors
+    # $ZELLIJ_AUTO_ATTACH / $ZELLIJ_AUTO_EXIT (set in zsh.sessionVariables
+    # above), so every new Ghostty pane attaches to (or creates) a
+    # session and exits cleanly on detach.
+    enableZshIntegration = true;
+    settings = {
+      # Don't show the startup tip / first-run wizard.
+      show_startup_tips = false;
+      show_release_notes = false;
+      # Pane frames eat horizontal space; rely on Ghostty's split-fill
+      # color and Zellij's status bar to indicate focus instead.
+      pane_frames = false;
+      # Use the same family as Ghostty so the embedded UI feels native.
+      default_layout = "compact";
+      # Match Ghostty's Monokai-ish vibe.
+      theme = "monokai-soda";
+      themes.monokai-soda = {
+        fg = [
+          248
+          248
+          242
+        ];
+        bg = [
+          26
+          26
+          26
+        ];
+        black = [
+          26
+          26
+          26
+        ];
+        red = [
+          249
+          38
+          114
+        ];
+        green = [
+          166
+          226
+          46
+        ];
+        yellow = [
+          244
+          191
+          117
+        ];
+        blue = [
+          102
+          217
+          239
+        ];
+        magenta = [
+          174
+          129
+          255
+        ];
+        cyan = [
+          161
+          239
+          228
+        ];
+        white = [
+          248
+          248
+          242
+        ];
+        orange = [
+          253
+          151
+          31
+        ];
+      };
+      # Ctrl-based prefixes don't collide with AeroSpace (alt-only) or
+      # Ghostty (now stripped of cmd+shift splits).
+      copy_on_select = true;
+      mouse_mode = true;
     };
   };
 
@@ -415,43 +520,110 @@
   ssh = {
     enable = true;
     enableDefaultConfig = false;
-    matchBlocks."*" = {
-      forwardAgent = false;
-      addKeysToAgent = "no";
-      compression = false;
-      serverAliveInterval = 0;
-      serverAliveCountMax = 3;
-      hashKnownHosts = false;
-      userKnownHostsFile = "~/.ssh/known_hosts";
-      controlMaster = "no";
-      controlPath = "~/.ssh/master-%r@%n:%p";
-      controlPersist = "no";
+    matchBlocks = {
+      # Global defaults applied to every host.
+      "*" = {
+        forwardAgent = false;
+        addKeysToAgent = "no";
+        compression = false;
+        serverAliveInterval = 0;
+        serverAliveCountMax = 3;
+        hashKnownHosts = false;
+        userKnownHostsFile = "~/.ssh/known_hosts";
+        controlMaster = "no";
+        controlPath = "~/.ssh/master-%r@%n:%p";
+        controlPersist = "no";
+        identityFile =
+          if pkgs.stdenv.hostPlatform.isDarwin then
+            "/Users/${user.name}/.ssh/id_ed25519"
+          else
+            "/home/${user.name}/.ssh/id_ed25519";
+      };
+
+      "github.com" = {
+        hostname = "github.com";
+        identitiesOnly = true;
+      };
+
+      "CK2Q9LN7PM-MBA.local CK2Q9LN7PM-MBA.tb".extraOptions.ConnectTimeout = "5";
+      "GJHC5VVN49-MBP.local GJHC5VVN49-MBP.tb".extraOptions.ConnectTimeout = "5";
+
+      "desk-nxst-*" = {
+        identitiesOnly = true;
+        extraOptions = {
+          CanonicalizeHostname = "yes";
+          CanonicalDomains = "schrodinger.com";
+          CanonicalizeMaxDots = "1";
+        };
+      };
+
+      # ── Home LAN (192.168.1.0/24) ────────────────────────────
+      # seir is AppGate-filtered over IPv4 (ZTNA default-deny for
+      # non-entitled LAN hosts), so it routes over IPv6 via Bonjour.
+      # All other home LAN hosts work fine over IPv4 through AppGate.
+      #
+      # NOTE: 192.168.1.35 is included as a Host pattern so that muscle
+      # memory `ssh olive@192.168.1.35` still works — the HostName override
+      # rewrites it to seir.local + forces IPv6 before the connect happens.
+      "seir seir.local 192.168.1.35" = {
+        hostname = "seir.local";
+        user = "olive";
+        addressFamily = "inet6";
+        identitiesOnly = true;
+        identityFile = "/Users/${user.name}/.ssh/olive_id_ed25519";
+      };
+
+      # Personal home hosts — all share the olive user + key.
+      # This block merges with the per-host HostName blocks below
+      # (SSH applies every matching Host pattern).
+      "contra rpi5 mm01 mm02 mm03 mm04 mm05 hp01 hp02 hp03" = {
+        user = "olive";
+        identitiesOnly = true;
+        identityFile = "/Users/${user.name}/.ssh/olive_id_ed25519";
+      };
+
+      # Raspberry Pi 5
+      "rpi5".hostname = "192.168.1.16";
+
+      # contra (cluster head?)
+      "contra".hostname = "192.168.1.100";
+
+      # HPE iLO BMCs (out-of-band management).
+      # Web UI lives on :443, but mpSSH (iLO's smash CLI) on :22 supports
+      # power on/off, virtual media, console redirection, etc.
+      #
+      # iLO's mpSSH only speaks legacy crypto (DH-group14-sha1 + ssh-rsa
+      # host keys), which modern OpenSSH disables by default. We re-enable
+      # them ONLY for these hosts. User is IPMIUSER (password also IPMIUSER);
+      # SSH will prompt for it interactively. Pubkey isn't supported.
+      "hp-bmc-*" = {
+        user = "IPMIUSER";
+        extraOptions = {
+          KexAlgorithms = "+diffie-hellman-group14-sha1";
+          HostKeyAlgorithms = "+ssh-rsa";
+          PubkeyAuthentication = "no";
+          PreferredAuthentications = "password,keyboard-interactive";
+        };
+      };
+      "hp-bmc-01 hp-bmc-1".hostname = "192.168.1.101";
+      "hp-bmc-02 hp-bmc-2".hostname = "192.168.1.102";
+      "hp-bmc-03 hp-bmc-3".hostname = "192.168.1.103";
+
+      # Mac mini cluster (mm01–mm05)
+      "mm01".hostname = "192.168.1.111";
+      "mm02".hostname = "192.168.1.112";
+      "mm03".hostname = "192.168.1.113";
+      "mm04".hostname = "192.168.1.114";
+      "mm05".hostname = "192.168.1.115";
+
+      # HP servers (hp01–hp03, paired 1:1 with their iLOs above)
+      "hp01".hostname = "192.168.1.121";
+      "hp02".hostname = "192.168.1.122";
+      "hp03".hostname = "192.168.1.123";
+
+      # Dell box (.250) — vague alias since hostname unknown
+      "dell".hostname = "192.168.1.250";
     };
-    extraConfig = lib.mkMerge [
-      ''
-        Host github.com
-          Hostname github.com
-          IdentitiesOnly yes
-
-        Host CK2Q9LN7PM-MBA.local CK2Q9LN7PM-MBA.tb
-          ConnectTimeout 5
-
-        Host GJHC5VVN49-MBP.local GJHC5VVN49-MBP.tb
-          ConnectTimeout 5
-
-        Host desk-nxst-*
-          CanonicalizeHostname yes
-          CanonicalDomains schrodinger.com
-          CanonicalizeMaxDots 1
-          IdentitiesOnly yes
-      ''
-      (lib.mkIf pkgs.stdenv.hostPlatform.isLinux ''
-        IdentityFile /home/${user.name}/.ssh/id_ed25519
-      '')
-      (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin ''
-        IdentityFile /Users/${user.name}/.ssh/id_ed25519
-      '')
-    ];
   };
 }
 // import ./vscode { inherit pkgs lib; }
