@@ -21,11 +21,11 @@ let
   shared-files = import ../shared/files.nix { inherit config pkgs user; };
 in
 {
+  # Snowfall auto-discovers everything in modules/home/ and applies it
+  # to home-manager users via home-manager.sharedModules in flake.nix.
+  # We only need to import flake-input-provided HM modules here.
   imports = [
     inputs.nix4nvchad.homeManagerModule
-    ./gtk
-    ./sway
-    ./services
   ];
 
   home = {
