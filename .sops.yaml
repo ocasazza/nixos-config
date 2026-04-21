@@ -3,3 +3,9 @@ creation_rules:
     age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl
   - path_regex: secrets/fleet\.env$
     age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl
+  # Ingestion-pipeline secrets (~/ingest + modules/nixos/ingest).
+  # These are referenced as placeholder paths from luna's host config;
+  # once sops-nix is wired into luna, `sops secrets/ingest.env` will
+  # replace the plaintext placeholders with an encrypted blob.
+  - path_regex: secrets/ingest\.env$
+    age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl

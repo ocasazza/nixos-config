@@ -556,6 +556,105 @@ in
     grafana.adminPassword = "changeme"; # set via UI on first login
   };
 
+  # ── ingestion pipeline ───────────────────────────────────────────────
+  # Three pull-over-API source adapters (obsidian vault repo, Atlassian
+  # Cloud, configurable GitHub repos) feeding one sink (Open WebUI
+  # Knowledge API) through LangGraph graphs. Module at
+  # modules/nixos/ingest/, project at /home/casazza/ingest.
+  #
+  # TODO(ingest): wire these four sops-nix entries once sops-nix is
+  # imported into luna (only darwin uses sops today — see
+  # hosts/darwin/default.nix). Until then, the token/emailFile paths
+  # below reference placeholder files the user creates manually:
+  #
+  #   /var/lib/ingest/.secrets/openwebui-api-token   (chmod 600, root:root)
+  #   /var/lib/ingest/.secrets/atlassian-email       (chmod 600)
+  #   /var/lib/ingest/.secrets/atlassian-api-token   (chmod 600)
+  #   /var/lib/ingest/.secrets/github-api-token      (chmod 600)
+  #
+  # Once sops-nix is wired, replace each with:
+  #   config.sops.secrets.openwebui-api-token.path
+  #   config.sops.secrets.atlassian-email.path
+  #   config.sops.secrets.atlassian-api-token.path
+  #   config.sops.secrets.github-api-token.path
+  # and add matching entries under secrets/ (age-encrypt per .sops.yaml).
+  local.ingest = {
+    enable = true;
+    projectDir = "/home/casazza/ingest";
+
+    sinks.openwebui = {
+      url = "http://localhost:8080";
+      tokenFile = "/var/lib/ingest/.secrets/openwebui-api-token";
+      knowledges = {
+        kb-it-tickets = "IT tickets pulled from Jira + GitHub issues";
+        kb-it-docs = "IT runbooks, Confluence, and vault IT-Ops notes";
+        kb-notes-personal = "Personal notes, journal, research from vault";
+        kb-notes-meetings = "Meeting transcripts and action items";
+        kb-systems-internal = "Internal system design/config/maintenance docs";
+        kb-systems-external = "External vendor/upstream docs";
+      };
+    };
+
+    sources = {
+      obsidian = {
+        type = "obsidian";
+        enabled = true;
+        schedule = "*:0/15"; # every 15 minutes
+        repo = "ocasazza/obsidian";
+        branch = "main";
+        # TODO(ingest): populate via sops once wired. For now leave
+        # unset — if the repo is public the adapter works without a
+        # token; if it's private, point obsidianTokenFile at the PAT
+        # file (can be the same github-api-token as the github source).
+        # obsidianTokenFile = "/var/lib/ingest/.secrets/github-api-token";
+        # folderMap defaults match DEFAULT_OBSIDIAN_FOLDER_MAP in
+        # ingest/config.py — no need to respecify here.
+      };
+
+      atlassian = {
+        type = "atlassian";
+        enabled = true;
+        schedule = "*:0/30"; # every 30 minutes
+        # TODO(ingest): USER EDIT — set to your Atlassian Cloud tenant URL.
+        baseUrl = "https://yourdomain.atlassian.net";
+        emailFile = "/var/lib/ingest/.secrets/atlassian-email";
+        tokenFile = "/var/lib/ingest/.secrets/atlassian-api-token";
+        # TODO(ingest): USER EDIT — empty lists = pull every accessible project/space.
+        jiraProjects = [
+          "OPS"
+          "IT"
+        ];
+        confluenceSpaces = [
+          "IT"
+          "OPS"
+        ];
+      };
+
+      github = {
+        type = "github";
+        enabled = true;
+        schedule = "*:0/30"; # every 30 minutes
+        tokenFile = "/var/lib/ingest/.secrets/github-api-token";
+        repos = [
+          {
+            slug = "ocasazza/nixos-config";
+            kind = "internal";
+            includeIssues = false;
+            includePRs = false;
+            includeDocs = true;
+          }
+          {
+            slug = "open-webui/open-webui";
+            kind = "external";
+            includeIssues = false;
+            includePRs = false;
+            includeDocs = true;
+          }
+        ];
+      };
+    };
+  };
+
   # Local Claude Code on luna. Telemetry endpoint is auto-derived by the
   # claude-code module — because `local.observability.enable = true` above,
   # the default flips to `http://127.0.0.1:4317` instead of luna.local, so
