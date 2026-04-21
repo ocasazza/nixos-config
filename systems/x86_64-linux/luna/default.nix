@@ -506,6 +506,13 @@ in
     grafana.adminPassword = "changeme"; # set via UI on first login
   };
 
+  # Event-driven obsidian repo pull. Triggered remotely by the editing
+  # Mac via `claw -w @vault-consumers systemctl start
+  # obsidian-vault-sync.service` from a post-commit hook in the
+  # obsidian repo. The repo must already be `jj git clone`'d to
+  # /home/casazza/obsidian on first install (one-time bootstrap).
+  local.obsidianVaultSync.enable = true;
+
   # Local Claude Code on luna. Telemetry endpoint is auto-derived by the
   # claude-code module — because `local.observability.enable = true` above,
   # the default flips to `http://127.0.0.1:4317` instead of luna.local, so
