@@ -1,6 +1,7 @@
 { pkgs, lib, ... }:
 
-# VSCode HM config — cross-platform.
+# VSCode HM config — cross-platform. Snowfall auto-discovers this
+# module and applies it to every HM user.
 #
 # On Darwin we use Microsoft's prebuilt `vscode` (signed binary
 # tarball, builds cleanly through nixpkgs).
@@ -11,7 +12,7 @@
 # `vscode-fhs` (the same Microsoft binary, wrapped with an FHS
 # environment so plugins find their expected `/lib`/`/usr` paths).
 {
-  vscode = {
+  programs.vscode = {
     enable = true;
     package = if pkgs.stdenv.isDarwin then pkgs.vscode else pkgs.vscode-fhs;
     profiles.default = {

@@ -41,23 +41,13 @@ in
     ];
   };
 
-  programs = lib.mkMerge [
-    (import ../../../modules/shared/home-manager.nix {
-      inherit
-        config
-        pkgs
-        lib
-        inputs
-        user
-        ;
-    })
-    {
-      # Pin ghostty to the prebuilt binary on Darwin (the source build
-      # via the ghostty flake input is slow and does not benefit from
-      # the binary cache the same way).
-      ghostty.package = lib.mkForce pkgs.ghostty-bin;
-    }
-  ];
+  programs = {
+    # Pin ghostty to the prebuilt binary on Darwin (the source build
+    # via the ghostty flake input is slow and does not benefit from
+    # the binary cache the same way). The rest of the ghostty config
+    # lives in `modules/home/ghostty`, auto-applied via snowfall.
+    ghostty.package = lib.mkForce pkgs.ghostty-bin;
+  };
 
   manual.manpages.enable = false;
 }

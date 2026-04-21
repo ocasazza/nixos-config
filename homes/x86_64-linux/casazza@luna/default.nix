@@ -23,10 +23,6 @@
 }:
 
 let
-  # Snowfall passes `user` as just a string (the directory name before
-  # `@`); the rest of the codebase expects `lib.salt.user` (an attrset
-  # with name/fullName/email). Pull it from `lib` to keep the existing
-  # shared HM file unchanged.
   user = lib.salt.user;
 in
 {
@@ -53,16 +49,8 @@ in
     file = import ../../../modules/nixos/files.nix { inherit user; };
   };
 
-  # Cross-platform programs config (zsh/git/ssh/zellij/nvim/etc.) lives
-  # in modules/shared/home-manager.nix. We pass it the canonical `user`
-  # attrset so the existing call signature is preserved.
-  programs = import ../../../modules/shared/home-manager.nix {
-    inherit
-      config
-      pkgs
-      lib
-      inputs
-      user
-      ;
-  };
+  # Cross-platform HM program config (zsh/git/ssh/zellij/nvim/etc.)
+  # lives in individual modules under `modules/home/*` and is
+  # auto-applied via snowfall's sharedModules pipeline; no explicit
+  # import is needed here.
 }
