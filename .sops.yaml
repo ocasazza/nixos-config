@@ -1,11 +1,49 @@
+# Trust hierarchy (enforced by key-management flow, NOT by sops itself):
+#
+#   offline root  --signs-->  admin_* keys  --encrypt/decrypt-->  secrets
+#                             host_*  keys  --decrypt at activation-->
+#
+# The root key lives offline, is never used operationally, and signs admin
+# pubkeys out-of-band. Root fingerprint: TBD (offline; not stored here).
+# Sops only checks "held private key matches listed public key"; the
+# admin/host split is intent, not a cryptographic constraint.
+#
+# Add a new admin:
+#   1. They `age-keygen -o ~/.config/sops/age/keys.txt`, share pubkey OOB.
+#   2. Root signs their pubkey (out-of-band, tracked separately).
+#   3. Append under the `&admin_<name>` anchor list below.
+#   4. `sops updatekeys secrets/*.yaml secrets/*.env` then commit.
+#
+# Add a new host: `ssh-to-age -i /etc/ssh/ssh_host_ed25519_key.pub`,
+# append under `&host_<name>` namespace, same updatekeys dance.
+#
+# Full rotation procedure (admin compromise, host rebuild, root rotation):
+# see secrets/README.md.
+
+keys:
+  # Admin keys: humans who can edit any secret. Any single admin suffices.
+  - &admin_olive age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl
+  # Host keys: derived from each consumer host's SSH host key via
+  # `ssh-to-age`. sops-nix uses the host's default sshKeyPaths
+  # (e.g. [ /etc/ssh/ssh_host_ed25519_key ]) to decrypt at activation,
+  # no private-key copy required.
+  - &host_luna age1jxcqkungt8kyu3mt5apf8xxw883j3pmug6kf0e7yhsas0yalxdwq3k5ufr
 creation_rules:
   - path_regex: secrets/opencode\.env$
-    age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl
+    age: *admin_olive
   - path_regex: secrets/fleet\.env$
-    age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl
-  # Ingestion-pipeline secrets (~/ingest + modules/nixos/ingest).
-  # These are referenced as placeholder paths from luna's host config;
-  # once sops-nix is wired into luna, `sops secrets/ingest.env` will
-  # replace the plaintext placeholders with an encrypted blob.
+    age: *admin_olive
+  # Ingestion-pipeline secrets consumed by luna's `local.ingest`.
+  # Encrypted to an admin key (for editing from darwin via `sops edit`)
+  # and to luna's host key (for in-place decryption at nixos-rebuild
+  # activation, no private-key copy).
+  - path_regex: secrets/(openwebui-api-token|atlassian-email|atlassian-api-token|github-api-token)\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
+  # Legacy/unused: kept so an ad-hoc `sops secrets/ingest.env` still
+  # encrypts under an admin key, even though luna now reads the four
+  # per-token YAMLs above instead of a monolithic env file.
   - path_regex: secrets/ingest\.env$
-    age: age13qgzftyza90rxfff80z07v8yyt7m26aydmgzqwmpccrs08a3s5pqvd6xxl
+    age: *admin_olive
