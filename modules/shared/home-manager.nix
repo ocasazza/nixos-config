@@ -77,6 +77,17 @@
       autoload -Uz compinit && compinit
     '';
     initExtra = ''
+      # ── zellij auto-attach (local only) ───────────────────────
+      # Attach to an existing zellij session (or create one) ONLY when
+      # we're in a LOCAL interactive shell — never on SSH. Otherwise
+      # every `ssh luna` lands in the same existing pane as the prior
+      # SSH connection, mirroring input/output. $SSH_CONNECTION is set
+      # by sshd; absence means this is a local login.
+      if [[ -z "''${SSH_CONNECTION:-}" && -z "''${SSH_CLIENT:-}" ]]; then
+        export ZELLIJ_AUTO_ATTACH=true
+        export ZELLIJ_AUTO_EXIT=true
+      fi
+
       # ── completion system tuning ──────────────────────────────
       # case-insensitive, partial-word, and substring completion
       zstyle ':completion:*' matcher-list \
@@ -190,11 +201,10 @@
     sessionVariables = {
       EDITOR = "nvim";
       CLICOLOR = "1";
-      # Zellij auto-start (interactive shells only): attach to existing
-      # session if one exists, otherwise create a new one. Exit shell
-      # when zellij detaches/exits so Ghostty surfaces close cleanly.
-      ZELLIJ_AUTO_ATTACH = "true";
-      ZELLIJ_AUTO_EXIT = "true";
+      # Zellij auto-attach is gated in initExtra (below) on NOT being
+      # in an SSH session — setting these unconditionally here would
+      # make `ssh luna` land every new shell in the same existing
+      # zellij pane, mirroring input/output across terminals.
     };
   };
 
