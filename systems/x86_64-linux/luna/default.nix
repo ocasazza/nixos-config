@@ -1,6 +1,7 @@
 {
   pkgs,
   lib,
+  config,
   inputs,
   ...
 }:
@@ -556,35 +557,68 @@ in
     grafana.adminPassword = "changeme"; # set via UI on first login
   };
 
+  # ── secrets (sops-nix) ───────────────────────────────────────────────
+  # sops-nix decrypts `secrets/*.yaml` at activation using an age identity
+  # derived from luna's SSH host key (default sshKeyPaths). The four ingest
+  # secrets below are encrypted to *two* recipients in `.sops.yaml`:
+  # the user's age key (for `sops edit` from darwin) and luna's
+  # ssh-host-derived age key (for in-place decryption here with no
+  # private-key copy). Placeholders (`REPLACE_ME_WITH_REAL_TOKEN`) ship
+  # in the encrypted files; real values land later via
+  # `sops edit secrets/<name>.yaml` from a machine holding the user key.
+  sops = {
+    defaultSopsFile = ../../../secrets/openwebui-api-token.yaml;
+    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+
+    secrets = {
+      openwebui-api-token = {
+        sopsFile = ../../../secrets/openwebui-api-token.yaml;
+        key = "openwebui_api_token";
+        owner = "ingest";
+        group = "ingest";
+        mode = "0400";
+      };
+      atlassian-email = {
+        sopsFile = ../../../secrets/atlassian-email.yaml;
+        key = "atlassian_email";
+        owner = "ingest";
+        group = "ingest";
+        mode = "0400";
+      };
+      atlassian-api-token = {
+        sopsFile = ../../../secrets/atlassian-api-token.yaml;
+        key = "atlassian_api_token";
+        owner = "ingest";
+        group = "ingest";
+        mode = "0400";
+      };
+      github-api-token = {
+        sopsFile = ../../../secrets/github-api-token.yaml;
+        key = "github_api_token";
+        owner = "ingest";
+        group = "ingest";
+        mode = "0400";
+      };
+    };
+  };
+
   # ── ingestion pipeline ───────────────────────────────────────────────
   # Three pull-over-API source adapters (obsidian vault repo, Atlassian
   # Cloud, configurable GitHub repos) feeding one sink (Open WebUI
   # Knowledge API) through LangGraph graphs. Module at
   # modules/nixos/ingest/, project at /home/casazza/ingest.
   #
-  # TODO(ingest): wire these four sops-nix entries once sops-nix is
-  # imported into luna (only darwin uses sops today — see
-  # hosts/darwin/default.nix). Until then, the token/emailFile paths
-  # below reference placeholder files the user creates manually:
-  #
-  #   /var/lib/ingest/.secrets/openwebui-api-token   (chmod 600, root:root)
-  #   /var/lib/ingest/.secrets/atlassian-email       (chmod 600)
-  #   /var/lib/ingest/.secrets/atlassian-api-token   (chmod 600)
-  #   /var/lib/ingest/.secrets/github-api-token      (chmod 600)
-  #
-  # Once sops-nix is wired, replace each with:
-  #   config.sops.secrets.openwebui-api-token.path
-  #   config.sops.secrets.atlassian-email.path
-  #   config.sops.secrets.atlassian-api-token.path
-  #   config.sops.secrets.github-api-token.path
-  # and add matching entries under secrets/ (age-encrypt per .sops.yaml).
+  # Tokens/emails come from sops-nix (see `sops.secrets.*` above).
+  # The ingest module reads each via its *File option; sops-nix puts
+  # the decrypted plaintext at /run/secrets/<name> (root-owned, mode
+  # 0400, group `ingest`).
   local.ingest = {
     enable = true;
     projectDir = "/home/casazza/ingest";
 
     sinks.openwebui = {
       url = "http://localhost:8080";
-      tokenFile = "/var/lib/ingest/.secrets/openwebui-api-token";
+      tokenFile = config.sops.secrets.openwebui-api-token.path;
       knowledges = {
         kb-it-tickets = "IT tickets pulled from Jira + GitHub issues";
         kb-it-docs = "IT runbooks, Confluence, and vault IT-Ops notes";
@@ -602,11 +636,10 @@ in
         schedule = "*:0/15"; # every 15 minutes
         repo = "ocasazza/obsidian";
         branch = "main";
-        # TODO(ingest): populate via sops once wired. For now leave
-        # unset — if the repo is public the adapter works without a
-        # token; if it's private, point obsidianTokenFile at the PAT
-        # file (can be the same github-api-token as the github source).
-        # obsidianTokenFile = "/var/lib/ingest/.secrets/github-api-token";
+        # Reuse the github PAT for private-repo clones. Open vaults can
+        # drop this; keeping it wired makes the private case work without
+        # re-encrypting a duplicate secret file.
+        obsidianTokenFile = config.sops.secrets.github-api-token.path;
         # folderMap defaults match DEFAULT_OBSIDIAN_FOLDER_MAP in
         # ingest/config.py — no need to respecify here.
       };
@@ -617,8 +650,8 @@ in
         schedule = "*:0/30"; # every 30 minutes
         # TODO(ingest): USER EDIT — set to your Atlassian Cloud tenant URL.
         baseUrl = "https://yourdomain.atlassian.net";
-        emailFile = "/var/lib/ingest/.secrets/atlassian-email";
-        tokenFile = "/var/lib/ingest/.secrets/atlassian-api-token";
+        emailFile = config.sops.secrets.atlassian-email.path;
+        tokenFile = config.sops.secrets.atlassian-api-token.path;
         # TODO(ingest): USER EDIT — empty lists = pull every accessible project/space.
         jiraProjects = [
           "OPS"
@@ -634,7 +667,7 @@ in
         type = "github";
         enabled = true;
         schedule = "*:0/30"; # every 30 minutes
-        tokenFile = "/var/lib/ingest/.secrets/github-api-token";
+        tokenFile = config.sops.secrets.github-api-token.path;
         repos = [
           {
             slug = "ocasazza/nixos-config";

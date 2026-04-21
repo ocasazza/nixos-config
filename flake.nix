@@ -20,6 +20,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Secrets management (sops-nix). Used by luna to decrypt
+    # secrets/*.yaml at activation via its SSH host key (derived to
+    # an age identity automatically). Already a transitive input via
+    # git-fleet* but snowfall needs a direct handle to import
+    # `nixosModules.default`.
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Terminal
     ghostty = {
       url = "github:ghostty-org/ghostty";
@@ -210,6 +220,7 @@
       # ── NixOS systems ──────────────────────────────────────────────────
       systems.modules.nixos = [
         inputs.disko.nixosModules.disko
+        inputs.sops-nix.nixosModules.sops
         inputs.home-manager.nixosModules.home-manager
         # Shared storage stack — luna runs the full stack (seaweedfs +
         # tikv); macs are JuiceFS clients only via the darwin modules.
