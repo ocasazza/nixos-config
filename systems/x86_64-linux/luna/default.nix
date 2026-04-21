@@ -490,6 +490,56 @@ in
     openFirewall = true;
   };
 
+  # ── MCPO (MCP-to-OpenAPI proxy for Open WebUI) ───────────────────────
+  # Exposes local stdio MCP servers over HTTP so Open WebUI's Tools
+  # registry can pick them up. Currently serves the Obsidian vault
+  # (read-only) via @bitbonsai/mcpvault under npx — a direct-filesystem
+  # MCP server that reads vault files straight off disk (no Obsidian
+  # desktop app / Local REST API plugin required, which is the right
+  # shape for a headless host).
+  #
+  # After nixos-rebuild:
+  #   curl http://luna.local:8100/obsidian/openapi.json | jq .info
+  #
+  # Then wire it into Open WebUI (one-time, admin UI — Open WebUI has
+  # no declarative tool-server option in its NixOS module):
+  #   Admin → Settings → Tools → Add tool server
+  #     URL:  http://luna.local:8100/obsidian
+  #     Name: Obsidian
+  #
+  # Add more MCP servers by appending to `local.mcpo.servers`; each
+  # entry gets its own URL path (e.g. `/obsidian`, `/github`, etc.).
+  local.mcpo = {
+    enable = true;
+    openFirewall = true;
+    port = 8100;
+
+    servers = {
+      obsidian = {
+        command = "npx";
+        # @bitbonsai/mcpvault takes the vault path as a positional
+        # argument; no env vars required.
+        args = [
+          "-y"
+          "@bitbonsai/mcpvault@latest"
+          "/home/casazza/obsidian/vault"
+        ];
+      };
+    };
+  };
+
+  # mcpo runs under `ProtectHome = true`, so /home is hidden from the
+  # unit's mount namespace. Bind the vault in read-only to give the
+  # Obsidian MCP child read access without exposing the rest of $HOME.
+  # Read-only at the namespace level is the canonical "no-writes"
+  # guardrail — @bitbonsai/mcpvault exposes write_note/delete_note/etc.
+  # on the MCP surface, but the bind-mount prevents those from actually
+  # touching disk. The swarm's Python agent also allow-lists only the
+  # read tools; this is belt-and-braces.
+  systemd.services.mcpo.serviceConfig.BindReadOnlyPaths = [
+    "/home/casazza/obsidian/vault"
+  ];
+
   # ── observability ────────────────────────────────────────────────────
   # Local Prometheus + Grafana + node/GPU/vLLM scrapes. Module lives in
   # `modules/nixos/observability/`. Auto-discovers vllm services from
@@ -518,6 +568,16 @@ in
   # the default flips to `http://127.0.0.1:4317` instead of luna.local, so
   # luna pushes to itself over loopback without an explicit override here.
   programs.claude-code.enable = true;
+
+  # Swarm (projects/swarm at ~/swarm — ad-hoc, not a systemd unit):
+  #   4000 — LiteLLM proxy
+  #   4319 — Phoenix OTLP gRPC (non-default to dodge otelcol-contrib on 4317)
+  #   6006 — Phoenix HTTP + UI
+  networking.firewall.allowedTCPPorts = [
+    4000
+    4319
+    6006
+  ];
 
   # luna shipped as NixOS 25.11 by the original installer; honor the
   # original stateVersion so per-user data files keep their existing
