@@ -14,14 +14,26 @@
 #   - The initiating machine's SSH public key in ~/.ssh/authorized_keys
 #   - `nix-daemon` trusted-users includes casazza (set via trusted-users below)
 #   - The builder must have the same Nix version (Determinate Nix on all nodes)
+#
+# Per-host opt-out:
+#   When you're on a network where none of the cluster nodes resolve (e.g.
+#   off-VPN, traveling, or the other Macs are asleep), every `nix develop`
+#   stalls for ~5s/builder on mDNS lookups + SSH ConnectTimeout before
+#   falling back to local/substitute builds. Set
+#       casazza.distributedBuilds.enable = false;
+#   in that host's `systems/aarch64-darwin/<HOST>/default.nix` to skip the
+#   builders entirely on that machine. Flip back when you're home.
 {
   lib,
+  config,
   isDeterminate,
   user,
   exoThunderboltHostname ? null,
   ...
 }:
 let
+  cfg = config.casazza.distributedBuilds;
+
   sshKey = "/Users/casazza/.ssh/id_ed25519";
   sshUser = "casazza";
 
@@ -104,30 +116,72 @@ let
   buildersConf = lib.concatMapStringsSep " ; " builderLine builders;
 in
 {
-  # Determinate Nix: append builder config to nix.custom.conf.
-  # environment.etc.<name>.text uses lib.types.lines which concatenates
-  # multiple module definitions automatically — no conflict with cachix module.
-  environment.etc."nix/nix.custom.conf" = lib.mkIf isDeterminate {
-    text = ''
-      builders = ${buildersConf}
-      builders-use-substitutes = true
-      fallback = true
-      max-jobs = auto
-      connect-timeout = 5
-      trusted-users = root ${user.name}
-    '';
+  options.casazza.distributedBuilds = {
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Whether to enable distributed Nix builds across the Thunderbolt
+        cluster. Set to false on machines that are commonly off-network
+        from the other cluster nodes — otherwise every `nix develop` /
+        `direnv allow` stalls on mDNS lookups for unreachable builders.
+      '';
+    };
   };
 
-  # Standard Nix (non-Determinate Linux hosts)
-  nix.distributedBuilds = lib.mkIf (!isDeterminate) true;
-  nix.buildMachines = lib.mkIf (!isDeterminate) builders;
-  nix.settings = lib.mkIf (!isDeterminate) {
-    builders-use-substitutes = true;
-    fallback = true;
-    max-jobs = "auto";
-    trusted-users = [
-      "root"
-      user.name
-    ];
-  };
+  config = lib.mkMerge [
+    # Determinate Nix: append builder config to nix.custom.conf.
+    # environment.etc.<name>.text uses lib.types.lines which concatenates
+    # multiple module definitions automatically — no conflict with cachix module.
+    (lib.mkIf (isDeterminate && cfg.enable) {
+      environment.etc."nix/nix.custom.conf".text = ''
+        builders = ${buildersConf}
+        builders-use-substitutes = true
+        fallback = true
+        max-jobs = auto
+        connect-timeout = 5
+        trusted-users = root ${user.name}
+      '';
+    })
+
+    # Determinate Nix, builders disabled: still apply the non-builder
+    # settings so trusted-users / fallback / max-jobs stay correct.
+    (lib.mkIf (isDeterminate && !cfg.enable) {
+      environment.etc."nix/nix.custom.conf".text = ''
+        builders =
+        builders-use-substitutes = true
+        fallback = true
+        max-jobs = auto
+        connect-timeout = 5
+        trusted-users = root ${user.name}
+      '';
+    })
+
+    # Standard Nix (non-Determinate Linux hosts)
+    (lib.mkIf (!isDeterminate && cfg.enable) {
+      nix.distributedBuilds = true;
+      nix.buildMachines = builders;
+      nix.settings = {
+        builders-use-substitutes = true;
+        fallback = true;
+        max-jobs = "auto";
+        trusted-users = [
+          "root"
+          user.name
+        ];
+      };
+    })
+
+    (lib.mkIf (!isDeterminate && !cfg.enable) {
+      nix.distributedBuilds = false;
+      nix.settings = {
+        fallback = true;
+        max-jobs = "auto";
+        trusted-users = [
+          "root"
+          user.name
+        ];
+      };
+    })
+  ];
 }

@@ -77,6 +77,13 @@
     consortium = {
       url = "github:olivecasazza/consortium";
     };
+
+    # Obsidian vault flake: provides vault-snapshot + vault-snapshot-watch
+    # for the auto-snapshot launchd agent on darwin.
+    obsidian-vault = {
+      url = "git+file:///Users/casazza/Repositories/ocasazza/obsidian";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -95,25 +102,17 @@
         };
       };
 
-      # Auto-discover all home modules in modules/home/. Snowfall already
-      # exposes these as `homeModules.<name>`, but that output is only
-      # available on the built flake — we can't reference it during
-      # evaluation of `mkFlake` itself. Instead we read the directory
-      # ourselves and import each default.nix, mirroring snowfall's logic.
-      # Result: a list ready to drop into `home-manager.sharedModules`.
+      # NOTE: home-manager wiring is now handled by snowfall homes.
+      # Snowfall auto-discovers `homes/<arch>/<user>[@host]/default.nix`
+      # and:
+      #   1. Exposes them as `homeConfigurations.<user>@<host>`
+      #   2. Generates per-system `home-manager.users.<user>` modules
+      #      that self-gate on host/system match
+      #   3. Auto-discovers every `modules/home/<name>/default.nix` and
+      #      adds them as `home-manager.sharedModules`
       #
-      # Tolerate the directory being absent or untracked: when nothing
-      # has been added under modules/home/ yet, `readDir` would fail
-      # with "path not tracked by Git". Returning an empty list there
-      # lets the flake still evaluate cleanly.
-      homeModulePaths =
-        if builtins.pathExists ./modules/home then
-          builtins.attrNames (
-            lib.filterAttrs (_: kind: kind == "directory") (builtins.readDir ./modules/home)
-          )
-        else
-          [ ];
-      homeModules = builtins.map (name: import (./modules/home + "/${name}")) homeModulePaths;
+      # Cross-platform HM logic lives in `homes/<arch>/casazza/` (no
+      # @host means apply to every system on that arch).
     in
     lib.mkFlake {
       channels-config = {
@@ -136,6 +135,10 @@
           home-manager = {
             extraSpecialArgs = {
               inherit inputs;
+              # Snowfall passes `user` as a string to homes; the rest of
+              # the codebase wants an attrset. We override here so any
+              # NixOS/darwin module that takes `user` as specialArg gets
+              # the rich attrset.
               user = {
                 name = "casazza";
                 fullName = "Olive Casazza";
@@ -145,9 +148,8 @@
             useGlobalPkgs = true;
             useUserPackages = true;
             backupFileExtension = "bak";
-            # Auto-applied to every home-manager user. Modules discovered
-            # from modules/home/<name>/default.nix at flake-eval time.
-            sharedModules = homeModules;
+            # sharedModules is no longer needed — snowfall auto-applies
+            # everything in modules/home/ via its home system-modules.
           };
         }
         inputs.nix-homebrew.darwinModules.nix-homebrew
@@ -180,6 +182,7 @@
               hippo = inputs.hippo;
               opencode = inputs.opencode;
               consortium = inputs.consortium;
+              obsidianVault = inputs.obsidian-vault;
               system = "aarch64-darwin";
             };
           }
@@ -203,9 +206,8 @@
             };
             useGlobalPkgs = true;
             useUserPackages = true;
-            # Auto-applied to every home-manager user. Modules discovered
-            # from modules/home/<name>/default.nix at flake-eval time.
-            sharedModules = homeModules;
+            # sharedModules is no longer needed — snowfall auto-applies
+            # everything in modules/home/ via its home system-modules.
           };
         }
         (

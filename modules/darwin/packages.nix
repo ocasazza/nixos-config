@@ -10,4 +10,7 @@ shared-packages
   gnugrep
   ghostty-bin
   yubikey-manager
+
+  # Personal knowledge management
+  obsidian
 ]

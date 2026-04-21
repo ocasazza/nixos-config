@@ -20,7 +20,22 @@ let
     CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
   };
 
-  allEnvVars = vertexEnvVars // apiKeyEnvVars // cfg.environment;
+  # OTel pipeline → luna's collector. Same env-var contract as Anthropic's
+  # monitoring guide (https://github.com/anthropics/claude-code-monitoring-guide):
+  # CLAUDE_CODE_ENABLE_TELEMETRY=1 turns on emission, then standard OTLP
+  # vars route metrics + logs to the configured endpoint. We also tag
+  # service.namespace/host.name so multi-machine slicing works in Grafana.
+  telemetryEnvVars = lib.optionalAttrs cfg.telemetry.enable {
+    CLAUDE_CODE_ENABLE_TELEMETRY = "1";
+    OTEL_METRICS_EXPORTER = "otlp";
+    OTEL_LOGS_EXPORTER = "otlp";
+    OTEL_EXPORTER_OTLP_PROTOCOL = cfg.telemetry.protocol;
+    OTEL_EXPORTER_OTLP_ENDPOINT = cfg.telemetry.endpoint;
+    OTEL_METRIC_EXPORT_INTERVAL = toString cfg.telemetry.exportIntervalMs;
+    OTEL_RESOURCE_ATTRIBUTES = "service.namespace=claude-code,host.name=${config.networking.hostName}";
+  };
+
+  allEnvVars = vertexEnvVars // apiKeyEnvVars // telemetryEnvVars // cfg.environment;
 
   wrappedClaude = pkgs.symlinkJoin {
     name = "claude-code-wrapped-${cfg.package.version}";
@@ -78,6 +93,62 @@ in
     };
 
     apiKeyHelper = lib.mkEnableOption "API key helper script for Vertex AI";
+
+    telemetry = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Push OTel metrics + logs to a collector. Default-on because the
+          SDK silently drops OTLP when the endpoint is unreachable, so a
+          laptop off the home LAN behaves identically to one on it. Set
+          to false to suppress emission entirely.
+        '';
+      };
+
+      endpoint = lib.mkOption {
+        type = lib.types.str;
+        default =
+          if (config.local.observability.enable or false) then
+            "http://127.0.0.1:4317"
+          else
+            "http://luna.local:4317";
+        defaultText = lib.literalExpression ''
+          if config.local.observability.enable
+          then "http://127.0.0.1:4317"
+          else "http://luna.local:4317"
+        '';
+        description = ''
+          OTLP endpoint URL. Auto-derived: if this host *is* the collector
+          (local.observability.enable = true), defaults to loopback so
+          metrics never traverse the network; otherwise defaults to luna's
+          published endpoint on the home LAN. Override per-host if neither
+          fits (e.g. an off-site box that should push to a tunnel).
+        '';
+      };
+
+      protocol = lib.mkOption {
+        type = lib.types.enum [
+          "grpc"
+          "http/protobuf"
+        ];
+        default = "grpc";
+        description = ''
+          OTLP transport. gRPC (4317) is the default and what Anthropic's
+          reference collector listens on; switch to `http/protobuf` (4318)
+          if a network path can't speak HTTP/2.
+        '';
+      };
+
+      exportIntervalMs = lib.mkOption {
+        type = lib.types.int;
+        default = 10000;
+        description = ''
+          Milliseconds between metric exports. 10s is responsive without
+          hammering the collector; bump to 60000 for laptops on cellular.
+        '';
+      };
+    };
 
     settings = lib.mkOption {
       type = lib.types.attrs;

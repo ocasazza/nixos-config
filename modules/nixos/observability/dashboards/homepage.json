@@ -1,0 +1,611 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "luna landing page — categorized service links + inline health-check tiles. Replaces the idea of a separate homepage app: Grafana itself is the homepage. Set as Grafana's default home dashboard via services.grafana.settings.dashboards.default_home_dashboard_path.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "title": "vLLM API root",
+      "url": "http://luna:8000/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "vLLM /v1/models",
+      "url": "http://luna:8000/v1/models",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "vLLM /docs (Swagger)",
+      "url": "http://luna:8000/docs",
+      "type": "link",
+      "icon": "doc",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "vLLM /metrics",
+      "url": "http://luna:8000/metrics",
+      "type": "link",
+      "icon": "bolt",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "Prometheus",
+      "url": "http://luna:9090/",
+      "type": "link",
+      "icon": "bolt",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "OTel /metrics",
+      "url": "http://luna:8889/metrics",
+      "type": "link",
+      "icon": "bolt",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "LangGraph traces (Phoenix)",
+      "url": "http://luna:6006/",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "Phoenix /v1/traces",
+      "url": "http://luna:6006/v1/traces",
+      "type": "link",
+      "icon": "bolt",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "LiteLLM proxy",
+      "url": "http://luna:4000/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "LiteLLM /v1/models",
+      "url": "http://luna:4000/v1/models",
+      "type": "link",
+      "icon": "doc",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "claude-code",
+      "type": "dashboards",
+      "icon": "dashboard",
+      "tags": ["claude-code"],
+      "targetBlank": false,
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": false
+    },
+    {
+      "title": "luna-stack",
+      "type": "dashboards",
+      "icon": "dashboard",
+      "tags": ["luna"],
+      "targetBlank": false,
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": false
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "panels": [],
+      "title": "Service health (Prometheus up{})",
+      "type": "row"
+    },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "vLLM coder",
+      "description": "up{job=\"vllm-coder\"} — auto-generated from local.vllm.services.coder.",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "up{job=\"vllm-coder\"}", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "1": { "text": "UP", "color": "green" } }
+            },
+            {
+              "type": "value",
+              "options": { "0": { "text": "DOWN", "color": "red" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "noValue": "n/a"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Grafana",
+      "description": "up{job=\"prometheus\"}+ Grafana itself is implicit (you're reading this) — uses prometheus self-scrape proxy.",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "up{job=\"prometheus\"}", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "1": { "text": "UP", "color": "green" } }
+            },
+            {
+              "type": "value",
+              "options": { "0": { "text": "DOWN", "color": "red" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "noValue": "n/a"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Prometheus",
+      "description": "up{job=\"prometheus\"} — self-scrape.",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "up{job=\"prometheus\"}", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "1": { "text": "UP", "color": "green" } }
+            },
+            {
+              "type": "value",
+              "options": { "0": { "text": "DOWN", "color": "red" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "noValue": "n/a"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "OTel collector",
+      "description": "up{job=\"otel-collector\"} — Prometheus exporter on :8889.",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "up{job=\"otel-collector\"}", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "1": { "text": "UP", "color": "green" } }
+            },
+            {
+              "type": "value",
+              "options": { "0": { "text": "DOWN", "color": "red" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "noValue": "n/a"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "node_exporter (luna)",
+      "description": "up{job=\"node\"} — host CPU/mem/disk + textfile collector.",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "up{job=\"node\"}", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "1": { "text": "UP", "color": "green" } }
+            },
+            {
+              "type": "value",
+              "options": { "0": { "text": "DOWN", "color": "red" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "noValue": "n/a"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "nvidia-gpu-exporter",
+      "description": "up{job=\"nvidia-gpu\"} — wraps nvidia-smi on :9835.",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "up{job=\"nvidia-gpu\"}", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "1": { "text": "UP", "color": "green" } }
+            },
+            {
+              "type": "value",
+              "options": { "0": { "text": "DOWN", "color": "red" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "noValue": "n/a"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "panels": [],
+      "title": "Live stats",
+      "type": "row"
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "vLLM running requests",
+      "description": "vllm:num_requests_running — confirmed exposed by Qwen3-Coder-30B vLLM 0.10 service.",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(vllm:num_requests_running)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Max GPU temp",
+      "description": "max(nvidia_smi_temperature_gpu) — RTX 4000 SFF Ada throttles at 83°C.",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "max(nvidia_smi_temperature_gpu)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 83 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Reingest last run age",
+      "description": "time() - reingest_last_run_timestamp_seconds. Pushed by scripts/reingest-auto.sh on Macs running launchd.",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "time() - reingest_last_run_timestamp_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3600 },
+              { "color": "red", "value": 86400 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 12 },
+      "id": 102,
+      "panels": [],
+      "title": "Services",
+      "type": "row"
+    },
+    {
+      "id": 20,
+      "type": "text",
+      "title": "Service directory",
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 13 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Inference — vLLM coder (Qwen3-Coder-30B-A3B-Instruct-AWQ)\n\n- [API root](http://luna:8000/) · [`/v1/models`](http://luna:8000/v1/models) · [`/v1/chat/completions`](http://luna:8000/v1/chat/completions) (POST)\n- [`/docs` (Swagger)](http://luna:8000/docs) · [`/redoc`](http://luna:8000/redoc)\n- [`/metrics`](http://luna:8000/metrics) · [`/health`](http://luna:8000/health)\n- OpenAI-compatible base URL → `http://luna:8000/v1`\n\n## Observability\n\n- Dashboards: [claude-code](/d/claude-code) · [luna-stack](/d/luna-stack)\n- [Prometheus UI](http://luna:9090/) · [`/-/healthy`](http://luna:9090/-/healthy) · [`/targets`](http://luna:9090/targets) · [`/rules`](http://luna:9090/rules) · [`/alerts`](http://luna:9090/alerts)\n- [OTel collector → Prom exporter](http://luna:8889/metrics)\n- OTLP intake: gRPC `luna:4317` · HTTP `luna:4318` (no UI)\n- Loki HTTP API: `http://luna:3100/` (query via Grafana Explore → Loki datasource)\n- Pushgateway: [`http://luna:9091/`](http://luna:9091/) — open per `openFirewall = true`\n\n## Pipeline (paths, not URLs)\n\n- Ingest log: `~/Repositories/ocasazza/obsidian/scripts/ingest.log`\n- Reingest log: `~/Repositories/ocasazza/obsidian/scripts/reingest-auto.log`\n- Textfile collector dir (luna): `/var/lib/node_exporter/textfile/`\n- Reingest metrics file: `/var/lib/node_exporter/textfile/reingest.prom`\n- Trigger one-shot reingest: `~/Repositories/ocasazza/obsidian/scripts/reingest-auto.sh`\n\n## Docs\n\n- Vault architecture: `~/Repositories/ocasazza/obsidian/CLAUDE.md`\n- Observability nix module: `~/.config/nixos-config/modules/nixos/observability/default.nix`\n- luna host config: `~/.config/nixos-config/systems/x86_64-linux/luna/default.nix`\n- vLLM module: `~/.config/nixos-config/modules/nixos/vllm/default.nix`\n- luna-stack panel design notes: `~/.config/nixos-config/modules/nixos/observability/dashboards/luna-stack-panels.md`\n\n## Hostnames\n\nUse bare `luna` (192.168.1.57) — confirmed working from LAN clients. `luna.local` (Avahi/mDNS) publishes from the host but does not currently resolve from this Mac; investigate Bonjour cache or interface routing if needed.\n"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "id": 103,
+      "panels": [],
+      "title": "Pipeline status (reingest textfile metrics)",
+      "type": "row"
+    },
+    {
+      "id": 30,
+      "type": "stat",
+      "title": "Last run timestamp",
+      "description": "reingest_last_run_timestamp_seconds — unix epoch, formatted as date.",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 30 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "reingest_last_run_timestamp_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          },
+          "noValue": "no data"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "Candidates queued",
+      "description": "reingest_candidates_total — notes carrying ingest/auto found at last run.",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 30 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "reingest_candidates_total", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "noValue": "no data"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "Last exit code",
+      "description": "reingest_last_exit_code — 0 green, anything else red.",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 30 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "reingest_last_exit_code", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "0": { "text": "OK (0)", "color": "green" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "noValue": "no data"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["luna", "homepage"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "luna home",
+  "uid": "luna-home",
+  "version": 1,
+  "weekStart": ""
+}

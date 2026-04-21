@@ -26,17 +26,4 @@ in
     exoThunderboltCluster = lib.salt.thunderboltHosts;
     thunderboltLinks = lib.salt.thunderboltLinks;
   };
-
-  # Claude Code with Vertex AI proxy
-  programs.claude-code = {
-    enable = true;
-    model = "claude-opus-4-7";
-    vertex = {
-      enable = true;
-      projectId = "vertex-code-454718";
-      region = "us-east5";
-      baseURL = "https://vertex-proxy.sdgr.app/v1";
-    };
-    apiKeyHelper = true;
-  };
 }

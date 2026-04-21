@@ -20,7 +20,23 @@ let
     CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
   };
 
-  allEnvVars = vertexEnvVars // apiKeyEnvVars // cfg.environment;
+  # OTel pipeline → luna's collector. Same env-var contract as the NixOS
+  # module so a Mac wired to luna shows up in the same Grafana dashboards
+  # alongside luna-local Claude Code sessions. host.name comes from
+  # nix-darwin's networking.hostName (set per-host under systems/).
+  telemetryEnvVars = lib.optionalAttrs cfg.telemetry.enable {
+    CLAUDE_CODE_ENABLE_TELEMETRY = "1";
+    OTEL_METRICS_EXPORTER = "otlp";
+    OTEL_LOGS_EXPORTER = "otlp";
+    OTEL_EXPORTER_OTLP_PROTOCOL = cfg.telemetry.protocol;
+    OTEL_EXPORTER_OTLP_ENDPOINT = cfg.telemetry.endpoint;
+    OTEL_METRIC_EXPORT_INTERVAL = toString cfg.telemetry.exportIntervalMs;
+    OTEL_RESOURCE_ATTRIBUTES = "service.namespace=claude-code,host.name=${
+      config.networking.hostName or "darwin"
+    }";
+  };
+
+  allEnvVars = vertexEnvVars // apiKeyEnvVars // telemetryEnvVars // cfg.environment;
 
   wrappedClaude = pkgs.symlinkJoin {
     name = "claude-code-wrapped-${cfg.package.version}";
@@ -78,6 +94,46 @@ in
     };
 
     apiKeyHelper = lib.mkEnableOption "API key helper script for Vertex AI";
+
+    telemetry = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Push OTel metrics + logs to a collector. Default-on because the
+          SDK silently drops OTLP when the endpoint is unreachable, so a
+          laptop off the home LAN behaves identically to one on it. Set
+          to false to suppress emission entirely.
+        '';
+      };
+
+      endpoint = lib.mkOption {
+        type = lib.types.str;
+        default = "http://luna.local:4317";
+        description = ''
+          OTLP endpoint URL. Defaults to luna's collector on the home LAN;
+          override per-host (e.g. `http://192.168.1.57:4317`) if mDNS is
+          flaky off-LAN. nix-darwin hosts never run the collector locally
+          (no `local.observability` module on darwin), so unlike the NixOS
+          module this default isn't loopback-aware.
+        '';
+      };
+
+      protocol = lib.mkOption {
+        type = lib.types.enum [
+          "grpc"
+          "http/protobuf"
+        ];
+        default = "grpc";
+        description = "OTLP transport: gRPC (4317) or HTTP/protobuf (4318).";
+      };
+
+      exportIntervalMs = lib.mkOption {
+        type = lib.types.int;
+        default = 10000;
+        description = "Milliseconds between metric exports.";
+      };
+    };
 
     settings = lib.mkOption {
       type = lib.types.attrs;

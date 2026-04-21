@@ -6,7 +6,11 @@
 }:
 
 let
-  homeDir = config.users.users.${user.name}.home;
+  # `config.users.users.<n>.home` is a nix-darwin system-level option,
+  # so it isn't reachable when this module is invoked from a snowfall
+  # home (where `config` is the HM config). Hard-code the macOS path
+  # instead — every Mac user's home is /Users/<n>.
+  homeDir = "/Users/${user.name}";
   #xdg_configHome = "${homeDir}/.config";
   #xdg_stateHome = "${homeDir}/.local/state";
   xdg_dataHome = "${homeDir}/.local/share";

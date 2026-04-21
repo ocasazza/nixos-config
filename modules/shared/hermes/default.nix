@@ -955,6 +955,28 @@ in
         default = "info";
         description = "Hippo server log level";
       };
+
+      obsidianSync = {
+        enable = mkEnableOption "Mirror hippo insights into an Obsidian vault as markdown notes";
+
+        vaultPath = mkOption {
+          type = types.str;
+          default = "";
+          description = "Absolute path to the Obsidian vault root.";
+        };
+
+        notesSubdir = mkOption {
+          type = types.str;
+          default = "30-Knowledge-Base/_hippo";
+          description = "Path under vaultPath where mirrored insight notes are written.";
+        };
+
+        watchInterval = mkOption {
+          type = types.int;
+          default = 300;
+          description = "Polling interval (seconds) as a backstop for in-place mutations of insight files.";
+        };
+      };
     };
   };
 
@@ -1433,6 +1455,115 @@ in
           };
         };
       })
+    ))
+
+    # Hippo → Obsidian one-way mirror (Darwin only)
+    #
+    # Watches $HIPPO_DIR for insight files and renders each one to a markdown
+    # note with YAML frontmatter under $VAULT_DIR/$notesSubdir. The script is
+    # idempotent (only rewrites when the rendered file would actually change)
+    # and garbage-collects markdown files whose source insight has been
+    # deleted from hippo, so the vault stays in sync with hippo's view of
+    # ground truth without producing spurious obsidian "modified" events.
+    (optionalAttrs isDarwin (
+      mkIf (cfg.hippo.enable && cfg.hippo.obsidianSync.enable) (
+        let
+          hippoDirRaw = cfg.hippo.memoryDir;
+          # Expand a leading "~" to the user's home at build time so launchd
+          # (which doesn't expand tildes) gets an absolute path.
+          hippoDir =
+            if lib.hasPrefix "~/" hippoDirRaw then
+              "/Users/${user.name}/" + lib.removePrefix "~/" hippoDirRaw
+            else
+              hippoDirRaw;
+          vaultDir = "${cfg.hippo.obsidianSync.vaultPath}/${cfg.hippo.obsidianSync.notesSubdir}";
+          syncScript = pkgs.writeShellApplication {
+            name = "hippo-obsidian-sync";
+            runtimeInputs = with pkgs; [
+              jq
+              coreutils
+            ];
+            text = ''
+              HIPPO_DIR="${hippoDir}"
+              VAULT_DIR="${vaultDir}"
+
+              mkdir -p "$VAULT_DIR"
+
+              # Track which uuids should exist after this run so we can GC
+              # markdown notes whose source insight has been deleted.
+              keep_file=$(mktemp)
+              trap 'rm -f "$keep_file"' EXIT
+
+              shopt -s nullglob
+              for src in "$HIPPO_DIR"/*.json; do
+                base=$(basename "$src" .json)
+                # Skip hippo's bookkeeping file
+                [ "$base" = "metadata" ] && continue
+
+                uuid=$(jq -r '.uuid // empty' "$src" 2>/dev/null || true)
+                [ -n "$uuid" ] || continue
+                printf '%s\n' "$uuid" >> "$keep_file"
+
+                out="$VAULT_DIR/$uuid.md"
+                tmp=$(mktemp)
+
+                # Render frontmatter + content. Situation tags are exposed
+                # both as a structured `situation:` list and as obsidian
+                # tags under the `hippo/` namespace (with non-tag-safe
+                # characters slugified).
+                jq -r '
+                  def slug: gsub("[^A-Za-z0-9_/-]"; "-");
+                  "---",
+                  "hippo_uuid: " + .uuid,
+                  "created: " + .created_at,
+                  "modified: " + (.importance_modified_at // .created_at),
+                  "importance: " + (.importance | tostring),
+                  "base_importance: " + (.base_importance | tostring),
+                  "situation:",
+                  ((.situation // []) | map("  - " + .) | .[]),
+                  "tags:",
+                  "  - hippo",
+                  ((.situation // []) | map("  - hippo/" + slug) | .[]),
+                  "---",
+                  "",
+                  .content
+                ' "$src" > "$tmp"
+
+                if ! cmp -s "$tmp" "$out" 2>/dev/null; then
+                  mv "$tmp" "$out"
+                else
+                  rm -f "$tmp"
+                fi
+              done
+
+              # GC: drop markdown files whose source insight is gone.
+              for md in "$VAULT_DIR"/*.md; do
+                [ -f "$md" ] || continue
+                base=$(basename "$md" .md)
+                if ! grep -Fxq "$base" "$keep_file" 2>/dev/null; then
+                  rm -f "$md"
+                fi
+              done
+            '';
+          };
+        in
+        {
+          launchd.user.agents.hippo-obsidian-sync = {
+            command = "${syncScript}/bin/hippo-obsidian-sync";
+            serviceConfig = {
+              Label = "local.hippo-obsidian-sync";
+              RunAtLoad = true;
+              # WatchPaths fires on directory-level changes (add/remove of
+              # insight files); StartInterval is the backstop that catches
+              # in-place edits like importance reinforcement.
+              WatchPaths = [ hippoDir ];
+              StartInterval = cfg.hippo.obsidianSync.watchInterval;
+              StandardOutPath = "${hippoDir}/obsidian-sync.log";
+              StandardErrorPath = "${hippoDir}/obsidian-sync.log";
+            };
+          };
+        }
+      )
     ))
 
     # Claw3D systemd services (Linux)

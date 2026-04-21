@@ -4,7 +4,11 @@ with pkgs.vscode-extensions;
 [
   yzhang.markdown-all-in-one
   ms-vscode-remote.vscode-remote-extensionpack
-  ms-toolsai.datawrangler
+  # ms-toolsai.datawrangler — disabled: nixpkgs's packaging fetches
+  # the .vsix from ms-toolsai.gallery.vsassets.io at build time,
+  # which fails inside the nix sandbox without internet (no DNS).
+  # Install manually inside vscode if you need it:
+  #   ext install ms-toolsai.datawrangler
   esbenp.prettier-vscode
   pkief.material-icon-theme
 ]

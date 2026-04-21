@@ -1,6 +1,11 @@
 { pkgs }:
 
+# Cross-platform shared packages. Anything that doesn't build on
+# *both* aarch64-darwin and x86_64-linux MUST be gated with
+# `optionals stdenv.isDarwin` / `optionals stdenv.isLinux`.
+
 with pkgs;
+
 [
   # General packages for development and system management
   aspell
@@ -22,7 +27,6 @@ with pkgs;
   age-plugin-yubikey
   gnupg
   libfido2
-  pinentry_mac
 
   # Cloud-related tools and SDKs
   #docker
@@ -60,7 +64,6 @@ with pkgs;
   unzip
   tio # serial console
   silver-searcher
-  vscode
   claude-code
 
   # Rust
@@ -85,4 +88,23 @@ with pkgs;
   nix-tree
   nh
   cachix
+]
+++ lib.optionals stdenv.isDarwin [
+  # macOS-only: pinentry-mac is the GUI prompt for GnuPG. There's no
+  # Linux equivalent under the same name (Linux uses pinentry-curses
+  # / pinentry-gtk2 which `programs.gnupg.agent.pinentryPackage` picks
+  # automatically).
+  pinentry_mac
+
+  # vscode in nixpkgs builds cleanly on Darwin via the upstream
+  # binary tarball, but on x86_64-linux the package transitively
+  # requires `xcbuild` (a macOS Xcode-build-system port) which fails
+  # to compile against modern glibc/C++17 (uint64_t header issue).
+  # Use the binary `vscode-fhs` or `vscodium` on linux instead, or
+  # let users install it themselves.
+  vscode
+]
+++ lib.optionals stdenv.isLinux [
+  # Linux equivalents / extras
+  vscodium # FOSS vscode build, no MS telemetry, builds cleanly on linux
 ]

@@ -16,6 +16,13 @@ in
 
   networking.hostName = hostname;
 
+  # The other cluster nodes (CK2Q9LN7PM-MBA, GJHC5VVN49-MBP, L75T4YHXV7-MBA)
+  # aren't reachable from this machine right now (mDNS doesn't resolve them),
+  # so leaving distributed builds on adds 5s + ConnectTimeout per builder
+  # to every `nix develop` / `direnv allow`. Re-enable when the cluster
+  # is back on the same network.
+  casazza.distributedBuilds.enable = false;
+
   # Pass exo cluster args that exo-cluster.nix expects
   _module.args = {
     exoPeers = exoPeers;
@@ -25,18 +32,5 @@ in
     exoThunderboltHostname = hostname;
     exoThunderboltCluster = lib.salt.thunderboltHosts;
     thunderboltLinks = lib.salt.thunderboltLinks;
-  };
-
-  # Claude Code with Vertex AI proxy
-  programs.claude-code = {
-    enable = true;
-    model = "claude-opus-4-7";
-    vertex = {
-      enable = true;
-      projectId = "vertex-code-454718";
-      region = "us-east5";
-      baseURL = "https://vertex-proxy.sdgr.app/v1";
-    };
-    apiKeyHelper = true;
   };
 }

@@ -1,15 +1,19 @@
 {
-  config,
   pkgs,
   user,
   ...
 }:
 
-let
-  hostName = config.networking.hostName;
-  sharedFiles = import ../shared/files { inherit config pkgs user; };
-  additionalFiles = import ../_darwin-support/files { inherit config pkgs user; };
-in
+# nix-darwin system-level config that lives close to the user account.
+# The actual home-manager config has been moved to the snowfall home at
+# `homes/aarch64-darwin/casazza/default.nix`; snowfall auto-wires it
+# into every Darwin system, so we no longer set `home-manager.users.*`
+# from this file.
+#
+# What stays here (Darwin-system-level, not home-manager):
+#   * users.users.<name>         — the macOS account record
+#   * homebrew                   — taps/casks/brews/masApps
+#   * local.dock                 — dock entries (custom module)
 {
   users.users.${user.name} = {
     name = "${user.name}";
@@ -18,7 +22,9 @@ in
     shell = pkgs.zsh;
   };
 
-  # Homebrew managed by Fleet MDM instead of nix-darwin
+  # Homebrew is managed by Fleet MDM rather than nix-darwin in this
+  # environment, but we still declare the surface so `nix-homebrew`
+  # knows what to expect if/when it's enabled.
   homebrew = {
     prefix = "/opt/homebrew";
     global = {
@@ -46,53 +52,6 @@ in
     masApps = {
       "Fresco" = 1251572132;
     };
-  };
-
-  home-manager = {
-    useGlobalPkgs = true;
-    users.${user.name} =
-      {
-        pkgs,
-        config,
-        lib,
-        inputs,
-        ...
-      }:
-      {
-        imports = [
-          inputs.nix4nvchad.homeManagerModule
-        ];
-        home = {
-          packages =
-            (pkgs.callPackage ./packages.nix { })
-            # Schrodinger opencode fork — exposed via the `opencode` flake
-            # input (see flake.nix). Adding to home.packages so the binary is
-            # on PATH in every shell, not just inside the wrapper environments
-            # built by `programs.opencode`.
-            ++ lib.optional (inputs ? opencode) inputs.opencode.packages.${pkgs.system}.default;
-          file = lib.mkMerge [
-            sharedFiles
-            additionalFiles
-          ];
-          stateVersion = "23.11";
-        };
-        programs = lib.mkMerge [
-          (import ../shared/home-manager.nix {
-            inherit
-              config
-              pkgs
-              lib
-              user
-              hostName
-              ;
-          })
-          {
-            # Override ghostty to use the binary package from Nix
-            ghostty.package = lib.mkForce pkgs.ghostty-bin;
-          }
-        ];
-        manual.manpages.enable = false;
-      };
   };
 
   local.dock = {

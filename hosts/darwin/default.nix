@@ -22,13 +22,30 @@ in
     ../../modules/shared/cachix
     ../../modules/shared/distributed-builds
     ../../modules/shared/hermes
+    ../../modules/shared/obsidian-vault
   ];
+
+  local.obsidianVault = {
+    enable = true;
+    vaultPath = "/Users/${user.name}/Repositories/ocasazza/obsidian/vault";
+    reingestAuto.enable = true;
+  };
+
+  # Mac-side OTel collector daemon. Pushes hostmetrics + opencode
+  # pipeline logs + reingest gauges to luna's OTLP intake at
+  # luna:4317. Replaces the old "Macs send nothing" gap that left the
+  # Grafana reingest tiles empty. See modules/darwin/observability.
+  local.darwinObservability.enable = true;
 
   local.hermes = {
     enable = true;
     claw3d.enable = true;
     voice.enable = true;
     hippo.enable = true;
+    hippo.obsidianSync = {
+      enable = true;
+      vaultPath = "/Users/${user.name}/Repositories/ocasazza/obsidian/vault";
+    };
 
     # Hybrid: main agent on Claude Opus 4.6 via Vertex (unchanged)
     # Subagent / MCP coding agent: Qwen3 Coder Next 8bit via exo cluster
@@ -111,14 +128,52 @@ in
     '';
   };
 
+  # Claude Code with Vertex AI proxy. Identical across every darwin host
+  # in this fleet (same vertex projectId, same model, same telemetry sink),
+  # so the per-host files at systems/aarch64-darwin/<host>/default.nix
+  # only need to override what's actually host-specific (hostname, exo
+  # peers, distributed-builds toggle).
+  #
+  # Telemetry defaults to enabled; the SDK silently drops OTLP when luna's
+  # collector isn't reachable (off-LAN), so always-on is safe.
+  programs.claude-code = {
+    enable = true;
+    model = "claude-opus-4-7";
+    vertex = {
+      enable = true;
+      projectId = "vertex-code-454718";
+      region = "us-east5";
+      baseURL = "https://vertex-proxy.sdgr.app/v1";
+    };
+    apiKeyHelper = true;
+  };
+
   # Opencode + Claude Code Vertex AI proxy
   programs.opencode = {
     enable = true;
     package = opencode.packages.${pkgs.system}.default;
     managedConfig = {
       share = "disabled";
-      enabled_providers = [ "anthropic" ];
+      enabled_providers = [
+        "anthropic"
+        "exo"
+      ];
       provider.anthropic.options.baseURL = "https://vertex-proxy.sdgr.app/v1";
+      # Exo cluster: OpenAI-compatible local endpoint for Qwen3 Coder Next.
+      # Reuses the same apiPort declared in local.hermes.exo.apiPort above.
+      provider.exo = {
+        npm = "@ai-sdk/openai-compatible";
+        name = "exo";
+        options = {
+          baseURL = "http://127.0.0.1:${toString config.local.hermes.exo.apiPort}/v1";
+          apiKey = "x";
+        };
+        models = {
+          ${config.local.hermes.localModel} = {
+            name = "Qwen3-Coder-Next-8bit";
+          };
+        };
+      };
     };
     vertex = {
       enable = true;
@@ -128,6 +183,41 @@ in
     };
     apiKeyHelper = true;
   };
+
+  # opencode user-level config: MCP servers for cross-conversation memory (hippo)
+  # and read/write access to the Obsidian PKM vault (mcp-server-filesystem).
+  #
+  # NOTE: this lives in ~/.config/opencode/opencode.json rather than
+  # programs.opencode.managedConfig because the Schrodinger opencode package
+  # hard-codes OPENCODE_MANAGED_CONFIG_DIR in its own wrapper to its bundled
+  # etc/opencode dir (nix/opencode.nix). That makes the system managed config
+  # at /Library/Application Support/opencode unreachable. The user-level config
+  # is loaded normally by both wrapped and unwrapped opencode binaries.
+  home-manager.users.${user.name}.home.file.".config/opencode/opencode.json".source =
+    (pkgs.formats.json { }).generate "opencode-user.json"
+      {
+        "$schema" = "https://opencode.ai/config.json";
+        mcp = {
+          hippo = {
+            type = "local";
+            command = [
+              "${config.local.hermes.hippo.package}/bin/hippo-server"
+              "--memory-dir"
+              "/Users/${user.name}/.hippo"
+            ];
+            environment.HIPPO_LOG = config.local.hermes.hippo.logLevel;
+            enabled = true;
+          };
+          obsidian-vault = {
+            type = "local";
+            command = [
+              "${pkgs.mcp-server-filesystem}/bin/mcp-server-filesystem"
+              "/Users/${user.name}/Repositories/ocasazza/obsidian/vault"
+            ];
+            enabled = true;
+          };
+        };
+      };
 
   # Enable autopkgserver for Fleet GitOps package building
   services.autopkgserver = {
@@ -515,7 +605,7 @@ in
   # See: https://docs.determinate.systems/getting-started/individual-install/#with-nix-darwin
   nix.enable = false;
 
-  environment.systemPackages = (import ../../modules/shared/packages.nix { inherit pkgs; }) ++ [
+  environment.systemPackages = (import ../../modules/darwin/packages.nix { inherit pkgs; }) ++ [
     consortium.packages.${pkgs.system}.consortium-cli
   ];
 

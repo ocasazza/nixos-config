@@ -1,0 +1,623 @@
+{
+  "title": "luna cost savings",
+  "uid": "luna-cost-savings",
+  "tags": ["luna", "cost"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 0,
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "links": [
+    {
+      "title": "luna home",
+      "type": "dashboards",
+      "tags": ["luna"],
+      "icon": "external link"
+    },
+    {
+      "title": "luna stack",
+      "type": "link",
+      "url": "/d/luna-stack",
+      "icon": "external link"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "kwh_rate",
+        "label": "$/kWh",
+        "type": "constant",
+        "query": "0.16",
+        "current": { "value": "0.16", "text": "0.16" },
+        "description": "Electricity price per kWh. Default = US average residential ~$0.16. Override to your local rate (NY ~$0.24, TX ~$0.13, etc.)."
+      },
+      {
+        "name": "amortization_months",
+        "label": "Hardware amortization (months)",
+        "type": "constant",
+        "query": "36",
+        "current": { "value": "36", "text": "36" },
+        "description": "Months over which to amortize the GPU/server capex below. 36 = 3 years. Set to a huge number (e.g. 9999) to ignore amortization."
+      },
+      {
+        "name": "hardware_capex",
+        "label": "Hardware capex ($)",
+        "type": "constant",
+        "query": "3500",
+        "current": { "value": "3500", "text": "3500" },
+        "description": "One-time hardware cost. Default approximates RTX 3090 Ti + RTX 4000 SFF Ada used market values + chassis. Adjust to your actual outlay. Set to 0 to ignore."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Luna's actual cost (24h)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Power cost (24h)",
+      "description": "GPU electricity cost. avg(nvidia_smi_power_draw_watts) over the window × 24h × $/kWh ÷ 1000. Excludes CPU/board idle (~20-50W more if you want to be strict).",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 3,
+          "color": { "mode": "fixed", "fixedColor": "yellow" }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Hardware amortized (24h)",
+      "description": "Daily share of upfront hardware cost: capex / (months × 30). Set hardware_capex = 0 to exclude.",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "$hardware_capex / ($amortization_months * 30)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "yellow" }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Total luna cost (24h)",
+      "description": "Power + amortized hardware. The fixed cost we incur regardless of which hosted tier we're comparing against.",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Opportunity cost — savings vs each hosted tier (24h)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "vs OpenRouter Qwen3-Coder-30B",
+      "description": "Apples-to-apples: same model, hosted. $0.07 in / $0.27 out per MTok. Verified openrouter.ai. Negative = hosted would be cheaper at this volume.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(increase(vllm:prompt_tokens_total[24h])) * 0.07 + sum(increase(vllm:generation_tokens_total[24h])) * 0.27) / 1e6 - (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0 },
+              { "color": "green", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "vs OpenRouter Qwen3-Coder 480B",
+      "description": "Tier-up to the bigger Qwen variant. $0.22 in / $1.00 out. Verified openrouter.ai.",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(increase(vllm:prompt_tokens_total[24h])) * 0.22 + sum(increase(vllm:generation_tokens_total[24h])) * 1.00) / 1e6 - (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0 },
+              { "color": "green", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "vs Vertex Gemini 2.5 Flash",
+      "description": "Cheap hosted tier-up. ~$0.30 in / ~$2.50 out. Approximate — verify cloud.google.com/vertex-ai/generative-ai/pricing.",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(increase(vllm:prompt_tokens_total[24h])) * 0.30 + sum(increase(vllm:generation_tokens_total[24h])) * 2.50) / 1e6 - (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0 },
+              { "color": "green", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "vs Vertex Gemini 2.5 Pro",
+      "description": "Standard tier-up, ≤200k ctx. ~$1.25 in / ~$10.00 out. Approximate.",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(increase(vllm:prompt_tokens_total[24h])) * 1.25 + sum(increase(vllm:generation_tokens_total[24h])) * 10.00) / 1e6 - (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0 },
+              { "color": "green", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "vs Vertex Claude Sonnet 4.5",
+      "description": "Anthropic-via-Vertex baseline tier. ~$3.00 in / ~$15.00 out. Approximate.",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(increase(vllm:prompt_tokens_total[24h])) * 3.00 + sum(increase(vllm:generation_tokens_total[24h])) * 15.00) / 1e6 - (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0 },
+              { "color": "green", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "vs Vertex Claude Opus 4 (configured fallback)",
+      "description": "What the system is actually wired to use as fallback per hosts/darwin/default.nix:44. ~$15.00 in / ~$75.00 out. Approximate. The real budget being displaced.",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(increase(vllm:prompt_tokens_total[24h])) * 15.00 + sum(increase(vllm:generation_tokens_total[24h])) * 75.00) / 1e6 - (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0 },
+              { "color": "green", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "Token volume (24h)",
+      "description": "Total tokens processed. Sanity check for the savings numbers above — at low volumes hosted is always cheaper because amortized hardware dominates.",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(vllm:prompt_tokens_total[24h]))",
+          "legendFormat": "prompt",
+          "refId": "A",
+          "instant": true
+        },
+        {
+          "expr": "sum(increase(vllm:generation_tokens_total[24h]))",
+          "legendFormat": "generation",
+          "refId": "B",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "purple" }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Sortable comparison table (24h)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "table",
+      "title": "All tiers — sortable",
+      "description": "Each row is one comparison tier. Click column headers to sort by hosted cost or savings. Same underlying token counts; only the per-MTok prices differ. The 'luna cost' column is identical across rows — it's the same hardware doing the same work.",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "tier": "tier",
+              "Value #A": "$/MTok in",
+              "Value #B": "$/MTok out",
+              "Value #C": "hosted cost ($)",
+              "Value #D": "luna cost ($)",
+              "Value #E": "savings ($)"
+            },
+            "indexByName": {
+              "tier": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "Value #E": 5
+            },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "label_replace(vector(0.07), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(0.22), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(0.30), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(1.25), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(3.00), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(15.00), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "label_replace(vector(0.27), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(1.00), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(2.50), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(10.00), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(15.00), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(75.00), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "(label_replace(vector(0.07), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(0.22), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(0.30), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(1.25), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(3.00), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(15.00), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")) * on() group_left() sum(increase(vllm:prompt_tokens_total[24h])) / 1e6 + (label_replace(vector(0.27), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(1.00), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(2.50), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(10.00), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(15.00), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(75.00), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")) * on() group_left() sum(increase(vllm:generation_tokens_total[24h])) / 1e6",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "(label_replace(vector(1), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(1), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")) * on() group_left() (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "expr": "(label_replace(vector(0.07), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(0.22), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(0.30), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(1.25), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(3.00), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(15.00), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")) * on() group_left() sum(increase(vllm:prompt_tokens_total[24h])) / 1e6 + (label_replace(vector(0.27), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(1.00), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(2.50), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(10.00), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(15.00), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(75.00), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")) * on() group_left() sum(increase(vllm:generation_tokens_total[24h])) / 1e6 - (label_replace(vector(1), \"tier\", \"OpenRouter Qwen3-Coder-30B\", \"\", \"\") or label_replace(vector(1), \"tier\", \"OpenRouter Qwen3-Coder 480B\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Gemini 2.5 Flash\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Gemini 2.5 Pro\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Claude Sonnet 4.5\", \"\", \"\") or label_replace(vector(1), \"tier\", \"Vertex Claude Opus 4\", \"\", \"\")) * on() group_left() (sum(avg_over_time(nvidia_smi_power_draw_watts[24h])) * 24 / 1000 * $kwh_rate + $hardware_capex / ($amortization_months * 30))",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "$/MTok in" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "$/MTok out" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "hosted cost ($)" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "luna cost ($)" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "savings ($)" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "gradient" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "yellow", "value": 0 },
+                    { "color": "green", "value": 0.5 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Trends",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Cumulative hosted-equivalent cost — all tiers",
+      "description": "Running total of what each hosted tier would have cost over the lifetime of vllm's current uptime. Resets when vllm restarts. Use this to see the cumulative opportunity cost stack up.",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(vllm:prompt_tokens_total) * 0.07 + sum(vllm:generation_tokens_total) * 0.27) / 1e6",
+          "legendFormat": "OR Qwen3-30B",
+          "refId": "A"
+        },
+        {
+          "expr": "(sum(vllm:prompt_tokens_total) * 0.22 + sum(vllm:generation_tokens_total) * 1.00) / 1e6",
+          "legendFormat": "OR Qwen3-480B",
+          "refId": "B"
+        },
+        {
+          "expr": "(sum(vllm:prompt_tokens_total) * 0.30 + sum(vllm:generation_tokens_total) * 2.50) / 1e6",
+          "legendFormat": "Gemini 2.5 Flash",
+          "refId": "C"
+        },
+        {
+          "expr": "(sum(vllm:prompt_tokens_total) * 1.25 + sum(vllm:generation_tokens_total) * 10.00) / 1e6",
+          "legendFormat": "Gemini 2.5 Pro",
+          "refId": "D"
+        },
+        {
+          "expr": "(sum(vllm:prompt_tokens_total) * 3.00 + sum(vllm:generation_tokens_total) * 15.00) / 1e6",
+          "legendFormat": "Sonnet 4.5",
+          "refId": "E"
+        },
+        {
+          "expr": "(sum(vllm:prompt_tokens_total) * 15.00 + sum(vllm:generation_tokens_total) * 75.00) / 1e6",
+          "legendFormat": "Opus 4",
+          "refId": "F"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" }
+        }
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Power draw (W)",
+      "description": "Real-time GPU power. Lower = less of the savings eaten by electricity.",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "nvidia_smi_power_draw_watts",
+          "refId": "A",
+          "legendFormat": "{{uuid}}"
+        },
+        {
+          "expr": "sum(nvidia_smi_power_draw_watts)",
+          "refId": "B",
+          "legendFormat": "total"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "custom": { "lineWidth": 2, "fillOpacity": 5, "showPoints": "never" }
+        }
+      }
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Methodology notes",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "type": "text",
+      "title": "Opportunity-cost framing",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 46 },
+      "options": {
+        "mode": "markdown",
+        "content": "## What 'savings' actually means here\n\nThis dashboard frames luna as **opportunity cost**, not a strict apples-to-apples comparison. The same workload luna handled could have run on any of the hosted tiers, and would have cost different amounts on each. The savings column is `hosted_equivalent_cost - luna_actual_cost` — the money you didn't have to spend on whichever tier you'd otherwise have used.\n\nKey nuance: **luna's cost (power + amortized hardware) is the same regardless of which hosted tier you compare against.** That's the same hardware doing the same tokens. The hosted column changes per row because each provider charges differently for those tokens.\n\nSo the right way to read this:\n\n- **vs Qwen3-Coder-30B (apples-to-apples)** — true cost difference for running this exact model. If this is positive, luna is literally cheaper than the same model hosted. If negative, you're paying for the privilege of local inference (privacy, no rate limits, etc.).\n- **vs Opus 4 (configured fallback)** — what you would have actually been charged if luna didn't exist, since `hosts/darwin/default.nix:44` wires Opus-via-Vertex as the main agent. This is the real budget being displaced and is usually the headline number.\n- **The cheaper hosted tiers in between** (Sonnet, Gemini Pro, Flash) — \"could you have just used a cheap hosted model?\" sanity check. If Gemini Flash is cheaper than luna, luna is hard to justify on cost alone — go for the qualitative reasons (data control, latency, offline).\n\n## Pricing sources & verification dates\n\n**Verified** on the dashboard creation date — re-check before quoting externally:\n\n- OpenRouter qwen3-coder-30b-a3b-instruct: $0.07 in / $0.27 out — https://openrouter.ai/qwen/qwen3-coder-30b-a3b-instruct\n- OpenRouter qwen3-coder (480B parent): $0.22 in / $1.00 out — https://openrouter.ai/qwen/qwen3-coder\n\n**Approximate** — Vertex AI prices change often, the numbers below are last-known and may be stale by 10-30%. Check https://cloud.google.com/vertex-ai/generative-ai/pricing for the current authoritative prices:\n\n- Vertex Gemini 2.5 Flash: ~$0.30 / ~$2.50\n- Vertex Gemini 2.5 Pro (≤200k ctx): ~$1.25 / ~$10.00\n- Vertex Claude Sonnet 4.5: ~$3.00 / ~$15.00\n- Vertex Claude Opus 4: ~$15.00 / ~$75.00\n\nPrices are baked into the queries (not Grafana variables) so updating them means editing the dashboard JSON in `modules/nixos/observability/dashboards/cost-savings.json`. That's intentional — variables would let you fudge the numbers, hard-coding forces a code change with a commit message.\n\n## Other caveats\n\n- **Power cost** is GPU draw only. Not chassis/CPU idle (~20-50W more), not networking, not the rest of luna's services. GPU dominates inference, so this is close enough.\n- **24h windows are wall-clock.** If luna was off for 12h, the numbers reflect 12h of actual usage. Adjust the dashboard time range to fit.\n- **Cumulative chart** uses raw `vllm:*_total` counters — they reset to zero on every vllm restart (model swap, nixos-rebuild, GPU driver reload). The 24h window stats use `increase()` which handles resets correctly.\n- **Hardware amortization** assumes the GPUs are dedicated to luna. If you use them for gaming / other work, the amortization should be apportioned and these numbers overstate the per-inference share.\n- **At very low token volumes** all rows go red — amortized hardware dominates and any hosted tier is cheaper. Push more workload through luna or set `hardware_capex = 0` to see the marginal cost picture (just power)."
+      }
+    }
+  ]
+}
