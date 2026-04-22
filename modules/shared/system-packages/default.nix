@@ -67,7 +67,11 @@
       unzip
       tio # serial console
       silver-searcher
-      claude-code
+      # claude-code intentionally omitted — programs.claude-code.enable
+      # installs a wrappedClaude with baked env vars (ANTHROPIC_BASE_URL,
+      # apiKeyHelper TTL, etc). Adding the raw package here created a
+      # systemPackages collision where the unwrapped binary won,
+      # stripping the LiteLLM wrapper env at the call site.
 
       # Rust
       cargo
