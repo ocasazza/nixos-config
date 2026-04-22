@@ -576,6 +576,61 @@
       "fieldConfig": {
         "defaults": { "unit": "currencyUSD", "decimals": 2 }
       }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 73 },
+      "id": 200,
+      "panels": [],
+      "title": "LiteLLM request routing",
+      "type": "row"
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "LiteLLM requests/min by model group",
+      "description": "rate(litellm_requests_total[1m]) broken out by the model-group label LiteLLM attaches to every request. Shows traffic mix across coder-local, coder-remote, coder-cloud-claude, embedding. No per-client slicing — only the router-level attribution.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 74 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (model_group) (rate(litellm_requests_total[1m]))",
+          "legendFormat": "{{model_group}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "stacking": { "mode": "none" } }
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Cloud vs. local request share",
+      "description": "Stacked view of cloud-* vs. everything else (local vllm + exo/GFR). Useful sanity check: when the fleet is nominally 'all local' this should be ~0 cloud; a spike = someone explicitly picked coder-cloud-claude.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 74 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_requests_total{model_group=~\"coder-cloud-.*\"}[1m]))",
+          "legendFormat": "cloud",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(litellm_requests_total{model_group!~\"coder-cloud-.*\"}[1m]))",
+          "legendFormat": "local",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "fillOpacity": 30, "lineWidth": 1, "stacking": { "mode": "normal" } }
+        }
+      }
     }
   ],
   "refresh": "30s",
