@@ -275,6 +275,16 @@ in
     (pkgs.formats.json { }).generate "opencode-user.json"
       {
         "$schema" = "https://opencode.ai/config.json";
+        # Tell opencode to flip `experimental_telemetry.isEnabled = true`
+        # on every AI SDK call (session/llm.ts reads this flag when
+        # constructing the `streamText` / `generateText` options). With
+        # the @opentelemetry/api global tracer registered in the
+        # opencode forks effect/oltp.ts, each AI SDK span (ai.streamText,
+        # ai.doStream, anthropic.messages.create, etc.) routes to the
+        # same OTLP pipeline as Effects own spans. Needed here because
+        # the system-wide managedConfig path (programs.opencode.managedConfig)
+        # is unreachable — see NOTE below.
+        experimental.openTelemetry = true;
         mcp = {
           hippo = {
             type = "local";
