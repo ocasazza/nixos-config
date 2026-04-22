@@ -171,6 +171,28 @@
         "type": "github"
       }
     },
+    "fenix": {
+      "inputs": {
+        "nixpkgs": [
+          "seaweedfs",
+          "nixpkgs"
+        ],
+        "rust-analyzer-src": "rust-analyzer-src"
+      },
+      "locked": {
+        "lastModified": 1776758770,
+        "narHash": "sha256-l2MswgsG69v+NYADWcNUOJUBSmuOImz62NZeW5pYkkg=",
+        "owner": "nix-community",
+        "repo": "fenix",
+        "rev": "76b4f0657f3bfbfd1cb14deb4d4a1482e0fa7159",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "fenix",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -1461,6 +1483,23 @@
         "sops-nix": "sops-nix_3"
       }
     },
+    "rust-analyzer-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1776702210,
+        "narHash": "sha256-SX0+HYv/rEcU6G42nUdXP30GYLcBaP8qx8HvKCIrw9c=",
+        "owner": "rust-lang",
+        "repo": "rust-analyzer",
+        "rev": "f381976fa67d9b87ca6c2ae35f8277b13013abf8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rust-lang",
+        "ref": "nightly",
+        "repo": "rust-analyzer",
+        "type": "github"
+      }
+    },
     "rust-overlay": {
       "inputs": {
         "nixpkgs": [
@@ -1485,6 +1524,7 @@
     "seaweedfs": {
       "inputs": {
         "darwin": "darwin_2",
+        "fenix": "fenix",
         "nixpkgs": [
           "nixpkgs"
         ],
@@ -1492,11 +1532,11 @@
         "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1776814651,
-        "narHash": "sha256-2uxoRHtVBTEjmW87CEvyoBwkLuJMsCXmPqmTMtk+lUU=",
+        "lastModified": 1776829303,
+        "narHash": "sha256-wps1DV1JYMy49PBjPb2CLAp/ARs6LIA0eeX1d3parKA=",
         "ref": "refs/heads/main",
-        "rev": "454d94b928db10bc6ed8e67fab79b2ec7b00a435",
-        "revCount": 5,
+        "rev": "3ccd025fe6c9e1cb2c95f89d4ec7a30a6f3178f6",
+        "revCount": 18,
         "type": "git",
         "url": "ssh://git@github.com/schrodinger/seaweedfs"
       },

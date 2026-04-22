@@ -145,10 +145,10 @@
         (_final: prev: {
           claude-code = prev.callPackage ./packages/claude-code { };
         })
-        # Expose pkgs.tikv + pkgs.tikv-pd to NixOS systems (Linux-only;
-        # the overlay is a no-op on darwin since meta.platforms gates
-        # the packages out).
-        inputs.seaweedfs.overlays.default
+        # NOTE: seaweedfs's overlay (which exposed pkgs.seaweedfs.{tikv,
+        # tikv-pd}) is intentionally dropped — luna pivoted from TiKV to
+        # Redis for JuiceFS metadata, so no consumer remains. Re-add if
+        # some future host brings TiKV back.
       ];
 
       # ── Darwin systems ──────────────────────────────────────────────────
@@ -222,11 +222,12 @@
         inputs.disko.nixosModules.disko
         inputs.sops-nix.nixosModules.sops
         inputs.home-manager.nixosModules.home-manager
-        # Shared storage stack — luna runs the full stack (seaweedfs +
-        # tikv); macs are JuiceFS clients only via the darwin modules.
+        # Shared storage stack — luna runs seaweedfs + juicefs (with a
+        # loopback Redis from nixpkgs for JuiceFS metadata). The
+        # seaweedfs flake's TiKV module is intentionally not imported;
+        # see systems/x86_64-linux/luna/default.nix for the rationale.
         inputs.seaweedfs.nixosModules.seaweedfs
         inputs.seaweedfs.nixosModules.juicefs
-        inputs.seaweedfs.nixosModules.tikv
         {
           home-manager = {
             extraSpecialArgs = {

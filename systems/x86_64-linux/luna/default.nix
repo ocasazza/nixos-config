@@ -742,6 +742,25 @@ in
         group = "grafana";
         mode = "0400";
       };
+
+      # Redis password for the seaweedfs instance (JuiceFS metadata KV).
+      # Consumed by two units:
+      #   1. redis-seaweedfs — loaded via `requirePassFile`; nixpkgs'
+      #      redis module reads it into a temp config with `requirepass
+      #      <file-contents>` at unit start (never enters /nix/store).
+      #   2. juicefs-mount-shared — read via `$(cat …)` in the module's
+      #      mount script and exported as META_PASSWORD so juicefs
+      #      authenticates to redis.
+      # Owner matches the redis-server per-instance user created by
+      # `services.redis.servers.seaweedfs` (default: `redis-seaweedfs`).
+      # juicefs-mount-shared runs as root so it can read regardless.
+      redis-seaweedfs-password = {
+        sopsFile = ../../../secrets/redis-seaweedfs-password.yaml;
+        key = "redis_seaweedfs_password";
+        owner = "redis-seaweedfs";
+        group = "redis-seaweedfs";
+        mode = "0400";
+      };
     };
   };
 
@@ -891,15 +910,25 @@ in
     };
   };
 
-  # ── shared storage stack (SeaweedFS + TiKV + JuiceFS) ───────────────
+  # ── shared storage stack (SeaweedFS + Redis + JuiceFS) ──────────────
   # luna is the single source of truth for the personal cluster's
   # filesystem. It runs:
   #   * seaweedfs master + volume + filer + S3 gateway (object store)
-  #   * tikv-pd + tikv-server (JuiceFS metadata KV)
+  #   * redis (JuiceFS metadata KV — single-instance, loopback-only)
   #   * juicefs mount on /mnt/juicefs (POSIX layer over the above)
   #
+  # Redis replaced TiKV as the JuiceFS metadata backend. TiKV 8.5.0's
+  # vendored C++ tree (grpcio-sys → rocksdb-sys → abseil lts_20211102)
+  # does not build under the current gcc 15 / cmake 4.1 stdenv, and
+  # none of the fixes land cleanly without patching abseil in-tree.
+  # Redis is a first-class JuiceFS metadata backend (`redis://` URL
+  # scheme, `META_PASSWORD` env for auth) and the user opted for
+  # "Redis everywhere" across the personal cluster.
+  #
   # Macs in the fleet only run the JuiceFS *client* against luna's PD
-  # and S3. See systems/aarch64-darwin/<host>/default.nix.
+  # and S3. See systems/aarch64-darwin/<host>/default.nix — their
+  # metaUrl needs the same migration in a follow-up; for now they
+  # point at TiKV and will fail to mount until updated.
   #
   # Secret seeding (one-time, out-of-band — sops-nix is not wired into
   # nixos-config yet; secret files are managed manually until then):
@@ -938,31 +967,29 @@ in
     openFirewall = true;
   };
 
-  services.tikv = {
+  # Redis — JuiceFS metadata KV. Single instance on loopback only.
+  # JuiceFS connects via `redis://:$META_PASSWORD@127.0.0.1:6379/0`;
+  # `metaPasswordFile` below injects the password into the env at
+  # unit-start without landing it in /nix/store. RDB snapshotting is
+  # on by default (services.redis.servers.<name>.save = default), so
+  # a luna reboot doesn't lose the metadata index.
+  services.redis.servers.seaweedfs = {
     enable = true;
-    pd = {
-      enable = true;
-      name = "luna"; # used by initialCluster below
-      clientUrls = [ "http://0.0.0.0:2379" ];
-      peerUrls = [ "http://0.0.0.0:2380" ];
-      advertiseClientUrls = [ "http://luna.local:2379" ];
-      advertisePeerUrls = [ "http://luna.local:2380" ];
-      initialCluster = "luna=http://luna.local:2380";
-    };
-    server = {
-      enable = true;
-      addr = "0.0.0.0:20160";
-      advertiseAddr = "luna.local:20160";
-      statusAddr = "0.0.0.0:20180";
-      pdEndpoints = [ "luna.local:2379" ];
-    };
-    openFirewall = true;
+    bind = "127.0.0.1"; # loopback-only; no LAN/10G NIC exposure
+    port = 6379;
+    # Auth required even on loopback — matches "Redis everywhere"
+    # direction where any future federation (Tailscale, WireGuard,
+    # etc.) already has credentials in place.
+    requirePassFile = config.sops.secrets.redis-seaweedfs-password.path;
   };
 
   services.juicefs = {
     enable = true;
     mounts.shared = {
-      metaUrl = "tikv://luna.local:2379/shared";
+      # Password is injected as META_PASSWORD at unit-start by the
+      # juicefs module, so the URL stays credential-free.
+      metaUrl = "redis://127.0.0.1:6379/0";
+      metaPasswordFile = config.sops.secrets.redis-seaweedfs-password.path;
       storageType = "s3";
       bucket = "http://luna.local:8333/shared";
       mountPoint = "/mnt/juicefs";
