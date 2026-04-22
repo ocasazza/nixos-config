@@ -803,6 +803,37 @@ in
     6006
   ];
 
+  # ── LangGraph Server (dev mode, in-memory SQLite) ───────────────────
+  # One `langgraph dev` per project, each pinned to its own venv under
+  # /var/lib/langgraph/venv/<name>. Graphs are defined by the project's
+  # own langgraph.json + pyproject.toml; the module just plumbs OTEL
+  # into Phoenix and OPENAI_API_BASE into the LiteLLM proxy.
+  #
+  # `databaseUrl = null` → in-memory SQLite checkpointer. Runs evaporate
+  # on restart — acceptable for dev, not for anything you want durable.
+  # Flip to a real Postgres URL (and add `services.postgresql` below)
+  # when you want runs to survive reboots.
+  #
+  # Security: :2024 only opens the LAN firewall for the swarm project
+  # because that's the one you actually point Studio at. ingest is
+  # internal-only (pull-sync oneshots fire via timer, no UI), so leave
+  # it loopback-local.
+  local.langgraphServer = {
+    enable = true;
+    projects = {
+      swarm = {
+        projectDir = "/home/casazza/swarm";
+        port = 2024;
+        openFirewall = true;
+      };
+      ingest = {
+        projectDir = "/home/casazza/ingest";
+        port = 2025;
+        openFirewall = false;
+      };
+    };
+  };
+
   # ── shared storage stack (SeaweedFS + TiKV + JuiceFS) ───────────────
   # luna is the single source of truth for the personal cluster's
   # filesystem. It runs:
