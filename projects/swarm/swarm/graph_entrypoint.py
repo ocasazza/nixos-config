@@ -7,8 +7,8 @@ zero-arg factory the server can call.
 
 from __future__ import annotations
 
-from .config import load
-from .graph import build_graph
+from swarm.config import load
+from swarm.graph import build_graph
 
 
 def make_graph():

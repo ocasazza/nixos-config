@@ -49,7 +49,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
 
-from .config import SwarmConfig, load
+from swarm.config import SwarmConfig, load
 
 # Default 3x3 grid the planner falls back to if the coder-local call
 # returns junk JSON. Keeps the demo graph runnable in Studio even when
