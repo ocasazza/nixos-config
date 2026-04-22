@@ -15,8 +15,40 @@ let
   cfg = config.local.hermes;
   ollamaBaseUrl = "${cfg.ollamaHost}:${toString cfg.ollamaPort}/v1";
   exoBaseUrl = "http://localhost:${toString cfg.exo.apiPort}/v1";
-  # The effective local base_url: exo takes priority over ollama when both are configured
-  localBaseUrl = if cfg.exo.enable then exoBaseUrl else ollamaBaseUrl;
+
+  # When the LiteLLM path is active:
+  #   * Auxiliary + cloud models route via `/vertex/v1` (LiteLLM
+  #     passthrough forwards the gcloud id-token written into
+  #     ~/.hermes/.env to vertex-proxy unchanged).
+  #   * Delegation + local models route via `/v1` (LiteLLM's OpenAI-
+  #     compat router), authenticated by the sops-minted virtual key
+  #     read from virtualKeyFile at shell init.
+  #
+  # When LiteLLM is disabled, fall through to the legacy direct paths.
+  vertexProxyBaseUrl =
+    if cfg.litellm.enable then "${cfg.litellm.endpoint}/vertex/v1" else cfg.vertexProxy.baseURL;
+
+  # The effective local base_url: LiteLLM's router takes priority over
+  # exo takes priority over ollama when all are configured.
+  localBaseUrl =
+    if cfg.litellm.enable then
+      "${cfg.litellm.endpoint}/v1"
+    else if cfg.exo.enable then
+      exoBaseUrl
+    else
+      ollamaBaseUrl;
+
+  # Model name hermes uses for "local" completions. When LiteLLM is in
+  # the path, hermes talks to LiteLLM's router by model-GROUP name, not
+  # by the underlying model id — the group maps to the right backend in
+  # luna's host config. Defaults to `coder-local` (burst-safe) but host
+  # configs can override via `local.hermes.litellm.defaultLocalGroup`.
+  localModelName = if cfg.litellm.enable then cfg.litellm.defaultLocalGroup else cfg.localModel;
+
+  # api_key injected into hermes' generated config. LiteLLM's router
+  # expects the virtual-key bearer; everything else keeps the legacy
+  # "ollama" literal (vLLM ignores the value).
+  localApiKey = if cfg.litellm.enable then "env:LITELLM_HERMES_API_KEY" else "ollama";
   # Helper: resolve interface names to libp2p listen multiaddrs at runtime
   exoListenAddrsScript = concatMapStringsSep "\n" (iface: ''
     _exo_addr=$(ipconfig getifaddr ${iface} 2>/dev/null || ip -4 addr show ${iface} 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1)
@@ -501,13 +533,70 @@ in
       baseURL = mkOption {
         type = types.str;
         default = "https://vertex-proxy.sdgr.app";
-        description = "Vertex AI proxy base URL (Anthropic SDK appends /v1/messages)";
+        description = ''
+          Vertex AI proxy base URL (Anthropic SDK appends /v1/messages).
+          When `local.hermes.litellm.enable = true` this value is
+          ignored — cloud calls route through LiteLLM's `/vertex/v1`
+          passthrough instead.
+        '';
       };
 
       model = mkOption {
         type = types.str;
         default = "claude-opus-4-6";
         description = "Model to use via Vertex proxy";
+      };
+    };
+
+    # ── LiteLLM-routed path ───────────────────────────────────────────
+    # Route all hermes calls through the LiteLLM proxy on luna:
+    #   - `vertexProxy.baseURL` references become `<endpoint>/vertex/v1`
+    #     (passthrough — gcloud id-token still flows via the refresh_token
+    #     shim into ~/.hermes/.env)
+    #   - `localBaseUrl` (ollama/exo) becomes `<endpoint>/v1` with
+    #     authentication via the sops-decrypted virtual key
+    #
+    # Mutually exclusive with the legacy path: `enable = true` on this
+    # block overrides everything that would otherwise hit vertex-proxy
+    # or localhost:52416 directly.
+    litellm = {
+      enable = mkEnableOption "Route Hermes through LiteLLM instead of direct providers";
+
+      endpoint = mkOption {
+        type = types.str;
+        default = "http://luna.local:4000";
+        description = ''
+          LiteLLM base URL. Serves `/vertex/v1` (passthrough for cloud
+          Claude) and `/v1` (OpenAI-compat router for local groups).
+        '';
+      };
+
+      virtualKeyFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          Path to this client's LiteLLM virtual key file. Expected
+          format: a single `LITELLM_HERMES_API_KEY=sk-...` line that
+          the zsh shellInit sources at every new shell, so the value
+          is exported as `$LITELLM_HERMES_API_KEY` for hermes' config
+          file to pick up via its `env:LITELLM_HERMES_API_KEY` indirect
+          reference.
+
+          On luna this is `config.sops.secrets.litellm-key-hermes.path`;
+          on darwin it's the /run/secrets path once sops-nix is wired
+          on darwin hosts.
+        '';
+      };
+
+      defaultLocalGroup = mkOption {
+        type = types.str;
+        default = "coder-local";
+        description = ''
+          LiteLLM model-group name hermes refers to when picking a
+          "local" model (delegation in non-vertex mode, auxiliary
+          in non-vertex mode). Options: coder-local (always-on, luna
+          vLLM) or coder-remote (burst pool: exo + GFR).
+        '';
       };
     };
 
@@ -987,15 +1076,19 @@ in
 
       home-manager.users.${user.name}.home.file.".hermes/config.yaml".text = concatStringsSep "\n" (
         [
-          "# Main model: Vertex AI proxy (Claude) — heavy lifting"
+          "# Main model: cloud Claude via LiteLLM /vertex/v1 passthrough"
+          "# (or direct vertex-proxy in legacy mode — controlled by"
+          "# local.hermes.litellm.enable)"
           "model:"
           "  default: \"${cfg.vertexProxy.model}\""
           "  provider: \"anthropic\""
-          "  base_url: \"${cfg.vertexProxy.baseURL}\""
+          "  base_url: \"${vertexProxyBaseUrl}\""
           ""
         ]
-        ++ optionals cfg.exo.enable [
+        ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
           "# Custom providers: exo distributed inference cluster"
+          "# (omitted when LiteLLM is in the path — hermes reaches exo"
+          "# via the coder-remote model group instead)"
           "custom_providers:"
           "  - name: \"exo\""
           "    base_url: \"${exoBaseUrl}\""
@@ -1011,7 +1104,7 @@ in
               "delegation:"
               "  model: \"${cfg.delegation.model}\""
               "  provider: \"${cfg.delegation.provider}\""
-              "  base_url: \"${cfg.vertexProxy.baseURL}\""
+              "  base_url: \"${vertexProxyBaseUrl}\""
               "  max_iterations: ${toString cfg.delegation.maxIterations}"
               "  default_toolsets: [${
                   concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
@@ -1020,11 +1113,11 @@ in
             ]
           else
             [
-              "# Subagent delegation: local LLM"
+              "# Subagent delegation: local LLM (LiteLLM router when enabled)"
               "delegation:"
               "  base_url: \"${localBaseUrl}\""
-              "  model: \"${cfg.localModel}\""
-              "  api_key: \"ollama\""
+              "  model: \"${localModelName}\""
+              "  api_key: \"${localApiKey}\""
               "  max_iterations: ${toString cfg.delegation.maxIterations}"
               "  default_toolsets: [${
                   concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
@@ -1040,28 +1133,28 @@ in
               "  vision:"
               "    provider: \"${cfg.delegation.provider}\""
               "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    base_url: \"${vertexProxyBaseUrl}\""
               "    timeout: 60"
               "    download_timeout: 30"
               "  web_extract:"
               "    provider: \"${cfg.delegation.provider}\""
               "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    base_url: \"${vertexProxyBaseUrl}\""
               "    timeout: 120"
               "  approval:"
               "    provider: \"${cfg.delegation.provider}\""
               "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    base_url: \"${vertexProxyBaseUrl}\""
               "    timeout: 30"
               "  session_search:"
               "    provider: \"${cfg.delegation.provider}\""
               "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    base_url: \"${vertexProxyBaseUrl}\""
               "    timeout: 30"
               "  flush_memories:"
               "    provider: \"${cfg.delegation.provider}\""
               "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${cfg.vertexProxy.baseURL}\""
+              "    base_url: \"${vertexProxyBaseUrl}\""
               "    timeout: 60"
               "  compression:"
               "    timeout: 120"
@@ -1069,16 +1162,16 @@ in
             ]
           else
             [
-              "# Auxiliary tasks: local LLM"
+              "# Auxiliary tasks: local LLM (LiteLLM router when enabled)"
               "auxiliary:"
               "  vision:"
               "    base_url: \"${localBaseUrl}\""
-              "    model: \"${cfg.localModel}\""
-              "    api_key: \"ollama\""
+              "    model: \"${localModelName}\""
+              "    api_key: \"${localApiKey}\""
               "  web_extract:"
               "    base_url: \"${localBaseUrl}\""
-              "    model: \"${cfg.localModel}\""
-              "    api_key: \"ollama\""
+              "    model: \"${localModelName}\""
+              "    api_key: \"${localApiKey}\""
               "  compression:"
               "    timeout: 120"
               ""
@@ -1093,7 +1186,7 @@ in
           "  protect_last_n: ${toString cfg.compression.protectLastN}"
           "  summary_model: \"${cfg.compression.summaryModel}\""
           "  summary_provider: \"${cfg.delegation.provider}\""
-          "  summary_base_url: \"${cfg.vertexProxy.baseURL}\""
+          "  summary_base_url: \"${vertexProxyBaseUrl}\""
           ""
         ]
         ++ optionals cfg.voice.enable [
@@ -1177,35 +1270,50 @@ in
         ]
       );
 
-      programs.zsh.shellInit = mkAfter ''
-        # Hermes Agent: Vertex proxy env vars and auth
-        export ANTHROPIC_VERTEX_PROJECT_ID="vertex-code-454718"
-        export CLOUD_ML_REGION="us-east5"
+      programs.zsh.shellInit = mkAfter (
+        ''
+          # Hermes Agent: Vertex proxy env vars and auth
+          export ANTHROPIC_VERTEX_PROJECT_ID="vertex-code-454718"
+          export CLOUD_ML_REGION="us-east5"
 
-        # faster-whisper model is already cached locally; suppress the
-        # huggingface_hub unauthenticated-request warning at transcription time.
-        export HF_HUB_OFFLINE=1
+          # faster-whisper model is already cached locally; suppress the
+          # huggingface_hub unauthenticated-request warning at transcription time.
+          export HF_HUB_OFFLINE=1
 
-        # Refresh hermes token using the same get-iam-token.sh helper as Claude Code.
-        # Called as a shell function so it runs fresh on every `hermes` invocation.
-        _hermes_refresh_token() {
-          local _tok=""
-          if [ -f "$HOME/.claude/get-iam-token.sh" ]; then
-            _tok="$($HOME/.claude/get-iam-token.sh 2>/dev/null || echo "")"
-          elif command -v gcloud >/dev/null 2>&1; then
-            _tok="$(gcloud auth print-identity-token 2>/dev/null || echo "")"
+          # Refresh hermes token using the same get-iam-token.sh helper as Claude Code.
+          # Called as a shell function so it runs fresh on every `hermes` invocation.
+          # When LiteLLM's cloud passthrough is in the path, this same id-token
+          # is what LiteLLM forwards to vertex-proxy — no change to the refresh
+          # contract needed.
+          _hermes_refresh_token() {
+            local _tok=""
+            if [ -f "$HOME/.claude/get-iam-token.sh" ]; then
+              _tok="$($HOME/.claude/get-iam-token.sh 2>/dev/null || echo "")"
+            elif command -v gcloud >/dev/null 2>&1; then
+              _tok="$(gcloud auth print-identity-token 2>/dev/null || echo "")"
+            fi
+            if [ -n "$_tok" ]; then
+              mkdir -p "$HOME/.hermes"
+              echo "ANTHROPIC_API_KEY=$_tok" > "$HOME/.hermes/.env"
+            fi
+          }
+
+          # Wrap hermes binaries to refresh token before each run
+          hermes() { _hermes_refresh_token; command hermes "$@"; }
+          hermes-agent() { _hermes_refresh_token; command hermes-agent "$@"; }
+          hermes-acp() { _hermes_refresh_token; command hermes-acp "$@"; }
+        ''
+        + optionalString (cfg.litellm.enable && cfg.litellm.virtualKeyFile != null) ''
+          # LiteLLM virtual key for hermes' local/delegation router path.
+          # The sops-decrypted file is a single KEY=VALUE line; export the
+          # VALUE so hermes' config.yaml `api_key: env:LITELLM_HERMES_API_KEY`
+          # resolves to the live bearer. Re-read on every shell start so
+          # sops rotation takes effect without a rebuild.
+          if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then
+            export LITELLM_HERMES_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
           fi
-          if [ -n "$_tok" ]; then
-            mkdir -p "$HOME/.hermes"
-            echo "ANTHROPIC_API_KEY=$_tok" > "$HOME/.hermes/.env"
-          fi
-        }
-
-        # Wrap hermes binaries to refresh token before each run
-        hermes() { _hermes_refresh_token; command hermes "$@"; }
-        hermes-agent() { _hermes_refresh_token; command hermes-agent "$@"; }
-        hermes-acp() { _hermes_refresh_token; command hermes-acp "$@"; }
-      '';
+        ''
+      );
     }
 
     # SOUL.md: global agent identity (only written when soulMd option is set)
