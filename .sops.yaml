@@ -28,11 +28,15 @@ keys:
   # (e.g. [ /etc/ssh/ssh_host_ed25519_key ]) to decrypt at activation,
   # no private-key copy required.
   - &host_luna age1jxcqkungt8kyu3mt5apf8xxw883j3pmug6kf0e7yhsas0yalxdwq3k5ufr
+  - &host_gn9cflm92k_mbp age1uh7yfce4f6xj0s62ne5tz8r5uj5qk9hr3fy2kz8nptgag9cg4efq00vg7e
 creation_rules:
   - path_regex: secrets/opencode\.env$
     age: *admin_olive
   - path_regex: secrets/fleet\.env$
-    age: *admin_olive
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_gn9cflm92k_mbp
   # Ingestion-pipeline secrets consumed by luna's `local.ingest`, plus
   # Open WebUI's declarative admin-seed/env secrets consumed by
   # `local.openWebUI`. Encrypted to an admin key (for editing from darwin
@@ -72,11 +76,23 @@ creation_rules:
   # content: a single `LITELLM_API_KEY_<CLIENT>=sk-...` line; placeholder
   # values ship encrypted and are replaced post-rebuild via LiteLLM's
   # `POST /key/generate` API.
-  - path_regex: secrets/litellm-key-(claude-code-nixos|claude-code-darwin|opencode|hermes)\.yaml$
+  - path_regex: secrets/litellm-key-claude-code-nixos\.yaml$
     key_groups:
       - age:
           - *admin_olive
           - *host_luna
+  - path_regex: secrets/litellm-key-claude-code-darwin\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
+          - *host_gn9cflm92k_mbp
+  - path_regex: secrets/litellm-key-(opencode|hermes)\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
+          - *host_gn9cflm92k_mbp
   # LangGraph OCI free-self-hosted stack: Postgres role password
   # consumed by `modules/nixos/langgraph-oci/` via its
   # `postgres.passwordFile` option. Admin + host_luna key group so luna
