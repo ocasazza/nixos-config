@@ -450,9 +450,18 @@ in
         port = 8000;
         # Both cards used; tp=2 shards weights across them.
         tensorParallelSize = 2;
-        # AWQ is small enough that we can be more aggressive on util —
-        # most of the budget goes to KV cache.
-        gpuMemoryUtilization = 0.85;
+        # Dropped from 0.85 → 0.75 so GPU 0 (the 3090 Ti) has ~2 GiB of
+        # headroom for the co-located `embedding` service below, which
+        # pins itself to GPU 0 via CUDA_VISIBLE_DEVICES=0 and claims
+        # gpuMemoryUtilization = 0.08 (~2 GiB on a 24 GiB card).
+        #
+        # Per-GPU allocation after this change:
+        #   GPU 0 (3090 Ti, 24 GiB): ~18 GiB coder + ~2 GiB embedding
+        #   GPU 1 (RTX 4000, 20 GiB): ~15 GiB coder (embedding not pinned here)
+        #
+        # AWQ is small enough (16 GiB total, ~8 GiB per shard at tp=2)
+        # that even the reduced 0.75 leaves ample KV cache headroom.
+        gpuMemoryUtilization = 0.75;
         # 32k is plenty for code agent workflows; the model supports
         # up to 256k natively but KV cache memory scales linearly with
         # context length. Bump higher if you hit context limits.
@@ -474,6 +483,48 @@ in
           # `lo` is sufficient for single-host tensor parallel.
           NCCL_SOCKET_IFNAME = "lo";
           NCCL_P2P_DISABLE = "0"; # let NCCL use direct P2P over PCIe
+        };
+      };
+
+      # ── embedding service ─────────────────────────────────────────
+      # Qwen3-Embedding-0.6B — small FP16 embedding model (~1.3 GiB on
+      # disk) co-located on GPU 0 alongside the coder shard. Powers:
+      #   - LocalGPT's "find related notes" inside Obsidian
+      #   - Semantic vault search from swarm MCP tools
+      #   - Open WebUI Knowledge RAG quality (real embeddings, not the
+      #     default sentence-transformers CPU fallback)
+      #
+      # vllm 0.10 turns any model into a pooling/embedding server via
+      # `--task embed` (converts the generative head into a pooling
+      # head). See upstream pooling_models docs for details.
+      #
+      # Pinned to GPU 0 only — tensor-parallel on a 0.6B model is pure
+      # overhead; a single shard on the 3090 Ti easily beats any
+      # cross-GPU comms cost, and it frees the RTX 4000 to dedicate its
+      # full remaining VRAM to the coder shard's KV cache.
+      embedding = {
+        model = "Qwen/Qwen3-Embedding-0.6B";
+        port = 8002;
+        # ~2 GiB on a 24 GiB 3090 Ti. FP16 weights are ~1.3 GiB; the
+        # remainder is KV/pooling scratch. Keep tight since coder is
+        # holding the bulk of GPU 0.
+        gpuMemoryUtilization = 0.08;
+        maxModelLen = 32768;
+        # vllm 0.10 serves embedding models via `--task embed`. Without
+        # this flag vllm tries to load Qwen3-Embedding as a generative
+        # model, which fails because the HF config declares it as a
+        # pooling model (no LM head).
+        extraArgs = [
+          "--task"
+          "embed"
+        ];
+        environment = {
+          # Stable device ordering + pin to GPU 0 only. The coder
+          # service above uses both GPUs (0,1); this pin ensures
+          # embedding never lands on GPU 1 where the coder shard would
+          # otherwise have full access to the remaining VRAM for KV.
+          CUDA_DEVICE_ORDER = "PCI_BUS_ID";
+          CUDA_VISIBLE_DEVICES = "0";
         };
       };
     };
