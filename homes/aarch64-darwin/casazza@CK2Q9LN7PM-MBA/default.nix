@@ -29,11 +29,11 @@ in
     stateVersion = "23.11";
 
     # Schrodinger opencode fork is exposed as a flake input package.
-    # Including it on PATH for every shell, not just inside the
-    # `programs.opencode` wrapper environments.
-    packages =
-      (pkgs.callPackage ../../../modules/darwin/packages.nix { })
-      ++ lib.optional (inputs ? opencode) inputs.opencode.packages.${pkgs.system}.default;
+    # System packages are handled by `modules/darwin/system-packages`
+    # (snowfall auto-applies it to every darwin host). Here we only
+    # add the opencode binary into the HM user profile when the flake
+    # input is available.
+    packages = lib.optional (inputs ? opencode) inputs.opencode.packages.${pkgs.system}.default;
 
     file = lib.mkMerge [
       sharedFiles

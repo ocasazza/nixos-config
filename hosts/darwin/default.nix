@@ -645,7 +645,10 @@ in
   # See: https://docs.determinate.systems/getting-started/individual-install/#with-nix-darwin
   nix.enable = false;
 
-  environment.systemPackages = (import ../../modules/darwin/packages.nix { inherit pkgs; }) ++ [
+  # System packages are auto-applied via
+  # `modules/darwin/system-packages` (snowfall auto-discovery). Only
+  # host-level additions go here.
+  environment.systemPackages = [
     consortium.packages.${pkgs.system}.consortium-cli
   ];
 

@@ -15,16 +15,10 @@
 # string is empty and we match every system on this architecture. To
 # pin a per-host override, create `homes/x86_64-linux/casazza@luna/`.
 {
-  config,
-  pkgs,
-  lib,
   inputs,
   ...
 }:
 
-let
-  user = lib.salt.user;
-in
 {
   imports = [
     # Flake-input HM modules (not auto-discovered by snowfall — those
@@ -41,14 +35,11 @@ in
       layout = "us";
       variant = "dvorak";
     };
-
-    # Per-user packages defined in modules/nixos/packages.nix. Kept there
-    # for now to minimize churn; can be inlined if the file disappears.
-    packages = pkgs.callPackage ../../../modules/nixos/packages.nix { };
   };
 
-  # Cross-platform HM program config (zsh/git/ssh/zellij/nvim/etc.)
-  # lives in individual modules under `modules/home/*` and is
-  # auto-applied via snowfall's sharedModules pipeline; no explicit
-  # import is needed here.
+  # System packages + HM program config are auto-applied via
+  # snowfall — `modules/nixos/system-packages` installs every package
+  # to `environment.systemPackages` (system-wide), and the individual
+  # modules under `modules/home/*` wire up HM programs. No explicit
+  # imports needed.
 }
