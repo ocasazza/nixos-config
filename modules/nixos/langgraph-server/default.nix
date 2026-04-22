@@ -390,6 +390,19 @@ in
 
         environment = baseEnv name proj // proj.env;
 
+        # langgraph.json uses paths RELATIVE to cwd (e.g.
+        # `./swarm/graph_entrypoint.py:make_graph`). cwd is the writable
+        # stateDir (`${cacheDir}/${name}`), not the read-only projectDir
+        # — so before starting, symlink every projectDir entry into cwd
+        # so the relatives resolve correctly AND `.langgraph_api` stays
+        # writable alongside them. `ln -sfT` is idempotent on restart.
+        preStart = ''
+          cwd=${toString cfg.cacheDir}/${name}
+          for src in ${toString proj.projectDir}/*; do
+            ${pkgs.coreutils}/bin/ln -sfT "$src" "$cwd/$(${pkgs.coreutils}/bin/basename "$src")"
+          done
+        '';
+
         serviceConfig = {
           Type = "simple";
           User = cfg.user;
