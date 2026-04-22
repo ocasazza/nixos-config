@@ -511,7 +511,10 @@ in
         # remainder is KV/pooling scratch. Keep tight since coder is
         # holding the bulk of GPU 0.
         gpuMemoryUtilization = 0.08;
-        maxModelLen = 32768;
+        # 4096 stays safely under the ~6416 KV-cache ceiling vllm
+        # computes at util 0.08 (~0.69 GiB KV). Embedding workloads
+        # typically chunk at 512-1024 tokens, so 4K is ample.
+        maxModelLen = 4096;
         # vllm 0.10 serves embedding models via `--task embed`. Without
         # this flag vllm tries to load Qwen3-Embedding as a generative
         # model, which fails because the HF config declares it as a

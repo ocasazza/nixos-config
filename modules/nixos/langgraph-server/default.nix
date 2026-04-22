@@ -246,6 +246,15 @@ let
       # LiteLLM → swarm's shared backend pool.
       OPENAI_API_BASE = proj.llmBaseUrl;
       OPENAI_API_KEY = proj.llmApiKey;
+      # Pip-wheel deps (notably grpcio pulled in by langgraph-api) dlopen
+      # libstdc++.so.6 at import time assuming a standard FHS layout.
+      # NixOS has no global library path, so surface libstdc++ + zlib
+      # here to avoid ImportError at service start. No nvidia_x11 — the
+      # server doesn't bind GPUs directly; the vllm module handles that.
+      LD_LIBRARY_PATH = lib.makeLibraryPath [
+        pkgs.stdenv.cc.cc.lib
+        pkgs.zlib
+      ];
     }
     // lib.optionalAttrs (proj.databaseUrl != null) {
       # langgraph-cli reads DATABASE_URI (the canonical langgraph
