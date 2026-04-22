@@ -8,13 +8,34 @@
 let
   cfg = config.programs.claude-code;
 
-  vertexEnvVars = lib.optionalAttrs cfg.vertex.enable {
+  # Vertex and LiteLLM paths are mutually exclusive. When litellm.enable
+  # is set, the legacy direct vertex env vars and activation-script
+  # settings.json content are suppressed in favor of the LiteLLM-routed
+  # block. Same pattern as the nixos module.
+  useLegacyVertex = cfg.vertex.enable && !cfg.litellm.enable;
+
+  vertexEnvVars = lib.optionalAttrs useLegacyVertex {
     CLAUDE_CODE_USE_VERTEX = "1";
     CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
     ANTHROPIC_VERTEX_PROJECT_ID = cfg.vertex.projectId;
     ANTHROPIC_VERTEX_BASE_URL = cfg.vertex.baseURL;
     CLOUD_ML_REGION = cfg.vertex.region;
   };
+
+  # LiteLLM env vars — same shape as the nixos module. See
+  # modules/nixos/claude-code/default.nix for the `cloudPassthrough`
+  # rationale.
+  litellmEnvVars = lib.optionalAttrs cfg.litellm.enable (
+    if cfg.litellm.cloudPassthrough then
+      {
+        ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/vertex/v1";
+        CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
+      }
+    else
+      {
+        ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/v1";
+      }
+  );
 
   apiKeyEnvVars = lib.optionalAttrs cfg.apiKeyHelper {
     CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
@@ -36,7 +57,8 @@ let
     }";
   };
 
-  allEnvVars = vertexEnvVars // apiKeyEnvVars // telemetryEnvVars // cfg.environment;
+  allEnvVars =
+    vertexEnvVars // litellmEnvVars // apiKeyEnvVars // telemetryEnvVars // cfg.environment;
 
   wrappedClaude = pkgs.symlinkJoin {
     name = "claude-code-wrapped-${cfg.package.version}";
@@ -49,9 +71,15 @@ let
             lib.filterAttrs (_: v: v != "") allEnvVars
           )
         );
+        runHook =
+          lib.optionalString
+            (cfg.litellm.enable && !cfg.litellm.cloudPassthrough && cfg.litellm.virtualKeyFile != null)
+            ''
+              --run 'if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then export ANTHROPIC_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"; fi'
+            '';
       in
       ''
-        wrapProgram $out/bin/claude ${setFlags}
+        wrapProgram $out/bin/claude ${setFlags} ${runHook}
       '';
   };
 in
@@ -72,7 +100,7 @@ in
     };
 
     vertex = {
-      enable = lib.mkEnableOption "Vertex AI proxy for Claude Code";
+      enable = lib.mkEnableOption "Vertex AI proxy for Claude Code (legacy direct path; ignored when litellm.enable = true)";
 
       projectId = lib.mkOption {
         type = lib.types.str;
@@ -90,6 +118,65 @@ in
         type = lib.types.str;
         default = "";
         description = "Base URL for the Vertex AI proxy.";
+      };
+    };
+
+    # ── LiteLLM-routed path ───────────────────────────────────────────
+    # See modules/nixos/claude-code/default.nix for full rationale. Same
+    # option surface across nixos + darwin so host configs can flip the
+    # enable flag on either platform with identical semantics.
+    litellm = {
+      enable = lib.mkEnableOption "Route Claude Code through LiteLLM";
+
+      endpoint = lib.mkOption {
+        type = lib.types.str;
+        default = "http://luna.local:4000";
+        description = ''
+          LiteLLM base URL (serves `/v1/messages` and `/vertex/*`).
+          Default uses `luna.local` (mDNS) so Macs on the home LAN
+          resolve without extra wiring; NixOS luna itself should
+          override to `http://localhost:4000` via its host config.
+        '';
+      };
+
+      virtualKeyFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = ''
+          Sops-decrypted path to this client's LiteLLM virtual key.
+          Content: `KEY=VALUE`; the value is read at wrapper runtime
+          and exported as `ANTHROPIC_API_KEY` when `cloudPassthrough
+          = false`. On darwin the decrypted file is written by the
+          sops-nix activation script to a path under /run/secrets.
+        '';
+      };
+
+      cloudPassthrough = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Route cloud calls through LiteLLM's `/vertex/*` passthrough
+          (apiKeyHelper keeps the gcloud id-token path alive). Flip
+          to false to authenticate purely via the virtual key against
+          LiteLLM's `/v1/messages` router.
+        '';
+      };
+
+      defaultGroup = lib.mkOption {
+        type = lib.types.str;
+        default = "coder-cloud-claude";
+        description = "Default LiteLLM model-group for this client.";
+      };
+
+      allowedGroups = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "coder-local"
+          "coder-remote"
+          "coder-cloud-claude"
+          "embedding"
+        ];
+        description = "Informational: model-groups this client may reference.";
       };
     };
 
@@ -149,18 +236,77 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !(cfg.vertex.enable && cfg.litellm.enable);
+        message = ''
+          programs.claude-code: vertex.enable and litellm.enable are
+          mutually exclusive. Pick one — either the legacy direct
+          vertex-proxy path (vertex.enable) or the new LiteLLM-routed
+          path (litellm.enable).
+        '';
+      }
+    ];
+
     environment.systemPackages = [
       wrappedClaude
     ]
-    ++ lib.optionals cfg.vertex.enable [ pkgs.google-cloud-sdk ];
+    ++ lib.optionals (cfg.vertex.enable || (cfg.litellm.enable && cfg.litellm.cloudPassthrough)) [
+      pkgs.google-cloud-sdk
+    ];
 
-    # Generate settings.json and API key helper via activation script
+    # Generate settings.json and API key helper via activation script.
+    # The emitted env block depends on which path is active:
+    #   - legacy vertex   -> CLAUDE_CODE_USE_VERTEX + vertex URLs
+    #   - litellm + pass  -> ANTHROPIC_BASE_URL = <endpoint>/vertex/v1
+    #   - litellm + route -> ANTHROPIC_BASE_URL = <endpoint>/v1 (no apiKey,
+    #                        supplied at wrapper run time from sops)
     system.activationScripts.claudeCode.text =
       let
         user = lib.salt.user;
-        settingsWithModel = cfg.settings // {
-          model = cfg.model;
-        };
+
+        settingsEnv =
+          if cfg.litellm.enable then
+            (
+              if cfg.litellm.cloudPassthrough then
+                {
+                  ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/vertex/v1";
+                  CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
+                }
+              else
+                {
+                  ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/v1";
+                }
+            )
+          else if cfg.vertex.enable then
+            {
+              CLAUDE_CODE_USE_VERTEX = "1";
+              CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
+              CLOUD_ML_REGION = cfg.vertex.region;
+              ANTHROPIC_VERTEX_PROJECT_ID = cfg.vertex.projectId;
+              ANTHROPIC_VERTEX_BASE_URL = cfg.vertex.baseURL;
+              CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
+            }
+          else
+            { };
+
+        # apiKeyHelper is active for both legacy-vertex and
+        # litellm+cloudPassthrough paths (the gcloud id-token is what
+        # LiteLLM forwards to vertex-proxy). For litellm-router-only
+        # mode, no helper is needed — the wrapper reads the virtual
+        # key from sops at invocation time.
+        helperActive =
+          cfg.apiKeyHelper || (cfg.litellm.enable && cfg.litellm.cloudPassthrough) || useLegacyVertex;
+
+        settingsWithModel =
+          cfg.settings
+          // {
+            model = cfg.model;
+            env = (cfg.settings.env or { }) // settingsEnv;
+          }
+          // lib.optionalAttrs helperActive {
+            apiKeyHelper = "~/.claude/get-iam-token.sh";
+          };
         settingsJson = builtins.toJSON settingsWithModel;
       in
       ''
@@ -171,7 +317,7 @@ in
         SETTINGS
         chown -R ${user.name} /Users/${user.name}/.claude
       ''
-      + lib.optionalString cfg.apiKeyHelper ''
+      + lib.optionalString helperActive ''
         cat > /Users/${user.name}/.claude/get-iam-token.sh << 'TOKENHELPER'
         #!/usr/bin/env bash
         set -euo pipefail
@@ -180,8 +326,10 @@ in
         chmod +x /Users/${user.name}/.claude/get-iam-token.sh
       '';
 
-    # Load gcloud credentials for Vertex AI
-    programs.zsh.shellInit = lib.mkIf cfg.vertex.enable ''
+    # Load gcloud credentials for Vertex AI (legacy path only; LiteLLM
+    # passthrough doesn't need an exported access token at shell init —
+    # the apiKeyHelper mints a fresh id-token per-call).
+    programs.zsh.shellInit = lib.mkIf useLegacyVertex ''
       if command -v gcloud >/dev/null 2>&1; then
         export GOOGLE_APPLICATION_CREDENTIALS_JSON="$(gcloud auth print-access-token 2>/dev/null || echo "")"
       fi
