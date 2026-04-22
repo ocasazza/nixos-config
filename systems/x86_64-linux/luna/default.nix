@@ -924,11 +924,30 @@ in
     };
   };
 
-  # Local Claude Code on luna. Telemetry endpoint is auto-derived by the
-  # claude-code module — because `local.observability.enable = true` above,
-  # the default flips to `http://127.0.0.1:4317` instead of luna.local, so
-  # luna pushes to itself over loopback without an explicit override here.
-  programs.claude-code.enable = true;
+  # Local Claude Code on luna. Routes through the LiteLLM proxy above:
+  #   * Default model pins to `coder-local` (luna's own vLLM) for fast
+  #     always-on completions with no cloud round trip.
+  #   * cloudPassthrough = true keeps `/vertex/*` reachable — explicit
+  #     `claude --model coder-cloud-claude ...` still works, and the
+  #     existing apiKeyHelper (gcloud id-token) keeps vertex-proxy
+  #     authenticated for those calls.
+  #
+  # Telemetry is now disabled at the client layer — LiteLLM's OTEL
+  # callbacks cover per-call tracing into Phoenix (richer + correctly
+  # attributed to the routing layer), and the client OTel pipeline
+  # would produce noisy duplicate spans.
+  programs.claude-code = {
+    enable = true;
+    litellm = {
+      enable = true;
+      # loopback to avoid the LAN hop for luna's own claude-code
+      endpoint = "http://localhost:4000";
+      virtualKeyFile = config.sops.secrets.litellm-key-claude-code-nixos.path;
+      defaultGroup = "coder-local";
+      cloudPassthrough = true;
+    };
+    telemetry.enable = false;
+  };
 
   # ── Phoenix (OTLP trace sink + UI) ──────────────────────────────────
   # Declarative systemd unit for Arize Phoenix. Completes the swarm
@@ -945,22 +964,135 @@ in
   };
 
   # ── LiteLLM proxy ────────────────────────────────────────────────────
-  # OpenAI-compatible federator in front of vLLM (:8000), local exo
-  # (:52416), and the GFR-exo federation. LangGraph workers hit this at
-  # :4000 and only know about model *groups* (coder-local, coder-remote,
-  # embedding) — the YAML config is what maps groups to upstream
-  # deployments and handles cooldown/quarantine of dark backends.
+  # OpenAI-compatible federator in front of vLLM (:8000, :8002), local
+  # exo (:52416), the GFR-exo federation, and (as a passthrough) the
+  # Schrödinger vertex-proxy for Anthropic/GCP. Every AI client in the
+  # fleet (claude-code nixos, claude-code darwin, opencode, hermes)
+  # reaches their upstreams exclusively through this endpoint at :4000.
   #
-  # Master key injection: the YAML references
-  # `master_key: os.environ/LITELLM_MASTER_KEY`, and the module loads
-  # /run/secrets/litellm-master-key as an `EnvironmentFile` so the
-  # plaintext never enters /nix/store. Rotate with
-  # `sops edit secrets/litellm-master-key.yaml` then restart the unit.
+  # Model groups are assembled here from the module's modelGroups option
+  # (see `modules/nixos/litellm/default.nix`) — the YAML config is
+  # rendered at build time, not hand-written. Adding a new backend is a
+  # one-line edit in this file.
+  #
+  # Auth shape:
+  #   * Master key  (`sops.secrets.litellm-master-key`) — used by
+  #     internal LangGraph/swarm workers and by the user bootstrapping
+  #     virtual keys via `POST /key/generate`.
+  #   * Virtual keys (`sops.secrets.litellm-key-*`) — one per external
+  #     client. Each surfaces as `LITELLM_API_KEY_<CLIENT>` in the
+  #     proxy's env via an additive EnvironmentFile; placeholder values
+  #     ship encrypted and are replaced post-bootstrap.
+  #   * Cloud pass-through (`/vertex`) — LiteLLM forwards the client's
+  #     Authorization header verbatim; no auth state on our side.
   local.litellm = {
     enable = true;
-    configFile = ../../../projects/swarm/litellm_config.yaml;
+    endpoint = "http://luna:4000";
     openFirewall = true;
     masterKeyFile = config.sops.secrets.litellm-master-key.path;
+
+    modelGroups = {
+      # luna's vLLM coder — always-on anchor for plan/reduce/any
+      # latency-sensitive step. Single deployment, weight 10.
+      coder-local = [
+        {
+          models = [ "openai/cpatonn/Qwen3-Coder-30B-A3B-Instruct-AWQ" ];
+          api_base = "http://localhost:8000/v1";
+          api_key = "sk-vllm-luna";
+          weight = 10;
+          max_tokens = 8192;
+          timeout = 120;
+        }
+      ];
+
+      # Fan-out pool: local exo (SSH tunnel to :52416) + GFR exo on
+      # nodes 02/03 via the authenticated reverse proxy. Dark most of
+      # the time; cooldown_time quarantine in routerSettings absorbs
+      # offline nodes.
+      coder-remote = [
+        {
+          models = [ "openai/qwen-3-coder-30b" ];
+          api_base = "http://localhost:52416/v1";
+          api_key = "sk-exo-local";
+          weight = 1;
+          max_tokens = 8192;
+          timeout = 120;
+        }
+        {
+          models = [ "openai/qwen-3-coder-30b" ];
+          api_base = "https://gfr-proxy.schrodinger.com/exo/02/v1";
+          api_key = "placeholder-not-yet-deployed";
+          weight = 1;
+          max_tokens = 8192;
+          timeout = 120;
+        }
+        {
+          models = [ "openai/qwen-3-coder-30b" ];
+          api_base = "https://gfr-proxy.schrodinger.com/exo/03/v1";
+          api_key = "placeholder-not-yet-deployed";
+          weight = 1;
+          max_tokens = 8192;
+          timeout = 120;
+        }
+      ];
+
+      # Cloud Claude via vertex-proxy. api_key = forwarded-per-request
+      # means LiteLLM's client-construct step passes (a literal is
+      # required by the SDK) but the client's actual Authorization
+      # header is what reaches vertex-proxy via the /vertex passthrough
+      # below — not this value. See modules/nixos/litellm for details.
+      coder-cloud-claude = [
+        {
+          models = [ "anthropic/claude-opus-4-7" ];
+          api_base = "https://vertex-proxy.sdgr.app/v1";
+          api_key = "forwarded-per-request";
+          weight = 1;
+          max_tokens = 8192;
+          timeout = 120;
+        }
+        {
+          models = [ "anthropic/claude-sonnet-4-6" ];
+          api_base = "https://vertex-proxy.sdgr.app/v1";
+          api_key = "forwarded-per-request";
+          weight = 1;
+          max_tokens = 8192;
+          timeout = 120;
+        }
+      ];
+
+      # Qwen3-Embedding-0.6B on luna:8002 (FP16). Powers LocalGPT
+      # semantic search in Obsidian, swarm MCP tools, Open WebUI
+      # Knowledge RAG quality.
+      embedding = [
+        {
+          models = [ "openai/Qwen/Qwen3-Embedding-0.6B" ];
+          api_base = "http://localhost:8002/v1";
+          api_key = "sk-vllm-luna";
+          weight = 10;
+          max_tokens = 8192;
+          timeout = 60;
+        }
+      ];
+    };
+
+    # /vertex/* → vertex-proxy. Clients keep their apiKeyHelper
+    # (gcloud id-token); LiteLLM forwards the bearer untouched.
+    passthroughEndpoints.vertex = {
+      path = "/vertex";
+      target = "https://vertex-proxy.sdgr.app";
+      forwardHeaders = true;
+    };
+
+    # Per-client virtual keys: each sops-decrypted EnvironmentFile is
+    # added to the proxy's env. Once bootstrap values are in place
+    # (via POST /key/generate), these activate LiteLLM's virtual-key
+    # ACL for external clients without touching the master key path.
+    virtualKeys = {
+      claude-code-nixos = config.sops.secrets.litellm-key-claude-code-nixos.path;
+      claude-code-darwin = config.sops.secrets.litellm-key-claude-code-darwin.path;
+      opencode = config.sops.secrets.litellm-key-opencode.path;
+      hermes = config.sops.secrets.litellm-key-hermes.path;
+    };
   };
 
   # ── LangGraph Server (dev mode, in-memory SQLite) ───────────────────

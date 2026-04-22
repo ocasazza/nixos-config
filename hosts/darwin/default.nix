@@ -128,24 +128,41 @@ in
     '';
   };
 
-  # Claude Code with Vertex AI proxy. Identical across every darwin host
-  # in this fleet (same vertex projectId, same model, same telemetry sink),
-  # so the per-host files at systems/aarch64-darwin/<host>/default.nix
-  # only need to override what's actually host-specific (hostname, exo
-  # peers, distributed-builds toggle).
+  # Claude Code routed through the LiteLLM proxy on luna. Identical
+  # across every darwin host in this fleet, so the per-host files at
+  # systems/aarch64-darwin/<host>/default.nix only need to override
+  # what's actually host-specific (hostname, exo peers, distributed-
+  # builds toggle).
   #
-  # Telemetry defaults to enabled; the SDK silently drops OTLP when luna's
-  # collector isn't reachable (off-LAN), so always-on is safe.
+  # cloudPassthrough keeps the apiKeyHelper path alive so Claude Code's
+  # default (Opus via vertex-proxy) still works — the request goes
+  # `darwin -> luna:4000/vertex/v1 -> vertex-proxy` instead of
+  # `darwin -> vertex-proxy` directly. LiteLLM doesn't add any auth
+  # state for cloud; it just forwards the gcloud id-token. Explicit
+  # model-name selection (e.g. `claude --model coder-local`) routes
+  # via LiteLLM's OpenAI-compat router to luna's vLLM.
+  #
+  # Telemetry is off here — LiteLLM's OTEL callbacks cover per-call
+  # tracing into Phoenix with richer attribution; the client telemetry
+  # would duplicate spans.
+  #
+  # virtualKeyFile is a static path referencing the sops-nix-rendered
+  # file (follow-up: `inputs.sops-nix.darwinModules.default` needs to be
+  # imported in flake.nix + a darwin-level sops.secrets.litellm-key-*
+  # block declared here before this file actually exists at activation
+  # time. Until then cloudPassthrough=true means the virtualKeyFile is
+  # unused anyway — the wrapper only reads it in router mode).
   programs.claude-code = {
     enable = true;
     model = "claude-opus-4-7";
-    vertex = {
+    litellm = {
       enable = true;
-      projectId = "vertex-code-454718";
-      region = "us-east5";
-      baseURL = "https://vertex-proxy.sdgr.app/v1";
+      endpoint = "http://luna.local:4000";
+      virtualKeyFile = "/run/secrets/litellm-key-claude-code-darwin";
+      defaultGroup = "coder-cloud-claude";
+      cloudPassthrough = true;
     };
-    apiKeyHelper = true;
+    telemetry.enable = false;
   };
 
   # Opencode + Claude Code Vertex AI proxy
