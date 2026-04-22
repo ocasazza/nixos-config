@@ -885,18 +885,19 @@ in
   # luna pushes to itself over loopback without an explicit override here.
   programs.claude-code.enable = true;
 
-  # Swarm auxiliary processes — Phoenix still runs out of
-  # `projects/swarm/scripts/*` under a manual `nix develop`; LiteLLM is
-  # now a declarative systemd unit (see `local.litellm` below) and the
-  # LangGraph Server half of swarm is too (see `local.langgraphServer`).
-  #   4319 — Phoenix OTLP gRPC (non-default to dodge otelcol-contrib on 4317)
-  #   6006 — Phoenix HTTP + UI
+  # ── Phoenix (OTLP trace sink + UI) ──────────────────────────────────
+  # Declarative systemd unit for Arize Phoenix. Completes the swarm
+  # migration off `projects/swarm/scripts/*` — LiteLLM and LangGraph
+  # Server were promoted earlier, Phoenix lives in
+  # `modules/nixos/phoenix/` now. LangGraph Server + LiteLLM's default
+  # `phoenixEndpoint` already points at `http://localhost:6006/v1/traces`,
+  # so no extra wiring needed.
   #
-  # (:4000 is opened by `local.litellm.openFirewall = true` below.)
-  networking.firewall.allowedTCPPorts = [
-    4319
-    6006
-  ];
+  # Firewall opens :6006 (UI + OTLP/HTTP) and :4319 (OTLP/gRPC).
+  local.phoenix = {
+    enable = true;
+    openFirewall = true;
+  };
 
   # ── LiteLLM proxy ────────────────────────────────────────────────────
   # OpenAI-compatible federator in front of vLLM (:8000), local exo
