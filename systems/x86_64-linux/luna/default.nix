@@ -818,9 +818,22 @@ in
   programs.claude-code.enable = true;
 
   # Swarm (projects/swarm at ~/swarm — ad-hoc, not a systemd unit):
-  #   4000 — LiteLLM proxy
+  #   4000 — LiteLLM proxy (bound to luna's 10G NIC, enp3s0)
   #   4319 — Phoenix OTLP gRPC (non-default to dodge otelcol-contrib on 4317)
   #   6006 — Phoenix HTTP + UI
+  #
+  # LiteLLM's start script (`~/swarm/scripts/start-litellm.sh`) derives
+  # its bind address at startup from the 10G NIC (`enp3s0`, Aquantia
+  # AQC113) via `ip -4 -br addr show dev enp3s0`. This keeps vLLM tensor
+  # traffic and cross-host exo federation off the 1G WiFi/LAN link
+  # (`enp0s31f6`, default gateway). If the 10G link is down the wrapper
+  # falls back to `0.0.0.0` so the proxy still starts.
+  #
+  # The iface name is hardcoded in the wrapper for now; when LiteLLM is
+  # promoted to a systemd module under `modules/nixos/litellm/` (follow-
+  # up — see GFR-exo-auth-token comment in the sops block above) the
+  # binding will come from `config.networking.interfaces.enp3s0.ipv4`
+  # declaratively rather than shell-derived.
   networking.firewall.allowedTCPPorts = [
     4000
     4319
