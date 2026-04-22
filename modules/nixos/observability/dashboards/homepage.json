@@ -99,6 +99,62 @@
       "tags": []
     },
     {
+      "title": "vLLM embedding /v1/models",
+      "url": "http://luna:8002/v1/models",
+      "type": "link",
+      "icon": "bolt",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "LangGraph swarm",
+      "url": "http://luna:2024/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "LangGraph swarm docs",
+      "url": "http://luna:2024/docs",
+      "type": "link",
+      "icon": "doc",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "LangGraph ingest",
+      "url": "http://luna:2025/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "Open WebUI",
+      "url": "http://luna:8080/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "mcpo (MCP → OpenAPI bridge)",
+      "url": "http://luna:8100/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "mcpo Obsidian tools",
+      "url": "http://luna:8100/obsidian/openapi.json",
+      "type": "link",
+      "icon": "doc",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
       "title": "claude-code",
       "type": "dashboards",
       "icon": "dashboard",
