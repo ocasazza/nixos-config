@@ -218,18 +218,21 @@ in
   programs.opencode = {
     enable = true;
     package = opencode.packages.${pkgs.system}.default;
-    # NOTE: `programs.opencode.telemetry` was added to `hosts/darwin/default.nix`
-    # in b3918f1 ("feat(darwin): enable opencode OTLP export to Phoenix on luna")
-    # but the opencode flake input pinned on `main` (dev @ 171f89f) does not
-    # yet expose that option — only `enable`, `package`, `managedConfig`,
-    # `vertex`, `secrets`, and `apiKeyHelper`. Until the opencode input is
-    # bumped from a Mac (the flake URL is file:///Users/casazza/..., so
-    # luna can't update it), every darwin eval fails with
-    #   error: The option `programs.opencode.telemetry' does not exist.
-    # Dropping the option here keeps darwin eval green. Re-introduce it
-    # (endpoint = "http://luna.local:6006") after `nix flake lock
-    # --update-input opencode` on any Mac lands a rev containing
-    # feat(nix): expose programs.opencode.telemetry.
+    # Ship Effect-runtime spans + AI SDK LLM spans to Phoenix on luna.
+    # The opencode fork's Effect runtime (packages/opencode/src/effect/oltp.ts)
+    # swaps Observability.layer to Otlp.layerJson whenever
+    # OTEL_EXPORTER_OTLP_ENDPOINT is set — every Effect.withSpan(...) site
+    # starts emitting. aiSdk=true also flips experimental.openTelemetry=true
+    # in managedConfig so per-LLM-call spans land on the same pipeline.
+    #
+    # Phoenix accepts OTLP/HTTP JSON at :6006/v1/traces directly — no
+    # otelcol hop. flake.lock pins opencode at rev 6a85277b4848 which
+    # introduces programs.opencode.telemetry; re-enabling after
+    # 5631b42's pre-lock-bump revert.
+    telemetry = {
+      enable = true;
+      endpoint = "http://luna.local:6006";
+    };
     managedConfig = {
       share = "disabled";
       enabled_providers = [
