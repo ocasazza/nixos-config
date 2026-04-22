@@ -2,7 +2,8 @@
   "dependencies": ["."],
   "graphs": {
     "swarm": "./swarm/graph_entrypoint.py:make_graph",
-    "demo": "./swarm/demo.py:make_graph"
+    "demo": "./swarm/demo.py:make_graph",
+    "research": "./swarm/research.py:make_graph"
   },
   "env": ".env",
   "python_version": "3.12"

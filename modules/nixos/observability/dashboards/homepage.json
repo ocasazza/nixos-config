@@ -131,6 +131,14 @@
       "tags": []
     },
     {
+      "title": "LangGraph ingest docs",
+      "url": "http://luna:2025/docs",
+      "type": "link",
+      "icon": "doc",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
       "title": "Open WebUI",
       "url": "http://luna:8080/",
       "type": "link",
@@ -157,6 +165,62 @@
     {
       "title": "Langflow",
       "url": "http://luna:7860/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "TiKV PD dashboard",
+      "url": "http://luna:2379/dashboard",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "TiKV PD /pd/api/v1/members",
+      "url": "http://luna:2379/pd/api/v1/members",
+      "type": "link",
+      "icon": "doc",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "TiKV server /metrics",
+      "url": "http://luna:20180/metrics",
+      "type": "link",
+      "icon": "bolt",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "SeaweedFS master",
+      "url": "http://luna:9333/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "SeaweedFS volume",
+      "url": "http://luna:8081/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "SeaweedFS filer",
+      "url": "http://luna:8881/",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "tags": []
+    },
+    {
+      "title": "SeaweedFS S3",
+      "url": "http://luna:8333/",
       "type": "link",
       "icon": "external link",
       "targetBlank": true,

@@ -56,7 +56,10 @@ def load() -> SwarmConfig:
         llm_api_key=os.environ.get("SWARM_LLM_API_KEY", "sk-swarm-local"),
         # These are LiteLLM model-group names (see litellm_config.yaml),
         # not raw HF ids — LiteLLM resolves them to a concrete backend.
-        coder_model=os.environ.get("SWARM_CODER_MODEL", "coder"),
+        # `coder-local` is the always-on LiteLLM group (luna vLLM).
+        # `coder-remote` is the exo / GFR federation. The bare name
+        # `coder` does not exist in `litellm_config.yaml` and would 404.
+        coder_model=os.environ.get("SWARM_CODER_MODEL", "coder-local"),
         # None until a vision-capable backend joins the swarm. browser-use
         # falls back to DOM-only mode when this is unset.
         vision_model=os.environ.get("SWARM_VISION_MODEL") or None,

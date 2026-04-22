@@ -42,6 +42,7 @@ stitches the 9 judgements into a single comparison table on
 from __future__ import annotations
 
 import json
+import os
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -49,6 +50,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
 
+from swarm import telemetry
 from swarm.config import SwarmConfig, load
 
 # Default 3x3 grid the planner falls back to if the coder-local call
@@ -238,4 +240,11 @@ def _parse_grid(raw: str | list) -> tuple[list[str], list[str]]:
 
 def make_graph():
     """Factory called by `langgraph dev` for each run."""
-    return build_demo_graph(load())
+    cfg = load()
+    # Attach OpenInference instrumentors so Phoenix sees this run.
+    # `init` is idempotent and a no-op on repeat calls.
+    telemetry.init(
+        cfg.phoenix_endpoint,
+        service_name=os.environ.get("OTEL_SERVICE_NAME", "swarm-demo"),
+    )
+    return build_demo_graph(cfg)

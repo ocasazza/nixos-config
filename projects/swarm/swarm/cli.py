@@ -11,6 +11,7 @@ from rich.panel import Panel
 from . import config as cfg_mod
 from . import telemetry
 from .graph import run_sync
+from .research import run_sync as research_run_sync
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 console = Console()
@@ -41,6 +42,38 @@ def run(
 
     if trace:
         console.print(f"\n[dim]Phoenix UI: {cfg.phoenix_endpoint.replace('/v1/traces', '')}[/dim]")
+
+
+@app.command()
+def research(
+    question: str = typer.Argument(..., help="The research question."),
+    trace: bool = typer.Option(True, help="Send spans to Phoenix."),
+) -> None:
+    """Run the 8-stage research pipeline on `question`."""
+    cfg = cfg_mod.load()
+    if trace:
+        telemetry.init(cfg.phoenix_endpoint, service_name="swarm-research")
+
+    try:
+        result = research_run_sync(question, cfg)
+    finally:
+        if trace:
+            telemetry.shutdown()
+
+    claims = result.get("claims") or []
+    console.print(Panel(f"[bold]Claims[/bold]: {len(claims)}"))
+    for c in claims:
+        console.print(f"  [{c.get('source')}] {c.get('id')}: {c.get('question')}")
+
+    if result.get("critique"):
+        console.print(Panel(result["critique"], title="Critique"))
+
+    console.print(Panel(result.get("answer", "(no answer)"), title="Answer"))
+
+    if trace:
+        console.print(
+            f"\n[dim]Phoenix UI: {cfg.phoenix_endpoint.replace('/v1/traces', '')}[/dim]"
+        )
 
 
 @app.command(name="config")
