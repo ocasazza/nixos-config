@@ -133,7 +133,12 @@ environment_variables:
   OTEL_SERVICE_NAME: litellm
 
 general_settings:
-  master_key: sk-swarm-local # matches SWARM_LLM_API_KEY in shells/swarm
+  # Master key is supplied via env var `LITELLM_MASTER_KEY` so the
+  # actual secret lives in sops (`secrets/litellm-master-key.yaml`)
+  # and never enters the /nix/store. LiteLLM evaluates the
+  # `os.environ/<NAME>` substitution at config-load time. Match the
+  # env var value with `SWARM_LLM_API_KEY` in shells/swarm.
+  master_key: os.environ/LITELLM_MASTER_KEY
   # No database — keep the proxy stateless so restarts are instant.
   # (LiteLLM's DB is for virtual keys / spend tracking, neither of
   # which we need on a single-user LAN deployment.)

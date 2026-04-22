@@ -756,6 +756,21 @@ in
         mode = "0400";
       };
 
+      # LiteLLM master key. Consumed by `local.litellm.masterKeyFile`
+      # as a systemd `EnvironmentFile`, so the decrypted file's content
+      # must be a single `KEY=VALUE` line. The sops YAML keeps the full
+      # env-var line (`LITELLM_MASTER_KEY=sk-...`) under a single yaml
+      # key; sops-nix extracts the VALUE of that key into the decrypted
+      # file, which is exactly what systemd's env-file parser wants.
+      # Owner is `litellm` so the LiteLLM unit can read it at start.
+      litellm-master-key = {
+        sopsFile = ../../../secrets/litellm-master-key.yaml;
+        key = "litellm_master_key";
+        owner = "litellm";
+        group = "litellm";
+        mode = "0400";
+      };
+
       # Redis password for the seaweedfs instance (JuiceFS metadata KV).
       # Consumed by two units:
       #   1. redis-seaweedfs — loaded via `requirePassFile`; nixpkgs'
@@ -870,31 +885,37 @@ in
   # luna pushes to itself over loopback without an explicit override here.
   programs.claude-code.enable = true;
 
-  # Swarm auxiliary processes — LiteLLM + Phoenix still run out of
-  # `projects/swarm/scripts/*` under a manual `nix develop`; only the
-  # LangGraph Server half of swarm is a declarative systemd unit
-  # (see `local.langgraphServer` below).
-  #   4000 — LiteLLM proxy (bound to luna's 10G NIC, enp3s0)
+  # Swarm auxiliary processes — Phoenix still runs out of
+  # `projects/swarm/scripts/*` under a manual `nix develop`; LiteLLM is
+  # now a declarative systemd unit (see `local.litellm` below) and the
+  # LangGraph Server half of swarm is too (see `local.langgraphServer`).
   #   4319 — Phoenix OTLP gRPC (non-default to dodge otelcol-contrib on 4317)
   #   6006 — Phoenix HTTP + UI
   #
-  # LiteLLM's start script (`projects/swarm/scripts/start-litellm.sh`) derives
-  # its bind address at startup from the 10G NIC (`enp3s0`, Aquantia
-  # AQC113) via `ip -4 -br addr show dev enp3s0`. This keeps vLLM tensor
-  # traffic and cross-host exo federation off the 1G WiFi/LAN link
-  # (`enp0s31f6`, default gateway). If the 10G link is down the wrapper
-  # falls back to `0.0.0.0` so the proxy still starts.
-  #
-  # The iface name is hardcoded in the wrapper for now; when LiteLLM is
-  # promoted to a systemd module under `modules/nixos/litellm/` (follow-
-  # up — see GFR-exo-auth-token comment in the sops block above) the
-  # binding will come from `config.networking.interfaces.enp3s0.ipv4`
-  # declaratively rather than shell-derived.
+  # (:4000 is opened by `local.litellm.openFirewall = true` below.)
   networking.firewall.allowedTCPPorts = [
-    4000
     4319
     6006
   ];
+
+  # ── LiteLLM proxy ────────────────────────────────────────────────────
+  # OpenAI-compatible federator in front of vLLM (:8000), local exo
+  # (:52416), and the GFR-exo federation. LangGraph workers hit this at
+  # :4000 and only know about model *groups* (coder-local, coder-remote,
+  # embedding) — the YAML config is what maps groups to upstream
+  # deployments and handles cooldown/quarantine of dark backends.
+  #
+  # Master key injection: the YAML references
+  # `master_key: os.environ/LITELLM_MASTER_KEY`, and the module loads
+  # /run/secrets/litellm-master-key as an `EnvironmentFile` so the
+  # plaintext never enters /nix/store. Rotate with
+  # `sops edit secrets/litellm-master-key.yaml` then restart the unit.
+  local.litellm = {
+    enable = true;
+    configFile = ../../../projects/swarm/litellm_config.yaml;
+    openFirewall = true;
+    masterKeyFile = config.sops.secrets.litellm-master-key.path;
+  };
 
   # ── LangGraph Server (dev mode, in-memory SQLite) ───────────────────
   # One `langgraph dev` per project, each pinned to its own venv under

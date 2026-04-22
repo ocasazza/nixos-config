@@ -53,6 +53,17 @@ creation_rules:
       - age:
           - *admin_olive
           - *host_luna
+  # LiteLLM master key: bearer token clients present to the LiteLLM
+  # proxy at :4000. Admin + host_luna key group so luna can decrypt at
+  # activation and edits are possible from darwin via `sops edit`.
+  # Consumed by `modules/nixos/litellm/` via its `masterKeyFile` option.
+  # The decrypted file is a single line `LITELLM_MASTER_KEY=sk-...` so
+  # systemd can load it directly via `EnvironmentFile`.
+  - path_regex: secrets/litellm-master-key\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
   # LangGraph OCI free-self-hosted stack: Postgres role password
   # consumed by `modules/nixos/langgraph-oci/` via its
   # `postgres.passwordFile` option. Admin + host_luna key group so luna
