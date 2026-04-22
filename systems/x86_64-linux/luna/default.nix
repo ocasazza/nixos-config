@@ -922,6 +922,70 @@ in
     };
   };
 
+  # ── LangGraph OCI (free self-hosted production stack) ───────────────
+  # Parallel-track with `local.langgraphServer` above. Runs the
+  # `langchain/langgraph-api` image in two roles (API + worker) against
+  # a dedicated Postgres + loopback Redis on :6380, so scheduled runs
+  # survive restarts (the `langgraph dev` path above loses them).
+  #
+  # LEFT COMMENTED OUT on purpose — flip over in a dedicated PR once
+  # the image + Postgres + Redis topology has been validated:
+  #   1. (optional) pin the image to a specific tag for reproducibility,
+  #      e.g. `image = "docker.io/langchain/langgraph-api:0.2.75";`
+  #   2. drop the `local.langgraphServer.enable = true` block above
+  #      (or set to false on each project) so ports :2024/:2025 free up,
+  #      then (optionally) move `port = 2026/2027` defaults below to
+  #      :2024/:2025 for drop-in client compatibility.
+  #   3. add the sops secret stanza for `langgraph-pg-password` (see
+  #      `sops.secrets` block below) so the Postgres role password can
+  #      be decrypted at activation.
+  #   4. `sudo nixos-rebuild switch`.
+  #   5. curl http://luna.local:2026/ok (swarm), :2027/ok (ingest).
+  #
+  # local.langgraphOci = {
+  #   enable = true;
+  #   # Pin in production — `:latest` is updated frequently and can
+  #   # silently change the API surface on a pull-on-restart.
+  #   # image = "docker.io/langchain/langgraph-api:0.2.75";
+  #   postgres.passwordFile = config.sops.secrets.langgraph-pg-password.path;
+  #   projects = {
+  #     swarm = {
+  #       projectDir = ../../../projects/swarm;
+  #       port = 2026;
+  #       openFirewall = true;
+  #       env = {
+  #         OPENAI_API_BASE = "http://127.0.0.1:4000/v1";
+  #         OPENAI_API_KEY  = "sk-swarm-local";
+  #         OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:6006/v1/traces";
+  #         PHOENIX_COLLECTOR_ENDPOINT  = "http://127.0.0.1:6006/v1/traces";
+  #         OTEL_SERVICE_NAME           = "langgraph-swarm";
+  #       };
+  #     };
+  #     ingest = {
+  #       projectDir = ../../../projects/ingest;
+  #       port = 2027;
+  #       openFirewall = false;
+  #       env = {
+  #         OPENAI_API_BASE = "http://127.0.0.1:4000/v1";
+  #         OPENAI_API_KEY  = "sk-swarm-local";
+  #         OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:6006/v1/traces";
+  #         PHOENIX_COLLECTOR_ENDPOINT  = "http://127.0.0.1:6006/v1/traces";
+  #         OTEL_SERVICE_NAME           = "langgraph-ingest";
+  #       };
+  #     };
+  #   };
+  # };
+  #
+  # Paired sops secret stanza (add into `sops.secrets` below when
+  # enabling the OCI stack):
+  # sops.secrets.langgraph-pg-password = {
+  #   sopsFile = ../../../secrets/langgraph-pg-password.yaml;
+  #   key = "langgraph_pg_password";
+  #   owner = "root";
+  #   group = "root";
+  #   mode = "0400";
+  # };
+
   # ── shared storage stack (SeaweedFS + Redis + JuiceFS) ──────────────
   # luna is the single source of truth for the personal cluster's
   # filesystem. It runs:
