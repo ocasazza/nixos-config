@@ -261,7 +261,12 @@ in
     #   - litellm + pass  -> ANTHROPIC_BASE_URL = <endpoint>/vertex/v1
     #   - litellm + route -> ANTHROPIC_BASE_URL = <endpoint>/v1 (no apiKey,
     #                        supplied at wrapper run time from sops)
-    system.activationScripts.claudeCode.text =
+    #
+    # nix-darwin only invokes a fixed list of activation-script slots
+    # (preActivation / extraActivation / postActivation) — custom names
+    # like `claudeCode` build successfully but are never called. Use
+    # extraActivation so this actually fires on `darwin-rebuild switch`.
+    system.activationScripts.extraActivation.text = lib.mkAfter (
       let
         user = lib.salt.user;
 
@@ -324,7 +329,8 @@ in
         echo $(gcloud auth print-identity-token 2>/dev/null)
         TOKENHELPER
         chmod +x /Users/${user.name}/.claude/get-iam-token.sh
-      '';
+      ''
+    );
 
     # Load gcloud credentials for Vertex AI (legacy path only; LiteLLM
     # passthrough doesn't need an exported access token at shell init —

@@ -304,16 +304,15 @@ in
     recipeOverrideDirs = "/Users/${user.name}/Repositories/schrodinger/git-fleet/lib/software";
   };
 
-  # Set desktop wallpaper
-  # Claude Code API key helper now managed by programs.claude-code module
+  # Set desktop wallpaper + load fleet MDM secrets.
+  # Both run via postActivation because nix-darwin only invokes a fixed
+  # set of activation-script slots (preActivation / extraActivation /
+  # postActivation). A custom `fleetSecrets` slot builds fine but is
+  # never called.
   system.activationScripts.postActivation.text = ''
     # Set wallpaper (timeout to avoid hanging on headless/lid-closed machines)
     timeout 5 sudo -u ${user.name} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"' 2>/dev/null || true
-  '';
 
-  # Load Fleet secrets into user's shell environment
-  # Creates a .fleet_secrets file in the user's home directory
-  system.activationScripts.fleetSecrets.text = ''
     echo "Loading Fleet MDM secrets..."
     FLEET_SECRETS_FILE="${config.sops.secrets.fleet.path}"
     USER_ENV_FILE="/Users/${user.name}/.fleet_secrets"
