@@ -64,6 +64,19 @@ creation_rules:
       - age:
           - *admin_olive
           - *host_luna
+  # Per-client LiteLLM virtual keys. One file per external client
+  # (claude-code on nixos, claude-code on darwin, opencode, hermes) so
+  # each module reads only its own decrypted EnvironmentFile. Same
+  # admin + host_luna group as the master key — luna decrypts at
+  # activation, admin rotates from darwin via `sops edit`. File
+  # content: a single `LITELLM_API_KEY_<CLIENT>=sk-...` line; placeholder
+  # values ship encrypted and are replaced post-rebuild via LiteLLM's
+  # `POST /key/generate` API.
+  - path_regex: secrets/litellm-key-(claude-code-nixos|claude-code-darwin|opencode|hermes)\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
   # LangGraph OCI free-self-hosted stack: Postgres role password
   # consumed by `modules/nixos/langgraph-oci/` via its
   # `postgres.passwordFile` option. Admin + host_luna key group so luna

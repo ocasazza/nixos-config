@@ -771,6 +771,51 @@ in
         mode = "0400";
       };
 
+      # Per-client LiteLLM virtual keys. Each decrypts to a single
+      # `LITELLM_API_KEY_<CLIENT>=sk-...` line which systemd loads as
+      # an additive EnvironmentFile for the litellm unit (see
+      # modules/nixos/litellm/default.nix, virtualKeys option).
+      #
+      # Placeholder values ship encrypted; actual keys are minted
+      # post-rebuild via the LiteLLM `POST /key/generate` API
+      # (authenticated with the master key) and written back through
+      # `sops edit secrets/litellm-key-<client>.yaml`.
+      #
+      # Owner is `litellm` so the proxy's systemd unit can read the
+      # decrypted files as an EnvironmentFile. Clients (claude-code,
+      # opencode, hermes) read these indirectly — the wrapper shim
+      # reads the sops-decrypted file at invocation time, so the
+      # per-client owner is whoever invokes the client binary, not a
+      # system user.
+      litellm-key-claude-code-nixos = {
+        sopsFile = ../../../secrets/litellm-key-claude-code-nixos.yaml;
+        key = "litellm_api_key";
+        owner = "litellm";
+        group = "litellm";
+        mode = "0400";
+      };
+      litellm-key-claude-code-darwin = {
+        sopsFile = ../../../secrets/litellm-key-claude-code-darwin.yaml;
+        key = "litellm_api_key";
+        owner = "litellm";
+        group = "litellm";
+        mode = "0400";
+      };
+      litellm-key-opencode = {
+        sopsFile = ../../../secrets/litellm-key-opencode.yaml;
+        key = "litellm_api_key";
+        owner = "litellm";
+        group = "litellm";
+        mode = "0400";
+      };
+      litellm-key-hermes = {
+        sopsFile = ../../../secrets/litellm-key-hermes.yaml;
+        key = "litellm_api_key";
+        owner = "litellm";
+        group = "litellm";
+        mode = "0400";
+      };
+
       # Redis password for the seaweedfs instance (JuiceFS metadata KV).
       # Consumed by two units:
       #   1. redis-seaweedfs — loaded via `requirePassFile`; nixpkgs'
