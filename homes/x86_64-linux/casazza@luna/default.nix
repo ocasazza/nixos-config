@@ -45,8 +45,6 @@ in
     # Per-user packages defined in modules/nixos/packages.nix. Kept there
     # for now to minimize churn; can be inlined if the file disappears.
     packages = pkgs.callPackage ../../../modules/nixos/packages.nix { };
-
-    file = import ../../../modules/nixos/files.nix { inherit user; };
   };
 
   # Cross-platform HM program config (zsh/git/ssh/zellij/nvim/etc.)
