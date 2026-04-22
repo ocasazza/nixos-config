@@ -4,13 +4,13 @@ LangGraph-based multi-agent swarm over LiteLLM. Local replacement for the
 marketing promises of the `kimi-2-6/kimi-2.6` repo, built from trusted
 open-source parts:
 
-| Layer         | Component                            |
-| ------------- | ------------------------------------ |
-| Orchestration | **LangGraph** (planner → fan-out → reducer) |
-| Model router  | **LiteLLM** proxy on `:4000`         |
+| Layer         | Component                                                         |
+| ------------- | ----------------------------------------------------------------- |
+| Orchestration | **LangGraph** (planner → fan-out → reducer)                       |
+| Model router  | **LiteLLM** proxy on `:4000`                                      |
 | Backends      | local **vLLM** (`:8000`), **exo** (`:52416`), future worker nodes |
-| Browser       | **browser-use** + Playwright         |
-| Visualization | **Arize Phoenix** (`:6006`)          |
+| Browser       | **browser-use** + Playwright                                      |
+| Visualization | **Arize Phoenix** (`:6006`)                                       |
 
 ## Boot
 

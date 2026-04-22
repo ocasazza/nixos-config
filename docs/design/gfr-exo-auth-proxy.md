@@ -25,6 +25,7 @@ LAN across the VPN / corp MITM). The mesh is point-to-point between the
 three GFR hosts; luna is not a member and cannot be added without
 redesigning the RDMA topology. SSH tunnels (the current escape hatch)
 work but are:
+
 - fragile — one tunnel per node, dies on network wobble
 - tied to a human (`quark@<host>` key pair)
 - unauthenticated at the application layer (whoever holds the SSH key
@@ -179,15 +180,15 @@ services.exo-auth-proxy = {
 ### Token provisioning
 
 1. On 04, generate once: `openssl rand -hex 32 | sops encrypt --input-type
-   binary --output-type yaml /dev/stdin > …`, stash as
+binary --output-type yaml /dev/stdin > …`, stash as
    `secrets/gfr-osx26-04.yaml::exo-auth/token`. Encrypt to both the admin
    age key and 04's host age key (see existing `shared.yaml` for the
    pattern).
 2. Share out-of-band to luna's operator, who then `sops edit
-   secrets/gfr-exo-auth-token.yaml` in `nixos-config` and pastes the
+secrets/gfr-exo-auth-token.yaml` in `nixos-config` and pastes the
    same value. Both sides match; federation works.
 3. Rotation: regenerate on 04, update luna's ciphertext, `sops
-   updatekeys`, rebuild both ends. The LiteLLM proxy picks up the new
+updatekeys`, rebuild both ends. The LiteLLM proxy picks up the new
    value on restart since it reads via `os.environ/GFR_EXO_AUTH_TOKEN`.
 
 ### Observability

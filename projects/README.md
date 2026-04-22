@@ -20,13 +20,13 @@ Currently declared:
 2. Enable it on the relevant host by adding an entry under
    `local.langgraphServer.projects` — e.g. on luna:
 
-    ```nix
-    local.langgraphServer.projects.<name> = {
-      projectDir = ../../../projects/<name>;
-      port = 2026;
-      openFirewall = false;
-    };
-    ```
+   ```nix
+   local.langgraphServer.projects.<name> = {
+     projectDir = ../../../projects/<name>;
+     port = 2026;
+     openFirewall = false;
+   };
+   ```
 
    The relative path (`../../../projects/<name>`) resolves to a
    `/nix/store/...` path at build time. The systemd unit's venv

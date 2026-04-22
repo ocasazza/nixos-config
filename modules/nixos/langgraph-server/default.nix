@@ -49,7 +49,7 @@ let
 
   # Submodule for one project entry in cfg.projects.
   projectOpts =
-    { name, ... }:
+    { ... }:
     {
       options = {
         projectDir = mkOption {
@@ -353,18 +353,17 @@ in
       description = "LangGraph Server";
     };
 
-    systemd.tmpfiles.rules =
-      [
-        "d ${toString cfg.cacheDir} 0750 ${cfg.user} ${cfg.group} -"
-        "d ${toString cfg.venvDir} 0750 ${cfg.user} ${cfg.group} -"
-      ]
-      # Per-project state dir. `langgraph dev` writes a `.langgraph_api`
-      # subdir in its cwd; pointing WorkingDirectory here (see the
-      # systemd.services block below) keeps that write off the
-      # read-only nix-store projectDir.
-      ++ lib.mapAttrsToList (
-        name: _: "d ${toString cfg.cacheDir}/${name} 0750 ${cfg.user} ${cfg.group} -"
-      ) cfg.projects;
+    systemd.tmpfiles.rules = [
+      "d ${toString cfg.cacheDir} 0750 ${cfg.user} ${cfg.group} -"
+      "d ${toString cfg.venvDir} 0750 ${cfg.user} ${cfg.group} -"
+    ]
+    # Per-project state dir. `langgraph dev` writes a `.langgraph_api`
+    # subdir in its cwd; pointing WorkingDirectory here (see the
+    # systemd.services block below) keeps that write off the
+    # read-only nix-store projectDir.
+    ++ lib.mapAttrsToList (
+      name: _: "d ${toString cfg.cacheDir}/${name} 0750 ${cfg.user} ${cfg.group} -"
+    ) cfg.projects;
 
     networking.firewall.allowedTCPPorts = firewallPorts;
 

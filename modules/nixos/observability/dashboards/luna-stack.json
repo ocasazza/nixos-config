@@ -602,7 +602,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "custom": { "fillOpacity": 10, "lineWidth": 2, "stacking": { "mode": "none" } }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "stacking": { "mode": "none" }
+          }
         }
       }
     },
@@ -628,7 +632,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "custom": { "fillOpacity": 30, "lineWidth": 1, "stacking": { "mode": "normal" } }
+          "custom": {
+            "fillOpacity": 30,
+            "lineWidth": 1,
+            "stacking": { "mode": "normal" }
+          }
         }
       }
     }

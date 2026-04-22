@@ -169,68 +169,68 @@ let
   # like declarative config even though it's a runtime DB mutation.
   # Revisit if upstream ever ships a first-class env-var path.
   seedScript = pkgs.writeShellScript "open-webui-seed-api-key" ''
-    set -eu
+        set -eu
 
-    DB="${cfg.stateDir}/data/webui.db"
-    HEALTH_URL="http://127.0.0.1:${toString cfg.port}/health"
-    ADMIN_EMAIL="${toString cfg.admin.email}"
-    API_KEY_FILE="${toString cfg.admin.apiKeyFile}"
+        DB="${cfg.stateDir}/data/webui.db"
+        HEALTH_URL="http://127.0.0.1:${toString cfg.port}/health"
+        ADMIN_EMAIL="${toString cfg.admin.email}"
+        API_KEY_FILE="${toString cfg.admin.apiKeyFile}"
 
-    # Wait for open-webui to finish lifespan startup. create_admin_user
-    # runs before the HTTP server starts accepting connections, so once
-    # /health returns 200 the admin row is guaranteed present.
-    echo "seed: waiting for open-webui /health..."
-    for i in $(seq 1 60); do
-      if ${pkgs.curl}/bin/curl -fsS --max-time 2 "$HEALTH_URL" >/dev/null; then
-        break
-      fi
-      sleep 2
-    done
+        # Wait for open-webui to finish lifespan startup. create_admin_user
+        # runs before the HTTP server starts accepting connections, so once
+        # /health returns 200 the admin row is guaranteed present.
+        echo "seed: waiting for open-webui /health..."
+        for i in $(seq 1 60); do
+          if ${pkgs.curl}/bin/curl -fsS --max-time 2 "$HEALTH_URL" >/dev/null; then
+            break
+          fi
+          sleep 2
+        done
 
-    if ! ${pkgs.curl}/bin/curl -fsS --max-time 2 "$HEALTH_URL" >/dev/null; then
-      echo "seed: open-webui never became healthy" >&2
-      exit 1
-    fi
+        if ! ${pkgs.curl}/bin/curl -fsS --max-time 2 "$HEALTH_URL" >/dev/null; then
+          echo "seed: open-webui never became healthy" >&2
+          exit 1
+        fi
 
-    if [ ! -f "$DB" ]; then
-      echo "seed: $DB does not exist (first boot before lifespan init?); bailing" >&2
-      exit 0
-    fi
+        if [ ! -f "$DB" ]; then
+          echo "seed: $DB does not exist (first boot before lifespan init?); bailing" >&2
+          exit 0
+        fi
 
-    API_KEY="$(cat "$API_KEY_FILE")"
-    if [ -z "$API_KEY" ]; then
-      echo "seed: api key file is empty; refusing to seed" >&2
-      exit 1
-    fi
+        API_KEY="$(cat "$API_KEY_FILE")"
+        if [ -z "$API_KEY" ]; then
+          echo "seed: api key file is empty; refusing to seed" >&2
+          exit 1
+        fi
 
-    # Resolve the admin user id. Prefer the configured email; fall back
-    # to any user with role=admin (covers the case where the instance
-    # predates admin-email config and was seeded via first-signup under
-    # a different address).
-    USER_ID="$(${pkgs.sqlite}/bin/sqlite3 "$DB" \
-      "SELECT id FROM user WHERE email = '$ADMIN_EMAIL' LIMIT 1;")"
-    if [ -z "$USER_ID" ]; then
-      USER_ID="$(${pkgs.sqlite}/bin/sqlite3 "$DB" \
-        "SELECT id FROM user WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1;")"
-    fi
+        # Resolve the admin user id. Prefer the configured email; fall back
+        # to any user with role=admin (covers the case where the instance
+        # predates admin-email config and was seeded via first-signup under
+        # a different address).
+        USER_ID="$(${pkgs.sqlite}/bin/sqlite3 "$DB" \
+          "SELECT id FROM user WHERE email = '$ADMIN_EMAIL' LIMIT 1;")"
+        if [ -z "$USER_ID" ]; then
+          USER_ID="$(${pkgs.sqlite}/bin/sqlite3 "$DB" \
+            "SELECT id FROM user WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1;")"
+        fi
 
-    if [ -z "$USER_ID" ]; then
-      echo "seed: no admin user found in $DB; skipping api-key seed" >&2
-      exit 0
-    fi
+        if [ -z "$USER_ID" ]; then
+          echo "seed: no admin user found in $DB; skipping api-key seed" >&2
+          exit 0
+        fi
 
-    echo "seed: upserting api_key row for user $USER_ID"
-    NOW="$(date +%s)"
-    # Idempotent UPSERT keyed on the stable primary key
-    # `key_<user_id>` that upstream's update_user_api_key_by_id uses.
-    ${pkgs.sqlite}/bin/sqlite3 "$DB" <<SQL
-BEGIN IMMEDIATE;
-DELETE FROM api_key WHERE user_id = '$USER_ID';
-INSERT INTO api_key (id, user_id, key, created_at, updated_at)
-VALUES ('key_' || '$USER_ID', '$USER_ID', '$API_KEY', $NOW, $NOW);
-COMMIT;
-SQL
-    echo "seed: done"
+        echo "seed: upserting api_key row for user $USER_ID"
+        NOW="$(date +%s)"
+        # Idempotent UPSERT keyed on the stable primary key
+        # `key_<user_id>` that upstream's update_user_api_key_by_id uses.
+        ${pkgs.sqlite}/bin/sqlite3 "$DB" <<SQL
+    BEGIN IMMEDIATE;
+    DELETE FROM api_key WHERE user_id = '$USER_ID';
+    INSERT INTO api_key (id, user_id, key, created_at, updated_at)
+    VALUES ('key_' || '$USER_ID', '$USER_ID', '$API_KEY', $NOW, $NOW);
+    COMMIT;
+    SQL
+        echo "seed: done"
   '';
 
 in
