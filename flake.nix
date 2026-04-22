@@ -194,6 +194,16 @@
         inputs.seaweedfs.darwinModules.seaweedfs
         inputs.seaweedfs.darwinModules.juicefs
         inputs.seaweedfs.darwinModules.macfuse
+        # Secrets management (sops-nix) on darwin. Mirrors the NixOS-side
+        # import below (inputs.sops-nix.nixosModules.sops). Each Mac's
+        # /etc/ssh/ssh_host_ed25519_key is auto-picked up via the
+        # sops.age.sshKeyPaths default (services.openssh.enable is true in
+        # hosts/darwin/default.nix). Per-host decryption further requires
+        # each Mac's ssh-to-age pubkey to be added to .sops.yaml as an
+        # `&host_<hostname>` anchor and each consumer secret to be
+        # re-encrypted with `sops updatekeys` — see TODO(sops-darwin)
+        # comments in hosts/darwin/default.nix.
+        inputs.sops-nix.darwinModules.default
         # Pass specialArgs that existing modules expect
         (
           { ... }:

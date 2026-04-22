@@ -25,6 +25,54 @@ in
     ../../modules/shared/obsidian-vault
   ];
 
+  # ── sops-nix (darwin) ───────────────────────────────────────────────
+  # Secrets materialization at launchd activation. Each Mac's
+  # /etc/ssh/ssh_host_ed25519_key is auto-used as the age identity via
+  # sops.age.sshKeyPaths' default (services.openssh.enable = true below).
+  #
+  # TODO(sops-darwin): none of the four Macs
+  # (CK2Q9LN7PM-MBA / GJHC5VVN49-MBP / GN9CFLM92K-MBP / L75T4YHXV7-MBA)
+  # have `&host_<hostname>` anchors in .sops.yaml yet, and the secret
+  # files below are only encrypted to admin_olive + host_luna. Until
+  # each Mac contributes its ssh-to-age pubkey:
+  #
+  #     ssh-to-age -i /etc/ssh/ssh_host_ed25519_key.pub
+  #
+  # and the secrets are re-encrypted with `sops updatekeys`, the
+  # launchd sops-install-secrets service will log "no key could decrypt
+  # the data" at activation. Eval still succeeds — the validation is
+  # runtime-only. Consumers are written to tolerate this:
+  #   * fleet.env → the system.activationScripts.fleetSecrets block
+  #     below guards on `if [ -f "$FLEET_SECRETS_FILE" ]`.
+  #   * litellm-key-claude-code-darwin → cloudPassthrough=true on the
+  #     programs.claude-code block below means the wrapper never reads
+  #     the file anyway.
+  sops = {
+    defaultSopsFile = ../../secrets/fleet.env;
+    defaultSopsFormat = "dotenv";
+    # age.sshKeyPaths defaults to [ /etc/ssh/ssh_host_ed25519_key ] which
+    # is exactly what we want — no override needed.
+    secrets = {
+      # Fleet MDM env file — whole file is the payload, consumed by the
+      # fleetSecrets activation script below which copies the decrypted
+      # file verbatim to ~/.fleet_secrets and sources it from zsh.
+      fleet = {
+        sopsFile = ../../secrets/fleet.env;
+        format = "dotenv";
+      };
+      # LiteLLM virtual key for the darwin claude-code client. Yaml
+      # secret with a single `litellm_api_key` scalar — sops-nix writes
+      # just the value to /run/secrets/litellm-key-claude-code-darwin.
+      # Mirrors the declaration on luna
+      # (systems/x86_64-linux/luna/default.nix).
+      litellm-key-claude-code-darwin = {
+        sopsFile = ../../secrets/litellm-key-claude-code-darwin.yaml;
+        format = "yaml";
+        key = "litellm_api_key";
+      };
+    };
+  };
+
   local.obsidianVault = {
     enable = true;
     vaultPath = "/Users/${user.name}/Repositories/ocasazza/obsidian/vault";
@@ -146,12 +194,13 @@ in
   # tracing into Phoenix with richer attribution; the client telemetry
   # would duplicate spans.
   #
-  # virtualKeyFile is a static path referencing the sops-nix-rendered
-  # file (follow-up: `inputs.sops-nix.darwinModules.default` needs to be
-  # imported in flake.nix + a darwin-level sops.secrets.litellm-key-*
-  # block declared here before this file actually exists at activation
-  # time. Until then cloudPassthrough=true means the virtualKeyFile is
-  # unused anyway — the wrapper only reads it in router mode).
+  # virtualKeyFile resolves to /run/secrets/litellm-key-claude-code-darwin
+  # via the sops.secrets declaration below. Until each darwin host's
+  # ssh-to-age pubkey is added to .sops.yaml as `&host_<hostname>` and
+  # the yaml is `sops updatekeys`d, decryption at launchd activation
+  # will fail — but cloudPassthrough=true means the wrapper never reads
+  # the file, so claude-code still works against vertex-proxy in the
+  # meantime. See TODO(sops-darwin) below.
   programs.claude-code = {
     enable = true;
     model = "claude-opus-4-7";
