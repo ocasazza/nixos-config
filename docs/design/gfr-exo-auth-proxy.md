@@ -2,7 +2,7 @@
 
 **Status:** proposed. This spec lives in `nixos-config` so it ships with
 the luna-side consumer (`secrets/gfr-exo-auth-token.yaml` +
-`~/swarm/litellm_config.yaml`), but the implementation belongs in
+`projects/swarm/litellm_config.yaml`), but the implementation belongs in
 `schrodinger/git-fleet-runner`. Move/copy there when landing.
 
 **Context source:** scout of `git-fleet-runner` on `main` and every

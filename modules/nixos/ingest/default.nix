@@ -3,7 +3,8 @@
 # Wires three pull-over-API source adapters (obsidian vault via the
 # GitHub Contents API, Atlassian Cloud Jira+Confluence, and arbitrary
 # GitHub repos) into one sink (Open WebUI Knowledge API) through
-# LangGraph graphs defined in the ~/ingest project on this host.
+# LangGraph graphs defined in the ingest project (tracked declaratively
+# under `projects/ingest/` in the nixos-config repo).
 #
 # Per-source wiring: one `systemd.services.ingest-<name>` oneshot +
 # one `systemd.timers.ingest-<name>` (OnCalendar from `schedule`).

@@ -1,8 +1,8 @@
 # LiteLLM `coder` federation: local vLLM + local-tunnelled exo + GFR exo
 
-This note tracks how luna's LiteLLM proxy (`~/swarm/litellm_config.yaml`,
+This note tracks how luna's LiteLLM proxy (`projects/swarm/litellm_config.yaml`,
 bound to the 10G NIC, see `systems/x86_64-linux/luna/default.nix`)
-fans the `coder` model group out over **four** backends:
+fans the `coder-local` / `coder-remote` model groups out over **four** backends:
 
 1. **Local vLLM** (`http://localhost:8000/v1`) — primary, `weight: 10`.
    Qwen3-Coder-30B AWQ, tensor-parallel across both luna GPUs. Module:

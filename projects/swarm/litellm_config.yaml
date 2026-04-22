@@ -1,0 +1,139 @@
+# LiteLLM proxy config. One OpenAI-compatible surface at :4000 in front of
+# every coder-capable backend in the swarm. LangGraph workers only know
+# about model groups ("coder-local", "coder-remote", "embedding"), not
+# specific hosts — LiteLLM load-balances and fails over automatically.
+#
+# Model groups:
+#   coder-local  — luna vLLM only. Always-on anchor for plan / reduce /
+#                  any latency-sensitive step.
+#   coder-remote — exo + GFR federation. Fan-out pool for parallel
+#                  expand workers; may be dark (expect cooldown-
+#                  quarantine on first call when exo is offline).
+#   embedding    — luna's Qwen3-Embedding-0.6B on :8002.
+#
+# Add a backend:
+#   - drop another `- model_name: <group>` block with its api_base
+#   - reload the proxy (scripts/start-litellm.sh restarts it)
+#
+# Dead endpoints are quarantined per-deployment via `cooldown_time` below.
+# This is how exo on :52416 can come and go without breaking a running
+# swarm.
+
+model_list:
+  # ── coder-local ─────────────────────────────────────────────────────
+  # luna's vLLM instance — primary coder backend, always on. Graphs
+  # that want the fast, always-reachable path (planners, reducers, any
+  # synchronous UI) pin this group. Single deployment, weight 10.
+  - model_name: coder-local
+    litellm_params:
+      model: openai/cpatonn/Qwen3-Coder-30B-A3B-Instruct-AWQ
+      api_base: http://localhost:8000/v1
+      api_key: sk-vllm-luna # vLLM ignores this; LiteLLM requires a value.
+      # Keep under vllm's 32k max_model_len minus some headroom.
+      max_tokens: 8192
+      weight: 10
+      timeout: 120
+
+  # ── coder-remote ────────────────────────────────────────────────────
+  # Fan-out pool — exo cluster + GFR federation. Graphs that issue
+  # parallel expand-style bursts target this group so luna's vLLM
+  # doesn't queue N simultaneous completions. Expect cold /
+  # cooldown-quarantine when no exo node is live.
+
+  # Local exo (SSH tunnel to :52416). Dark most of the time; after one
+  # failed call LiteLLM puts it in `cooldown_time` quarantine so
+  # retries route to a still-healthy coder-remote deployment.
+  - model_name: coder-remote
+    litellm_params:
+      model: openai/qwen-3-coder-30b
+      api_base: http://localhost:52416/v1
+      api_key: sk-exo-local
+      max_tokens: 8192
+      weight: 1
+      timeout: 120
+
+  # GFR exo federation. Exo on the Schrödinger `git-fleet-runner` fleet
+  # (nodes 02/03) is PF-blocked from the WiFi/Ethernet plane — the exo
+  # API (:52415) only listens on the TB5 mesh (10.200.0.0/24). A GFR-
+  # side authenticated reverse proxy (see
+  # docs/design/gfr-exo-auth-proxy.md in the nixos-config repo) exposes
+  # each node at
+  #   https://gfr-proxy.schrodinger.com/exo/<node>/v1
+  # requiring a `Bearer $GFR_EXO_AUTH_TOKEN` header.
+  #
+  # The token lives in sops:
+  #   nixos-config/secrets/gfr-exo-auth-token.yaml
+  #     → /run/secrets/gfr-exo-auth-token on luna
+  # and is surfaced into this process's environment as
+  # `GFR_EXO_AUTH_TOKEN`. LiteLLM's `os.environ/<NAME>` substitution
+  # reads env at proxy start, so changing the secret requires a restart.
+  #
+  # NOTE: LiteLLM is not a systemd unit yet (launched from
+  # scripts/start-litellm.sh under `nix develop`). Until that changes,
+  # GFR_EXO_AUTH_TOKEN has to be exported by the user / start script
+  # before launch — e.g.:
+  #   export GFR_EXO_AUTH_TOKEN="$(sudo cat /run/secrets/gfr-exo-auth-token)"
+  # Tracking as a follow-up in the nixos-config repo.
+  - model_name: coder-remote
+    litellm_params:
+      model: openai/qwen-3-coder-30b
+      api_base: https://gfr-proxy.schrodinger.com/exo/02/v1
+      api_key: os.environ/GFR_EXO_AUTH_TOKEN
+      max_tokens: 8192
+      weight: 1
+      timeout: 120
+
+  - model_name: coder-remote
+    litellm_params:
+      model: openai/qwen-3-coder-30b
+      api_base: https://gfr-proxy.schrodinger.com/exo/03/v1
+      api_key: os.environ/GFR_EXO_AUTH_TOKEN
+      max_tokens: 8192
+      weight: 1
+      timeout: 120
+
+  # Local vLLM embedding endpoint — Qwen3-Embedding-0.6B on luna:8002.
+  # Exposed to clients as `embedding`, e.g.:
+  #   curl http://localhost:4000/v1/embeddings \
+  #     -H 'Authorization: Bearer sk-swarm-local' \
+  #     -d '{"model":"embedding","input":"hello world"}'
+  # Powers: LocalGPT "find related notes" in Obsidian, swarm MCP
+  # semantic-search tools, Open WebUI Knowledge RAG.
+  - model_name: embedding
+    litellm_params:
+      model: openai/Qwen/Qwen3-Embedding-0.6B
+      api_base: http://localhost:8002/v1
+      api_key: sk-vllm-luna
+      weight: 10
+      timeout: 60
+
+router_settings:
+  routing_strategy: simple-shuffle # weighted load-balance
+  num_retries: 2
+  timeout: 120
+  # After a single failure against a deployment, quarantine it for this
+  # many seconds. Critical for exo which may be offline most of the time
+  # — otherwise every call that happens to pick exo first would 500 even
+  # though vllm is healthy.
+  allowed_fails: 1
+  cooldown_time: 60
+
+litellm_settings:
+  drop_params: true # silently drop params unsupported by a given backend
+  set_verbose: false
+  # Emit OTLP spans to Phoenix so LiteLLM calls show up as spans inside
+  # the LangGraph trace tree instead of disappearing into a black box.
+  success_callback: ["otel"]
+  failure_callback: ["otel"]
+
+# OTEL destination. The start-litellm.sh wrapper exports
+# OTEL_EXPORTER_OTLP_ENDPOINT=$PHOENIX_COLLECTOR_ENDPOINT so the two
+# stay in sync.
+environment_variables:
+  OTEL_SERVICE_NAME: litellm
+
+general_settings:
+  master_key: sk-swarm-local # matches SWARM_LLM_API_KEY in shells/swarm
+  # No database — keep the proxy stateless so restarts are instant.
+  # (LiteLLM's DB is for virtual keys / spend tracking, neither of
+  # which we need on a single-user LAN deployment.)

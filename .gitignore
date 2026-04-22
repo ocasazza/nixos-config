@@ -3,3 +3,10 @@ result
 .crush
 .env.local
 .fastembed_cache/
+
+# Python projects under projects/ — caches and venv state
+__pycache__/
+*.pyc
+projects/*/.venv/
+projects/*/.run/
+projects/*/.env
