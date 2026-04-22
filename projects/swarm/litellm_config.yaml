@@ -78,7 +78,7 @@ model_list:
     litellm_params:
       model: openai/qwen-3-coder-30b
       api_base: https://gfr-proxy.schrodinger.com/exo/02/v1
-      api_key: os.environ/GFR_EXO_AUTH_TOKEN
+      api_key: placeholder-not-yet-deployed # replace with sops-backed env var once GFR proxy is live
       max_tokens: 8192
       weight: 1
       timeout: 120
@@ -87,7 +87,7 @@ model_list:
     litellm_params:
       model: openai/qwen-3-coder-30b
       api_base: https://gfr-proxy.schrodinger.com/exo/03/v1
-      api_key: os.environ/GFR_EXO_AUTH_TOKEN
+      api_key: placeholder-not-yet-deployed # replace with sops-backed env var once GFR proxy is live
       max_tokens: 8192
       weight: 1
       timeout: 120
