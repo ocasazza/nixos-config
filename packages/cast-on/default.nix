@@ -62,7 +62,6 @@ writeShellApplication {
 
     DRY_RUN=0
     SKIP_GIT=0
-    EXTRA_NH_ARGS=()
     TARGETS=()
 
     while [[ $# -gt 0 ]]; do
@@ -218,7 +217,7 @@ writeShellApplication {
       echo "==> Dry run: skipping copy + activation"
       for h in "''${HOSTS[@]}"; do
         attr="$(bare_attr "$h")"
-        echo "  $h -> $(cat /tmp/cast-on.''${attr}.out)"
+        echo "  $h -> $(cat "/tmp/cast-on.''${attr}.out")"
       done
       exit 0
     fi
