@@ -938,25 +938,32 @@ in
     openFirewall = true;
   };
 
-  services.tikv = {
+  # TiKV — source-build disabled on this branch (parallel-track via OCI).
+  #
+  # The seaweedfs flake's `nixosModules.tikv` wraps `pkgs.tikv` +
+  # `pkgs.tikv-pd` derivations, which at TiKV 8.5.0 fail to build under
+  # the current stdenv (CMake 4 → gcc 15 → abseil symbol-visibility
+  # regressions in the vendored rocksdb-sys → grpcio-sys C++ tree). We
+  # instead run the upstream container images via
+  # `modules/nixos/tikv-oci/` (pingcap/pd + pingcap/tikv) — same ports
+  # (2379/2380 for PD, 20160/20180 for TiKV), no source compile.
+  #
+  # JuiceFS's `metaUrl = "tikv://luna.local:2379/shared"` below works
+  # transparently against the OCI variant because the container
+  # publishes PD on the same port. We intentionally leave the JuiceFS
+  # wiring alone: the SeaweedFS-backend direction (Redis vs. TiKV for
+  # the filer store) is being decided on the parallel
+  # `casazza/seaweedfs-redis-backend` branch; this branch stays
+  # TiKV-based to keep the parallel tracks honest.
+  services.tikv.enable = false;
+
+  # TiKV via OCI container. Loopback-only by default (TiKV + PD publish
+  # on 127.0.0.1). JuiceFS running on the same host reaches them over
+  # loopback; LAN exposure would need TLS+auth which is not configured
+  # here, so don't flip openFirewall on without that.
+  local.tikvOci = {
     enable = true;
-    pd = {
-      enable = true;
-      name = "luna"; # used by initialCluster below
-      clientUrls = [ "http://0.0.0.0:2379" ];
-      peerUrls = [ "http://0.0.0.0:2380" ];
-      advertiseClientUrls = [ "http://luna.local:2379" ];
-      advertisePeerUrls = [ "http://luna.local:2380" ];
-      initialCluster = "luna=http://luna.local:2380";
-    };
-    server = {
-      enable = true;
-      addr = "0.0.0.0:20160";
-      advertiseAddr = "luna.local:20160";
-      statusAddr = "0.0.0.0:20180";
-      pdEndpoints = [ "luna.local:2379" ];
-    };
-    openFirewall = true;
+    # openFirewall left at default (false) — parallel-track eval install.
   };
 
   services.juicefs = {
