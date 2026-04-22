@@ -218,20 +218,17 @@ in
   programs.opencode = {
     enable = true;
     package = opencode.packages.${pkgs.system}.default;
-    # Ship Effect-runtime spans + AI SDK LLM spans to Phoenix on luna.
-    # The opencode fork's Effect runtime (packages/opencode/src/effect/oltp.ts)
-    # swaps Observability.layer to Otlp.layerJson whenever
-    # OTEL_EXPORTER_OTLP_ENDPOINT is set — every Effect.withSpan(...) site
-    # starts emitting. aiSdk=true also flips experimental.openTelemetry=true
-    # in managedConfig so per-LLM-call spans land on the same pipeline.
-    #
-    # Phoenix accepts OTLP/HTTP JSON at :6006/v1/traces directly — no
-    # otelcol hop. flake.lock pins opencode at rev 6a85277b4848 which
-    # introduces programs.opencode.telemetry; re-enabling after
-    # 5631b42's pre-lock-bump revert.
+    # Ship Effect-runtime spans + AI SDK LLM spans to luna's otelcol,
+    # which forwards to Phoenix. opencode's Effect runtime uses
+    # `effect/unstable/observability.Otlp.layerJson` — OTLP/HTTP JSON —
+    # but Phoenix's `/v1/traces` only accepts protobuf and rejects JSON
+    # with 415. Route through luna's otelcol-contrib at :4318 instead:
+    # it speaks JSON on the receiver side and re-encodes as protobuf on
+    # the way out via `otlphttp/phoenix` exporter (see modules/nixos/
+    # observability/ traces pipeline).
     telemetry = {
       enable = true;
-      endpoint = "http://luna:6006";
+      endpoint = "http://luna:4318";
     };
     managedConfig = {
       share = "disabled";

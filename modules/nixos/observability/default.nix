@@ -502,6 +502,17 @@ in
             # the only way to slice cost across machines.
             resource_to_telemetry_conversion.enabled = true;
           };
+          # Forward spans to Phoenix via OTLP/HTTP protobuf. Phoenix's
+          # receiver rejects OTLP/HTTP JSON with "Unsupported content
+          # type" — which breaks opencode's Effect runtime that only
+          # exports JSON (`effect/unstable/observability.Otlp.layerJson`).
+          # Solution: point every OTLP/HTTP JSON client (opencode on the
+          # Mac fleet, ad-hoc scripts) at this otelcol's :4318 intake,
+          # and let the otelcol re-serialize as protobuf on the way out.
+          "otlphttp/phoenix" = {
+            endpoint = "http://127.0.0.1:6006";
+            tls.insecure = true;
+          };
         }
         // optionalAttrs cfg.loki.enable {
           # contrib `loki` exporter speaks Loki's push API directly. We
@@ -528,6 +539,18 @@ in
                 "batch"
               ];
               exporters = [ "prometheus" ];
+            };
+            # Traces pipeline: OTLP intake → Phoenix. Dedicated so
+            # opencode spans coming in as JSON get re-encoded as
+            # protobuf by the otlphttp exporter before hitting Phoenix's
+            # protobuf-only receiver.
+            traces = {
+              receivers = [ "otlp" ];
+              processors = [
+                "memory_limiter"
+                "batch"
+              ];
+              exporters = [ "otlphttp/phoenix" ]; # quoted key above matches this pipeline ref
             };
           }
           // optionalAttrs cfg.loki.enable {
