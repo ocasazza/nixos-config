@@ -29,6 +29,13 @@ keys:
   # no private-key copy required.
   - &host_luna age1jxcqkungt8kyu3mt5apf8xxw883j3pmug6kf0e7yhsas0yalxdwq3k5ufr
   - &host_gn9cflm92k_mbp age1uh7yfce4f6xj0s62ne5tz8r5uj5qk9hr3fy2kz8nptgag9cg4efq00vg7e
+  - &host_ck2q9ln7pm_mba age144p4lzmv6r3kphxv3ldmu8rmr2a889zlveck5cnyce9pm8jmdc4qqylgfh
+  - &host_gjhc5vvn49_mbp age1u2ks8pg77vmk64tcgv68qrm078s3sd8kze832u8xagmdfant7fksf7zd5r
+  # L75T4YHXV7-MBA pending — pubkey not reachable from luna right now
+  # (DNS) and couldn't be fetched via claw fan-out either. When that Mac
+  # is reachable (LAN or Thunderbolt), collect and add:
+  #   claw -w L75T4YHXV7-MBA 'cat /etc/ssh/ssh_host_ed25519_key.pub' | ssh-to-age
+  # then re-run `sops updatekeys` on the files below.
 creation_rules:
   - path_regex: secrets/opencode\.env$
     age: *admin_olive
@@ -37,6 +44,8 @@ creation_rules:
       - age:
           - *admin_olive
           - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
   # Ingestion-pipeline secrets consumed by luna's `local.ingest`, plus
   # Open WebUI's declarative admin-seed/env secrets consumed by
   # `local.openWebUI`. Encrypted to an admin key (for editing from darwin
@@ -87,12 +96,16 @@ creation_rules:
           - *admin_olive
           - *host_luna
           - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
   - path_regex: secrets/litellm-key-(opencode|hermes)\.yaml$
     key_groups:
       - age:
           - *admin_olive
           - *host_luna
           - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
   # LangGraph OCI free-self-hosted stack: Postgres role password
   # consumed by `modules/nixos/langgraph-oci/` via its
   # `postgres.passwordFile` option. Admin + host_luna key group so luna
