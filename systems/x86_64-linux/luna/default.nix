@@ -991,11 +991,17 @@ in
     openFirewall = true;
     masterKeyFile = config.sops.secrets.litellm-master-key.path;
 
-    # SQLite keystore for per-client virtual keys. Activates the
-    # /key/generate admin endpoint so we can mint per-client bearers
-    # (claude-code, opencode, hermes) backed by audit metadata. Model
-    # list stays static in nix config.
-    databaseUrl = "sqlite:////var/lib/litellm/keys.db";
+    # SQLite keystore for per-client virtual keys. Disabled until the
+    # Prisma-on-NixOS gap is resolved: LiteLLM's auth path imports
+    # prisma-python which tries to download Rust query/schema engines
+    # from binaries.prisma.sh for platform "linux-nixos" (404 — not
+    # a supported build target). Workarounds: patchelf prebuilt debian
+    # engines, run LiteLLM via OCI container, or swap to Postgres in
+    # a container with the official litellm-database image.
+    #
+    # All clients currently auth with the master key; per-client
+    # isolation is deferred.
+    # databaseUrl = "sqlite:////var/lib/litellm/keys.db";
 
     modelGroups = {
       # luna's vLLM coder — always-on anchor for plan/reduce/any
