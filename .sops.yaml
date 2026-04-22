@@ -53,6 +53,15 @@ creation_rules:
       - age:
           - *admin_olive
           - *host_luna
+  # LangGraph OCI free-self-hosted stack: Postgres role password
+  # consumed by `modules/nixos/langgraph-oci/` via its
+  # `postgres.passwordFile` option. Admin + host_luna key group so luna
+  # can decrypt at activation and edits are possible from darwin.
+  - path_regex: secrets/langgraph-pg-password\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
   # Legacy/unused: kept so an ad-hoc `sops secrets/ingest.env` still
   # encrypts under an admin key, even though luna now reads the four
   # per-token YAMLs above instead of a monolithic env file.

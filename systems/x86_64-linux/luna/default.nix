@@ -1010,6 +1010,28 @@ in
     # openFirewall left at default (false) — parallel-track eval install.
   };
 
+  # ── TEI (Text Embeddings Inference) via OCI container ────────────────
+  # Purpose-built embedding server for Qwen3-Embedding-0.6B. This is the
+  # long-term replacement for `local.vllm.services.embedding` above —
+  # vLLM allocates a full KV cache even for pooling models (upstream
+  # vllm#29584), which is wasteful VRAM; TEI has no KV cache at all.
+  #
+  # Left DISABLED here on purpose. The module is provided so the flip
+  # is a single option toggle when you're ready. Default port is 8003
+  # (parallel-track with vLLM embedding on 8002), GPU 0 only,
+  # loopback-only. Suggested swap:
+  #   1. Remove `local.vllm.services.embedding = { … };` (or set to null)
+  #   2. Enable block below, optionally `port = 8002`
+  #   3. Update `projects/swarm/litellm_config.yaml` `embedding` group's
+  #      `api_base` to match (8003 if you kept default, 8002 if you reused)
+  #   4. `sudo nixos-rebuild switch`
+  #
+  # local.teiOci = {
+  #   enable = true;
+  #   # port = 8002;     # reuse existing LiteLLM api_base (after vLLM off)
+  #   # gpuDevices = [ 0 ];
+  # };
+
   services.juicefs = {
     enable = true;
     mounts.shared = {
