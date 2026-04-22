@@ -519,17 +519,26 @@ in
         # this flag vllm tries to load Qwen3-Embedding as a generative
         # model, which fails because the HF config declares it as a
         # pooling model (no LM head).
+        # `--enforce-eager` skips torch.compile + CUDA-graph capture
+        # (saves ~200-500 MiB at cold start, unblocks OOM when coder's
+        # tp=2 shard already claims 21 GiB on GPU 0).
+        # `--max-num-seqs 1` caps concurrency so per-seq KV blocks don't
+        # balloon past the 0.69 GiB budget.
         extraArgs = [
           "--task"
           "embed"
+          "--enforce-eager"
+          "--max-num-seqs"
+          "1"
         ];
         environment = {
-          # Stable device ordering + pin to GPU 0 only. The coder
-          # service above uses both GPUs (0,1); this pin ensures
-          # embedding never lands on GPU 1 where the coder shard would
-          # otherwise have full access to the remaining VRAM for KV.
+          # Stable device ordering + pin to GPU 1 (RTX 4000 SFF Ada).
+          # GPU 0 (3090 Ti) is saturated by coder at util 0.75 plus
+          # ~1.25 MiB free; moving embedding to GPU 1 decouples the
+          # two services. GPU 1 has ~5 GiB free after coder's tp=2
+          # shard — plenty for a 0.6B embedding + 4K KV.
           CUDA_DEVICE_ORDER = "PCI_BUS_ID";
-          CUDA_VISIBLE_DEVICES = "0";
+          CUDA_VISIBLE_DEVICES = "1";
         };
       };
     };

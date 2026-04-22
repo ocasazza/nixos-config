@@ -353,10 +353,18 @@ in
       description = "LangGraph Server";
     };
 
-    systemd.tmpfiles.rules = [
-      "d ${toString cfg.cacheDir} 0750 ${cfg.user} ${cfg.group} -"
-      "d ${toString cfg.venvDir} 0750 ${cfg.user} ${cfg.group} -"
-    ];
+    systemd.tmpfiles.rules =
+      [
+        "d ${toString cfg.cacheDir} 0750 ${cfg.user} ${cfg.group} -"
+        "d ${toString cfg.venvDir} 0750 ${cfg.user} ${cfg.group} -"
+      ]
+      # Per-project state dir. `langgraph dev` writes a `.langgraph_api`
+      # subdir in its cwd; pointing WorkingDirectory here (see the
+      # systemd.services block below) keeps that write off the
+      # read-only nix-store projectDir.
+      ++ lib.mapAttrsToList (
+        name: _: "d ${toString cfg.cacheDir}/${name} 0750 ${cfg.user} ${cfg.group} -"
+      ) cfg.projects;
 
     networking.firewall.allowedTCPPorts = firewallPorts;
 
@@ -386,7 +394,13 @@ in
           Type = "simple";
           User = cfg.user;
           Group = cfg.group;
-          WorkingDirectory = toString proj.projectDir;
+          # cwd MUST be writable — `langgraph dev` creates `.langgraph_api/`
+          # under cwd for its in-memory checkpointer. projectDir is a
+          # read-only nix-store path, so point cwd at the per-project
+          # state dir instead (created by the tmpfiles rule above).
+          # The --config flag in startScript passes projectDir/langgraph.json
+          # explicitly so the graph still loads from the nix-store source.
+          WorkingDirectory = "${toString cfg.cacheDir}/${name}";
 
           ExecStart = startScript name proj;
 
