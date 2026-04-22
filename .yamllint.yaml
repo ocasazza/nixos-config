@@ -1,0 +1,20 @@
+---
+# yamllint config for pre-commit's yamllint hook (see nix/pre-commit.nix).
+# Permissive on purpose — sops-encrypted yaml has long base64 lines and
+# no document-start marker, and treefmt already handles whitespace /
+# trailing newlines, so the remaining value is the structural sanity
+# check (duplicate keys, empty mapping values, unparseable yaml).
+extends: default
+rules:
+  line-length: disable
+  document-start: disable
+  indentation: disable
+  comments-indentation: disable
+  comments:
+    require-starting-space: false
+    min-spaces-from-content: 1
+  truthy:
+    allowed-values: ["true", "false", "yes", "no", "on", "off"]
+    check-keys: false
+  empty-lines:
+    max: 3
