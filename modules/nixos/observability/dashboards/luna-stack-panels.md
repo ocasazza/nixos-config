@@ -62,7 +62,7 @@ Each panel: **title** | question it answers | PromQL | viz | rationale.
 
 11. **TTFT p50/p95/p99** |
     `histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))` |
-    timeseries | aggregate `sum by (le)` *before* `histogram_quantile`,
+    timeseries | aggregate `sum by (le)` _before_ `histogram_quantile`,
     otherwise you get the average of quantiles (meaningless). Recording
     rule recommended — bucket cardinality on a 30B MoE makes this slow.
 

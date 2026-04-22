@@ -671,6 +671,89 @@ in
     6006
   ];
 
+  # ── shared storage stack (SeaweedFS + TiKV + JuiceFS) ───────────────
+  # luna is the single source of truth for the personal cluster's
+  # filesystem. It runs:
+  #   * seaweedfs master + volume + filer + S3 gateway (object store)
+  #   * tikv-pd + tikv-server (JuiceFS metadata KV)
+  #   * juicefs mount on /mnt/juicefs (POSIX layer over the above)
+  #
+  # Macs in the fleet only run the JuiceFS *client* against luna's PD
+  # and S3. See systems/aarch64-darwin/<host>/default.nix.
+  #
+  # Secret seeding (one-time, out-of-band — sops-nix is not wired into
+  # nixos-config yet; secret files are managed manually until then):
+  #   sudo install -d -m 0700 -o seaweedfs -g seaweedfs /var/lib/seaweedfs
+  #   sudo install -m 0600 -o seaweedfs -g seaweedfs \
+  #     <(openssl rand -hex 32) /var/lib/seaweedfs/admin-secret
+  #   sudo install -d -m 0700 -o root -g root /var/lib/juicefs-secrets
+  #   echo -n 'admin' | sudo install -m 0600 /dev/stdin /var/lib/juicefs-secrets/access-key
+  #   sudo cp /var/lib/seaweedfs/admin-secret /var/lib/juicefs-secrets/secret-key
+  #   sudo chmod 0600 /var/lib/juicefs-secrets/*
+  services.seaweedfs = {
+    enable = true;
+    bindIP = "0.0.0.0"; # LAN-only; tighten when Tailscale is in place
+    cluster = {
+      masterPeers = [ "luna.local:9333" ];
+      dataCenter = "home";
+      rack = "luna";
+    };
+    master = {
+      enable = true;
+      defaultReplication = "000"; # single-host cluster — no redundancy
+    };
+    volume = {
+      enable = true;
+      maxVolumes = 100; # ~3 TB at 30 GB/volume; well within luna's free space
+    };
+    filer = {
+      enable = true;
+      mount.enable = false; # JuiceFS handles the POSIX mount, not weed
+    };
+    s3 = {
+      enable = true;
+      accessKey = "admin";
+      secretKeyFile = "/var/lib/seaweedfs/admin-secret";
+    };
+    openFirewall = true;
+  };
+
+  services.tikv = {
+    enable = true;
+    pd = {
+      enable = true;
+      name = "luna"; # used by initialCluster below
+      clientUrls = [ "http://0.0.0.0:2379" ];
+      peerUrls = [ "http://0.0.0.0:2380" ];
+      advertiseClientUrls = [ "http://luna.local:2379" ];
+      advertisePeerUrls = [ "http://luna.local:2380" ];
+      initialCluster = "luna=http://luna.local:2380";
+    };
+    server = {
+      enable = true;
+      addr = "0.0.0.0:20160";
+      advertiseAddr = "luna.local:20160";
+      statusAddr = "0.0.0.0:20180";
+      pdEndpoints = [ "luna.local:2379" ];
+    };
+    openFirewall = true;
+  };
+
+  services.juicefs = {
+    enable = true;
+    mounts.shared = {
+      metaUrl = "tikv://luna.local:2379/shared";
+      storageType = "s3";
+      bucket = "http://luna.local:8333/shared";
+      mountPoint = "/mnt/juicefs";
+      accessKeyFile = "/var/lib/juicefs-secrets/access-key";
+      secretKeyFile = "/var/lib/juicefs-secrets/secret-key";
+      formatOnFirstBoot = true;
+      cacheDir = "/var/cache/juicefs/shared";
+      cacheSize = 10240; # 10 GiB local read cache
+    };
+  };
+
   # luna shipped as NixOS 25.11 by the original installer; honor the
   # original stateVersion so per-user data files keep their existing
   # schema (the value should never change post-install per nixpkgs docs).
