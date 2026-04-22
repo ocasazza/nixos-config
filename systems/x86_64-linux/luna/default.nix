@@ -1053,14 +1053,14 @@ in
     enable = true;
     bindIP = "0.0.0.0"; # LAN-only; tighten when Tailscale is in place
     cluster = {
-      # Single-host deployment: empty peers list so SeaweedFS runs
-      # standalone. Previously `[ "luna.local:9333" ]` — but combined
-      # with `bindIP = "0.0.0.0"` the module resolved the peer list as
-      # `[ "0.0.0.0:9333", "luna.local:9333" ]` (even count), and
-      # seaweedfs master fatal-exits with "Only odd number of masters
-      # are supported". Scale out by adding real peers (3+) if/when we
-      # federate.
-      masterPeers = [ ];
+      # Single-host deployment: one master, pointed at loopback so
+      # SeaweedFS resolves exactly one peer (odd count required by
+      # Raft quorum). Earlier `[ "luna.local:9333" ]` combined with
+      # `bindIP = "0.0.0.0"` was resolved as two peers (even) and
+      # master fatal-exited. `[ ]` broke filer, which requires a
+      # non-empty master list. `localhost:9333` satisfies both.
+      # Scale to an odd N ≥ 3 when federating.
+      masterPeers = [ "localhost:9333" ];
       dataCenter = "home";
       rack = "luna";
     };
@@ -1071,10 +1071,12 @@ in
     volume = {
       enable = true;
       maxVolumes = 100; # ~3 TB at 30 GB/volume; well within luna's free space
+      port = 8081; # default 8080 collides with Open WebUI
     };
     filer = {
       enable = true;
       mount.enable = false; # JuiceFS handles the POSIX mount, not weed
+      metricsPort = 8890; # default 8889 collides with OTel collector Prom bridge
     };
     s3 = {
       enable = true;
