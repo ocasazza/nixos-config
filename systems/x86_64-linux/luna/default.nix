@@ -991,6 +991,12 @@ in
     openFirewall = true;
     masterKeyFile = config.sops.secrets.litellm-master-key.path;
 
+    # SQLite keystore for per-client virtual keys. Activates the
+    # /key/generate admin endpoint so we can mint per-client bearers
+    # (claude-code, opencode, hermes) backed by audit metadata. Model
+    # list stays static in nix config.
+    databaseUrl = "sqlite:////var/lib/litellm/keys.db";
+
     modelGroups = {
       # luna's vLLM coder — always-on anchor for plan/reduce/any
       # latency-sensitive step. Single deployment, weight 10.

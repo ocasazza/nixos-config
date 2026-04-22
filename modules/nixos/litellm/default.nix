@@ -108,6 +108,10 @@ let
     }
     // lib.optionalAttrs (renderedPassthroughEndpoints != [ ]) {
       pass_through_endpoints = renderedPassthroughEndpoints;
+    }
+    // lib.optionalAttrs (cfg.databaseUrl != null) {
+      database_url = cfg.databaseUrl;
+      store_model_in_db = false;
     };
   };
 
@@ -310,6 +314,22 @@ in
         they reference `config.local.litellm.endpoint`. Override here
         to point clients at a different deployment (e.g. a remote
         proxy, Tailscale-exposed luna, etc.).
+      '';
+    };
+
+    databaseUrl = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "sqlite:////var/lib/litellm/keys.db";
+      description = ''
+        Backing store for LiteLLM virtual keys, user metadata, and
+        per-key spend tracking. When null (default), virtual keys are
+        disabled and clients must authenticate with the master key.
+        Setting this to a SQLite or Postgres URL activates the
+        `POST /key/generate`, `/user/*`, `/key/*` admin endpoints.
+
+        `store_model_in_db` is forced to false — model_list stays
+        static from nix config, DB is only for auth metadata.
       '';
     };
 
