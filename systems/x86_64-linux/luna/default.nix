@@ -40,13 +40,16 @@ let
 in
 {
   imports = [
-    # disko spec: snapshot of luna's existing partitions on nvme1n1
-    # (system) + nvme0n1 (scratch btrfs) + sda/sdb (mdadm RAID1).
-    # See modules/nixos/disk-config.nix for layout details.
-    ../../../modules/nixos/disk-config.nix
     ../../../modules/shared
     ../../../modules/shared/cachix
   ];
+
+  # disko spec: snapshot of luna's existing partitions on nvme1n1
+  # (system) + nvme0n1 (scratch btrfs) + sda/sdb (mdadm RAID1).
+  # The module itself lives at `modules/nixos/disk-config/` and is
+  # auto-discovered by snowfall, but its config is gated behind this
+  # opt-in so no other NixOS host inherits luna's disk spec.
+  local.lunaDisk.enable = true;
 
   # NOTE: home-manager wiring is handled by snowfall via the snowfall
   # home at `homes/x86_64-linux/casazza@luna/default.nix`.
