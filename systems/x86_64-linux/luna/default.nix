@@ -325,10 +325,12 @@ in
       shell = pkgs.zsh;
       openssh.authorizedKeys.keys = keys;
 
-      # initialPassword fires only on first user creation. Set so we
-      # have a way in if SSH keys ever break — change with `passwd`
-      # after first login.
-      initialPassword = "changeme";
+      # No declarative password. `mutableUsers = true` leaves the live
+      # login password under `passwd` control; an `initialPassword`
+      # default would leak plaintext into /nix/store without taking
+      # effect on an already-provisioned box. Interactive password
+      # (if needed as SSH-key fallback) is set out-of-band via
+      # `passwd` on first login.
     };
 
     root = {
@@ -623,13 +625,17 @@ in
   # itself into the dashboard.
   #
   # After first deploy:
-  #   * Grafana UI → http://luna.local:3000  (admin / changeme)
+  #   * Grafana UI → http://luna.local:3000
+  #     admin password: `sops decrypt secrets/grafana-admin-password.yaml`
   #   * Import dashboards by ID: 1860 (node), 14574 (NVIDIA GPU)
   #   * vLLM panels: build from /metrics — no canonical dashboard yet.
   local.observability = {
     enable = true;
     openFirewall = true;
-    grafana.adminPassword = "changeme"; # set via UI on first login
+    # adminPasswordFile is wrapped as `$__file{...}` inside Grafana's
+    # config.ini by the observability module — Grafana re-reads the
+    # file at service start, so rotation = edit the sops yaml + switch.
+    grafana.adminPasswordFile = config.sops.secrets.grafana-admin-password.path;
   };
 
   # ── secrets (sops-nix) ───────────────────────────────────────────────
@@ -720,6 +726,20 @@ in
         key = "gfr_exo_auth_token";
         owner = "casazza";
         group = "users";
+        mode = "0400";
+      };
+
+      # Grafana admin password. Consumed by local.observability via
+      # `grafana.adminPasswordFile`, which the module wraps in a
+      # `$__file{...}` reference inside services.grafana.settings so
+      # the plaintext never lands in the Nix store. Owned by `grafana`
+      # because Grafana (running as that user) reads the file directly
+      # when expanding $__file{} on service start.
+      grafana-admin-password = {
+        sopsFile = ../../../secrets/grafana-admin-password.yaml;
+        key = "grafana_admin_password";
+        owner = "grafana";
+        group = "grafana";
         mode = "0400";
       };
     };
