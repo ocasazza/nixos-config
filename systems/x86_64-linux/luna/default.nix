@@ -749,7 +749,8 @@ in
   # Three pull-over-API source adapters (obsidian vault repo, Atlassian
   # Cloud, configurable GitHub repos) feeding one sink (Open WebUI
   # Knowledge API) through LangGraph graphs. Module at
-  # modules/nixos/ingest/, project at /home/casazza/ingest.
+  # modules/nixos/ingest/, project source under `projects/ingest/` in
+  # this repo (same tree the langgraph-server unit pins below).
   #
   # Tokens/emails come from sops-nix (see `sops.secrets.*` above).
   # The ingest module reads each via its *File option; sops-nix puts
@@ -757,7 +758,7 @@ in
   # 0400, group `ingest`).
   local.ingest = {
     enable = true;
-    projectDir = "/home/casazza/ingest";
+    projectDir = ../../../projects/ingest;
 
     sinks.openwebui = {
       url = "http://localhost:8080";
@@ -837,12 +838,15 @@ in
   # luna pushes to itself over loopback without an explicit override here.
   programs.claude-code.enable = true;
 
-  # Swarm (projects/swarm at ~/swarm — ad-hoc, not a systemd unit):
+  # Swarm auxiliary processes — LiteLLM + Phoenix still run out of
+  # `projects/swarm/scripts/*` under a manual `nix develop`; only the
+  # LangGraph Server half of swarm is a declarative systemd unit
+  # (see `local.langgraphServer` below).
   #   4000 — LiteLLM proxy (bound to luna's 10G NIC, enp3s0)
   #   4319 — Phoenix OTLP gRPC (non-default to dodge otelcol-contrib on 4317)
   #   6006 — Phoenix HTTP + UI
   #
-  # LiteLLM's start script (`~/swarm/scripts/start-litellm.sh`) derives
+  # LiteLLM's start script (`projects/swarm/scripts/start-litellm.sh`) derives
   # its bind address at startup from the 10G NIC (`enp3s0`, Aquantia
   # AQC113) via `ip -4 -br addr show dev enp3s0`. This keeps vLLM tensor
   # traffic and cross-host exo federation off the 1G WiFi/LAN link
@@ -875,16 +879,24 @@ in
   # because that's the one you actually point Studio at. ingest is
   # internal-only (pull-sync oneshots fire via timer, no UI), so leave
   # it loopback-local.
+  #
+  # Project sources live under `projects/<name>/` in this repo and are
+  # referenced here as relative nix paths. At build time Nix hashes the
+  # tree into `/nix/store/<hash>-<name>/`; the systemd unit's venv
+  # bootstrap runs `uv pip install --editable` against that store path,
+  # so every rebuild picks up pyproject / uv.lock bumps atomically.
+  # Add a project: drop it under `projects/<name>/` with a
+  # `langgraph.json` + `pyproject.toml`, then add an entry below.
   local.langgraphServer = {
     enable = true;
     projects = {
       swarm = {
-        projectDir = "/home/casazza/swarm";
+        projectDir = ../../../projects/swarm;
         port = 2024;
         openFirewall = true;
       };
       ingest = {
-        projectDir = "/home/casazza/ingest";
+        projectDir = ../../../projects/ingest;
         port = 2025;
         openFirewall = false;
       };
@@ -955,6 +967,24 @@ in
       advertiseAddr = "luna.local:20160";
       statusAddr = "0.0.0.0:20180";
       pdEndpoints = [ "luna.local:2379" ];
+      # CMake 4+ (current nixpkgs ships 4.1.x) removed compatibility with
+      # `cmake_minimum_required(VERSION <3.5)`. TiKV 8.5.0's bundled
+      # rocksdb-sys / grpcio-sys C++ deps still ship such CMakeLists, so
+      # the build fails with "Compatibility with CMake < 3.5 has been
+      # removed from CMake." Set CMAKE_POLICY_VERSION_MINIMUM=3.5 on the
+      # derivation to tell CMake to assume 3.5-era policies instead of
+      # erroring. The tikv package is pulled through the seaweedfs flake
+      # input directly (not via `pkgs.seaweedfs.tikv`) because snowfall
+      # wraps the tikv NixOS module with the seaweedfs flake's own
+      # `self.pkgs`, so local overlays on `pkgs.seaweedfs.tikv` never
+      # reach the module. Remove this override when TiKV (or its vendored
+      # rocksdb-sys / grpcio-sys) bumps cmake_minimum_required >= 3.5
+      # upstream.
+      package = inputs.seaweedfs.packages.${pkgs.stdenv.hostPlatform.system}.tikv.overrideAttrs (old: {
+        env = (old.env or { }) // {
+          CMAKE_POLICY_VERSION_MINIMUM = "3.5";
+        };
+      });
     };
     openFirewall = true;
   };

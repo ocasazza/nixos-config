@@ -1,0 +1,48 @@
+[project]
+name = "ingest"
+version = "0.2.0"
+description = "Declarative ingestion pipeline for personal + IT knowledge (obsidian + atlassian + github → Open WebUI)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  # LangGraph orchestration
+  "langgraph>=0.2.50",
+  "langgraph-cli[inmem]>=0.1.55",
+  "langchain>=0.3.7",
+  "langchain-openai>=0.2.10",
+  # Atlassian source adapter — covers Jira + Confluence in one client
+  "atlassian-python-api>=3.41.0",
+  # GitHub source adapter — covers the obsidian vault repo (via Contents API)
+  # AND arbitrary repos (issues, PRs, docs) for the dedicated github adapter.
+  "PyGithub>=2.5.0",
+  # Config / data
+  "pydantic>=2.9.2",
+  "pydantic-settings>=2.6.0",
+  "python-frontmatter>=1.1.0",
+  "pyyaml>=6.0.2",
+  # HTTP client for Open WebUI sink + GitHub Contents API (we go direct
+  # rather than through PyGithub for obsidian so we can drive conditional
+  # requests with If-Modified-Since — PyGithub's ContentFile does not
+  # surface ETag / Last-Modified headers.)
+  "httpx>=0.27.2",
+  # CLI
+  "typer>=0.13.0",
+  "rich>=13.9.4",
+  # Observability — same Phoenix wiring as ~/swarm
+  "openinference-instrumentation-langchain>=0.1.29",
+  "opentelemetry-sdk>=1.27.0",
+  "opentelemetry-exporter-otlp-proto-http>=1.27.0",
+]
+
+[project.scripts]
+ingest = "ingest.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingest"]
+
+[tool.uv]
+package = true

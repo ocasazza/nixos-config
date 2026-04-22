@@ -27,8 +27,8 @@
 #   local.langgraphServer = {
 #     enable = true;
 #     projects = {
-#       swarm  = { projectDir = "/home/casazza/swarm";  port = 2024; openFirewall = true; };
-#       ingest = { projectDir = "/home/casazza/ingest"; port = 2025; };
+#       swarm  = { projectDir = ../../../projects/swarm;  port = 2024; openFirewall = true; };
+#       ingest = { projectDir = ../../../projects/ingest; port = 2025; };
 #     };
 #   };
 #
@@ -123,7 +123,7 @@ let
           default = "sk-swarm-local";
           description = ''
             LiteLLM proxy master key. Matches `master_key` in
-            `~/swarm/litellm_config.yaml`. Exported as
+            `projects/swarm/litellm_config.yaml`. Exported as
             `OPENAI_API_KEY`. Not a real secret — LiteLLM is LAN-only
             — so literal string here is fine; switch to a *File
             option if you ever expose the proxy publicly.
