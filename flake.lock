@@ -1357,11 +1357,11 @@
         "nixpkgs": "nixpkgs_13"
       },
       "locked": {
-        "lastModified": 1776880059,
-        "narHash": "sha256-qvl0vDIjCtugUJYs2ojlgMLtH5Tg/qIp3aGveTg5PG8=",
+        "lastModified": 1776892310,
+        "narHash": "sha256-r2GxalrWASyzGh6cwUD/ZmpPERI141ZZG/kkCyZp47w=",
         "ref": "dev",
-        "rev": "6a85277b4848f926a91242eb3a6f29cd9800be33",
-        "revCount": 11094,
+        "rev": "bf2160b3360882ac495d4139a364dc573dd00b31",
+        "revCount": 11095,
         "type": "git",
         "url": "file:///Users/casazza/Repositories/schrodinger/opencode"
       },
