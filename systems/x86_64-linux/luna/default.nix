@@ -1053,7 +1053,14 @@ in
     enable = true;
     bindIP = "0.0.0.0"; # LAN-only; tighten when Tailscale is in place
     cluster = {
-      masterPeers = [ "luna.local:9333" ];
+      # Single-host deployment: empty peers list so SeaweedFS runs
+      # standalone. Previously `[ "luna.local:9333" ]` — but combined
+      # with `bindIP = "0.0.0.0"` the module resolved the peer list as
+      # `[ "0.0.0.0:9333", "luna.local:9333" ]` (even count), and
+      # seaweedfs master fatal-exits with "Only odd number of masters
+      # are supported". Scale out by adding real peers (3+) if/when we
+      # federate.
+      masterPeers = [ ];
       dataCenter = "home";
       rack = "luna";
     };
