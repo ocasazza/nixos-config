@@ -43,6 +43,16 @@ creation_rules:
       - age:
           - *admin_olive
           - *host_luna
+  # GFR exo federation: bearer token luna presents to the GFR-side
+  # authenticated reverse proxy that fronts exo on nodes 02/03. Same
+  # admin+host key group as the ingest secrets so luna can decrypt at
+  # activation and surface the value into LiteLLM's environment.
+  # Design spec: docs/design/gfr-exo-auth-proxy.md.
+  - path_regex: secrets/gfr-exo-auth-token\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
   # Legacy/unused: kept so an ad-hoc `sops secrets/ingest.env` still
   # encrypts under an admin key, even though luna now reads the four
   # per-token YAMLs above instead of a monolithic env file.

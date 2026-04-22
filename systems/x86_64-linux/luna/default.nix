@@ -698,6 +698,30 @@ in
         group = "ingest";
         mode = "0400";
       };
+
+      # Bearer token luna presents to the GFR-side authenticated reverse
+      # proxy that fronts exo on nodes 02/03. Consumed by the LiteLLM
+      # proxy (`~/swarm/litellm_config.yaml`) as
+      # `api_key: os.environ/GFR_EXO_AUTH_TOKEN` for the two GFR-exo
+      # entries in the `coder` model group. Owned by `casazza` (not
+      # `ingest`) because LiteLLM is launched under the login user from
+      # `~/swarm/scripts/start-litellm.sh` for now — follow-up: promote
+      # to a systemd unit with an EnvironmentFile pointing at
+      # /run/secrets/gfr-exo-auth-token so the env-var plumbing stops
+      # living in the wrapper script.
+      #
+      # Ciphertext ships with placeholder `REPLACE_ME_WITH_REAL_TOKEN`;
+      # real value drops in via
+      #   sops edit secrets/gfr-exo-auth-token.yaml
+      # from a host holding the admin age key, once the GFR-side proxy
+      # (see docs/design/gfr-exo-auth-proxy.md) is deployed.
+      gfr-exo-auth-token = {
+        sopsFile = ../../../secrets/gfr-exo-auth-token.yaml;
+        key = "gfr_exo_auth_token";
+        owner = "casazza";
+        group = "users";
+        mode = "0400";
+      };
     };
   };
 
