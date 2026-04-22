@@ -231,7 +231,7 @@ in
     # 5631b42's pre-lock-bump revert.
     telemetry = {
       enable = true;
-      endpoint = "http://luna.local:6006";
+      endpoint = "http://luna:6006";
     };
     managedConfig = {
       share = "disabled";
