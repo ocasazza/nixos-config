@@ -250,6 +250,46 @@ in
     fi
   '';
 
+  # ── shared JuiceFS client (talks to luna's TiKV + S3) ────────────────
+  # Every Mac in the fleet mounts the shared filesystem at /Volumes/juicefs
+  # so writes from any host land in luna's SeaweedFS object store.
+  #
+  # Off-LAN behavior: when luna.local is unreachable the launchd mount
+  # daemon retries (KeepAlive=true). The mount-point exists but is empty
+  # until the host is back on the home network or Tailscale (TBD).
+  #
+  # Secret seeding (one-time, per-Mac, out-of-band):
+  #   sudo install -d -m 0700 -o root -g wheel /var/lib/juicefs-secrets
+  #   echo -n 'admin' | sudo install -m 0600 /dev/stdin /var/lib/juicefs-secrets/access-key
+  #   sudo install -m 0600 /dev/stdin /var/lib/juicefs-secrets/secret-key  # paste luna's seaweedfs admin secret
+  #
+  # macFUSE: nix-homebrew is currently disabled in this flake so the
+  # cask install path is opted out via requireNixHomebrew=false. User
+  # installs macFUSE once-per-Mac:
+  #   brew install --cask macfuse
+  # then approves the kext in System Settings → Privacy & Security and
+  # reboots. The activation script prints a reminder until the kext is
+  # detected at /Library/Filesystems/macfuse.fs.
+  services.macfuse = {
+    enable = true;
+    requireNixHomebrew = false;
+  };
+
+  services.juicefs = {
+    enable = true;
+    mounts.shared = {
+      metaUrl = "tikv://luna.local:2379/shared";
+      storageType = "s3";
+      bucket = "http://luna.local:8333/shared";
+      mountPoint = "/Volumes/juicefs";
+      accessKeyFile = "/var/lib/juicefs-secrets/access-key";
+      secretKeyFile = "/var/lib/juicefs-secrets/secret-key";
+      formatOnFirstBoot = false; # luna formats; clients only mount
+      cacheDir = "/var/cache/juicefs/shared";
+      cacheSize = 5120; # 5 GiB local read cache per Mac
+    };
+  };
+
   # Tiling window manager (no SIP disable needed)
   services.aerospace = {
     enable = true;

@@ -84,6 +84,15 @@
       url = "git+file:///Users/casazza/Repositories/ocasazza/obsidian";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Shared SeaweedFS + JuiceFS + TiKV + macFUSE modules. Same flake is
+    # consumed by ~/Repositories/schrodinger/git-fleet-runner so the
+    # corp cluster (gfr-osx26-02/03/04) and the personal cluster (luna +
+    # Macs) share one source of truth for the storage stack.
+    seaweedfs = {
+      url = "git+ssh://git@github.com/schrodinger/seaweedfs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -126,6 +135,10 @@
         (_final: prev: {
           claude-code = prev.callPackage ./packages/claude-code { };
         })
+        # Expose pkgs.tikv + pkgs.tikv-pd to NixOS systems (Linux-only;
+        # the overlay is a no-op on darwin since meta.platforms gates
+        # the packages out).
+        inputs.seaweedfs.overlays.default
       ];
 
       # ── Darwin systems ──────────────────────────────────────────────────
@@ -167,6 +180,10 @@
           };
         }
         inputs.git-fleet-runner.darwinModules.autopkgserver
+        # Shared storage stack (matches gfr's wiring of the same modules)
+        inputs.seaweedfs.darwinModules.seaweedfs
+        inputs.seaweedfs.darwinModules.juicefs
+        inputs.seaweedfs.darwinModules.macfuse
         # Pass specialArgs that existing modules expect
         (
           { ... }:
@@ -194,6 +211,11 @@
       systems.modules.nixos = [
         inputs.disko.nixosModules.disko
         inputs.home-manager.nixosModules.home-manager
+        # Shared storage stack — luna runs the full stack (seaweedfs +
+        # tikv); macs are JuiceFS clients only via the darwin modules.
+        inputs.seaweedfs.nixosModules.seaweedfs
+        inputs.seaweedfs.nixosModules.juicefs
+        inputs.seaweedfs.nixosModules.tikv
         {
           home-manager = {
             extraSpecialArgs = {
