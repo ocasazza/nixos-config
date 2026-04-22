@@ -995,6 +995,21 @@ in
     requirePassFile = config.sops.secrets.redis-seaweedfs-password.path;
   };
 
+  # TiKV via OCI container (parallel-track, not in the hot JuiceFS path).
+  # JuiceFS metadata lives in Redis above; this runs pingcap/pd +
+  # pingcap/tikv from their upstream OCI images so we keep a working
+  # TiKV cluster around for eval / future apps without fighting the
+  # source-build breakage on the nixpkgs tikv derivation (TiKV 8.5.0's
+  # vendored rocksdb-sys / grpcio-sys C++ tree doesn't build under the
+  # current gcc 15 / cmake 4.1 stdenv). PD publishes on 127.0.0.1:2379
+  # and TiKV on 127.0.0.1:20160 by default — loopback-only, because
+  # the module doesn't ship TLS+auth. Don't flip openFirewall without
+  # wiring those in first.
+  local.tikvOci = {
+    enable = true;
+    # openFirewall left at default (false) — parallel-track eval install.
+  };
+
   services.juicefs = {
     enable = true;
     mounts.shared = {
