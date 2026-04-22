@@ -157,10 +157,23 @@ let
 
     # uv pip install is a near-instant no-op when the version is already
     # satisfied, so run it unconditionally to pick up bumps.
+    #
+    # prisma + prisma_binaries are only needed when databaseUrl is set
+    # (virtual-key SQLite/Postgres path). Always installing them keeps
+    # the venv's shape identical between DB-on / DB-off configurations
+    # — no re-bootstrap churn when the flag is flipped.
     ${cfg.uv}/bin/uv pip install --python "$VENV/bin/python" \
       --quiet \
       "litellm[proxy]==$LITELLM_VERSION" \
-      "setuptools"
+      "setuptools" \
+      "prisma"
+
+    # Prisma needs its binary engines fetched once into the venv on
+    # first boot (and after litellm version bumps recreate the venv).
+    # `prisma py fetch` is idempotent; safe to run on every start.
+    if [ -n "''${DATABASE_URL:-}" ] || grep -q 'database_url' "${toString effectiveConfigFile}"; then
+      "$VENV/bin/prisma" py fetch --python="$VENV/bin/python" 2>&1 || true
+    fi
 
     echo "$LITELLM_VERSION" > "$VERSION_STAMP"
 
