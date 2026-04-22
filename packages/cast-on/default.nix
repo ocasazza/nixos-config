@@ -175,25 +175,31 @@ writeShellApplication {
       echo "$h"
     }
 
-    is_darwin_attr() {
-      nix eval --raw ".#darwinConfigurations.\"$1\".config.system.build.toplevel.outPath" \
-        &>/dev/null
-    }
-    is_nixos_attr() {
-      nix eval --raw ".#nixosConfigurations.\"$1\".config.system.build.toplevel.outPath" \
-        &>/dev/null
-    }
-
-    # ── 3. Build all closures locally first ────────────────────────────
     # NixOS hosts (luna and friends) get the darwin-only inputs stubbed
-    # out so we don't pull private schrodinger repos from a Linux box.
-    # See modules/_stubs/empty/flake.nix.
+    # out so we don't pull private schrodinger repos from a Linux box
+    # (and from a Mac driving fleet deploys, so `is_nixos_attr` below
+    # doesn't trip on a dead darwin-only input). See
+    # modules/_stubs/empty/flake.nix.
     NIXOS_OVERRIDES=(
       --override-input opencode          path:./modules/_stubs/empty
       --override-input hermes            path:./modules/_stubs/empty
       --override-input git-fleet         path:./modules/_stubs/empty
       --override-input git-fleet-runner  path:./modules/_stubs/empty
     )
+
+    is_darwin_attr() {
+      nix eval --raw ".#darwinConfigurations.\"$1\".config.system.build.toplevel.outPath" \
+        &>/dev/null
+    }
+    is_nixos_attr() {
+      # Apply NIXOS_OVERRIDES so darwin-private inputs don't fail the
+      # probe when cast-on is driven from a Mac evaluating a nixos host.
+      nix eval --raw ".#nixosConfigurations.\"$1\".config.system.build.toplevel.outPath" \
+        "''${NIXOS_OVERRIDES[@]}" \
+        &>/dev/null
+    }
+
+    # ── 3. Build all closures locally first ────────────────────────────
 
     echo "==> Building closures"
     for h in "''${HOSTS[@]}"; do
