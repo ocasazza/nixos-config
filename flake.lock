@@ -1457,7 +1457,8 @@
         "obsidian-vault": "obsidian-vault",
         "opencode": "opencode",
         "seaweedfs": "seaweedfs",
-        "snowfall-lib": "snowfall-lib_3"
+        "snowfall-lib": "snowfall-lib_3",
+        "sops-nix": "sops-nix_3"
       }
     },
     "rust-overlay": {
@@ -1603,6 +1604,26 @@
         "owner": "Mic92",
         "repo": "sops-nix",
         "rev": "d1ff3b1034d5bab5d7d8086a7803c5a5968cd784",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "type": "github"
+      }
+    },
+    "sops-nix_3": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1776771786,
+        "narHash": "sha256-DRFGPfFV6hbrfO9a1PH1FkCi7qR5FgjSqsQGGvk1rdI=",
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "rev": "bef289e2248991f7afeb95965c82fbcd8ff72598",
         "type": "github"
       },
       "original": {

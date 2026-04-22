@@ -33,11 +33,12 @@ creation_rules:
     age: *admin_olive
   - path_regex: secrets/fleet\.env$
     age: *admin_olive
-  # Ingestion-pipeline secrets consumed by luna's `local.ingest`.
-  # Encrypted to an admin key (for editing from darwin via `sops edit`)
-  # and to luna's host key (for in-place decryption at nixos-rebuild
-  # activation, no private-key copy).
-  - path_regex: secrets/(openwebui-api-token|atlassian-email|atlassian-api-token|github-api-token)\.yaml$
+  # Ingestion-pipeline secrets consumed by luna's `local.ingest`, plus
+  # Open WebUI's declarative admin-seed/env secrets consumed by
+  # `local.openWebUI`. Encrypted to an admin key (for editing from darwin
+  # via `sops edit`) and to luna's host key (for in-place decryption at
+  # nixos-rebuild activation, no private-key copy).
+  - path_regex: secrets/(openwebui-api-token|openwebui-admin-password|openwebui-secret-key|atlassian-email|atlassian-api-token|github-api-token)\.yaml$
     key_groups:
       - age:
           - *admin_olive

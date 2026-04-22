@@ -481,14 +481,35 @@ in
   # URLs auto-derive from `local.vllm.services` above, so adding an
   # embedding/chat service later wires it into the UI on next switch.
   #
-  # First boot:
-  #   1. nixos-rebuild switch
-  #   2. open http://luna.local:8080  → first signup becomes admin
-  #   3. set `local.openWebUI.signupEnabled = false;` and rebuild to
-  #      seal the instance
+  # Fully declarative wiring:
+  #   * Admin account seeded from `secrets/openwebui-admin-password.yaml`
+  #     via upstream's `WEBUI_ADMIN_EMAIL` / `WEBUI_ADMIN_PASSWORD` env
+  #     vars (the module renders a sops-backed env file and hands it to
+  #     `services.open-webui.environmentFile`).
+  #   * JWT signing pinned to the sops-held `WEBUI_SECRET_KEY` so tokens
+  #     survive rebuilds.
+  #   * Ingest-pipeline API token pinned into the admin's `api_key` row
+  #     by a post-start oneshot. Upstream has no `DEFAULT_USER_API_KEY`
+  #     env var, so this is declarative-by-wrapping-imperative — every
+  #     rebuild UPSERTs the same row into sqlite. See the module's
+  #     `seedScript` and the commit introducing it for the rationale.
+  #
+  # Verify (after rebuild):
+  #   curl -sS http://luna.local:8080/health
+  #   curl -sS \
+  #     -H "Authorization: Bearer $(sudo cat /run/secrets/openwebui-api-token)" \
+  #     http://luna.local:8080/api/v1/knowledge/
   local.openWebUI = {
     enable = true;
     openFirewall = true;
+
+    admin = {
+      email = "admin@luna.local";
+      name = "Luna Admin";
+      passwordFile = config.sops.secrets.openwebui-admin-password.path;
+      secretKeyFile = config.sops.secrets.openwebui-secret-key.path;
+      apiKeyFile = config.sops.secrets.openwebui-api-token.path;
+    };
   };
 
   # ── MCPO (MCP-to-OpenAPI proxy for Open WebUI) ───────────────────────
@@ -574,8 +595,32 @@ in
       openwebui-api-token = {
         sopsFile = ../../../secrets/openwebui-api-token.yaml;
         key = "openwebui_api_token";
+        # Readable by the ingest service (which POSTs it as a bearer
+        # token) and by root (which the open-webui-seed-api-key unit
+        # runs as). DynamicUser=true on open-webui itself means we can't
+        # simply own the file as `open-webui`; we route the same
+        # plaintext into the seeder (runs as root) and the ingest sink
+        # via distinct code paths instead.
         owner = "ingest";
         group = "ingest";
+        mode = "0400";
+      };
+      openwebui-admin-password = {
+        sopsFile = ../../../secrets/openwebui-admin-password.yaml;
+        key = "openwebui_admin_password";
+        # Referenced by sops.templates."open-webui.env" via the
+        # placeholder mechanism; the rendered env file is the thing
+        # systemd loads, not this file directly, so owner/mode here
+        # is just the at-rest permission on /run/secrets/.
+        owner = "root";
+        group = "root";
+        mode = "0400";
+      };
+      openwebui-secret-key = {
+        sopsFile = ../../../secrets/openwebui-secret-key.yaml;
+        key = "openwebui_secret_key";
+        owner = "root";
+        group = "root";
         mode = "0400";
       };
       atlassian-email = {
