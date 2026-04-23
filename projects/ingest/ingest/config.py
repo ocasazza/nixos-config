@@ -73,18 +73,6 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
-        # Treat env value `""` as `None`, so pydantic-settings won't try
-        # to parse `""` as JSON for complex (list/dict) fields. The
-        # NixOS ingest module emits `""` for empty list-typed env vars
-        # (e.g. INGEST_ATLASSIAN_JIRA_PROJECTS); without this, the
-        # EnvSettingsSource raises SettingsError before our
-        # `_parse_json_field` mode="before" validator gets a chance.
-        # With it, the env value reaches the validator as None → falls
-        # through to the field's default_factory=list. See
-        # https://github.com/pydantic/pydantic-settings/issues/170 and
-        # the failure mode documented in
-        # ~/.config/nixos-config/todo.md "Stage 8a SettingsError".
-        env_parse_none_str="",
     )
 
     # ── paths ────────────────────────────────────────────────────────

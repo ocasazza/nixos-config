@@ -360,8 +360,15 @@ let
           export INGEST_ATLASSIAN_API_TOKEN="$(cat ${src.tokenFile})"
         ''}
         export INGEST_ATLASSIAN_BASE_URL="${src.baseUrl}"
-        export INGEST_ATLASSIAN_JIRA_PROJECTS="${concatStringsSep "," src.jiraProjects}"
-        export INGEST_ATLASSIAN_CONFLUENCE_SPACES="${concatStringsSep "," src.confluenceSpaces}"
+        # Emit list-typed env vars as JSON arrays, not CSV — pydantic-settings'
+        # EnvSettingsSource auto-parses complex (list/dict) typed fields as JSON
+        # in `prepare_field_value`, which runs BEFORE any `mode="before"` field
+        # validator. A CSV like "OPS,IT" or a bare word like "SYSMGR" raises
+        # SettingsError before our `_parse_json_field` validator gets the chance
+        # to do its CSV fallback. JSON arrays parse cleanly. (Empty list also
+        # works — `[]` is valid JSON.) See ingest config.py validator.
+        export INGEST_ATLASSIAN_JIRA_PROJECTS='${builtins.toJSON src.jiraProjects}'
+        export INGEST_ATLASSIAN_CONFLUENCE_SPACES='${builtins.toJSON src.confluenceSpaces}'
         ${venvBootstrap}
         exec ${pkgs.bash}/bin/bash ${toString cfg.projectDir}/scripts/atlassian-sync.sh
       ''
