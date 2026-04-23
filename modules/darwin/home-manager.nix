@@ -22,10 +22,14 @@
     shell = pkgs.zsh;
   };
 
-  # Homebrew is managed by Fleet MDM rather than nix-darwin in this
-  # environment, but we still declare the surface so `nix-homebrew`
-  # knows what to expect if/when it's enabled.
+  # Homebrew is partly Fleet MDM-managed; nix-darwin layers on top to
+  # install specific casks we depend on (currently just macFUSE for the
+  # shared JuiceFS mount). `cleanup = "none"` is deliberate — we do NOT
+  # want nix-darwin to remove casks/brews that Fleet or the user
+  # installed imperatively. Flip to "uninstall"/"zap" only after the
+  # full declared list is audited against every Mac's imperative state.
   homebrew = {
+    enable = true;
     prefix = "/opt/homebrew";
     global = {
       brewfile = true;
@@ -34,15 +38,21 @@
     onActivation = {
       autoUpdate = false;
       upgrade = false;
-      cleanup = "zap";
+      cleanup = "none";
     };
     taps = [
       "vjeantet/tap"
     ];
     casks = [
       "ghostty"
-      "meetingbar"
       "hiddenbar"
+      # macFUSE kernel extension — required by services.juicefs on
+      # darwin. Installing this cask still requires a one-time kext
+      # approval in System Settings → Privacy & Security and a reboot
+      # before the FUSE mount utility becomes usable (`juicefs` otherwise
+      # errors with `fuse: no FUSE mount utility found`).
+      "macfuse"
+      "meetingbar"
     ];
     brews = [
       "vjeantet/tap/alerter"

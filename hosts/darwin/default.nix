@@ -337,7 +337,7 @@ in
     fi
   '';
 
-  # ── shared JuiceFS client (talks to luna's TiKV + S3) ────────────────
+  # ── shared JuiceFS client (talks to luna's Redis + S3) ───────────────
   # Every Mac in the fleet mounts the shared filesystem at /Volumes/juicefs
   # so writes from any host land in luna's SeaweedFS object store.
   #
@@ -345,10 +345,12 @@ in
   # daemon retries (KeepAlive=true). The mount-point exists but is empty
   # until the host is back on the home network or Tailscale (TBD).
   #
-  # Secret seeding (one-time, per-Mac, out-of-band):
+  # Secret seeding (one-time, per-Mac, out-of-band).
+  # `install` on macOS rejects /dev/stdin as source; use tee + chmod:
   #   sudo install -d -m 0700 -o root -g wheel /var/lib/juicefs-secrets
-  #   echo -n 'admin' | sudo install -m 0600 /dev/stdin /var/lib/juicefs-secrets/access-key
-  #   sudo install -m 0600 /dev/stdin /var/lib/juicefs-secrets/secret-key  # paste luna's seaweedfs admin secret
+  #   echo -n 'admin' | sudo tee /var/lib/juicefs-secrets/access-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/access-key
+  #   sudo tee /var/lib/juicefs-secrets/secret-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/secret-key  # paste luna's seaweedfs admin secret (/var/lib/seaweedfs/admin-secret on luna)
+  #   sudo tee /var/lib/juicefs-secrets/meta-password >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/meta-password  # paste luna's redis-seaweedfs password (sops decrypts to /run/secrets/redis-seaweedfs-password on luna)
   #
   # macFUSE: nix-homebrew is currently disabled in this flake so the
   # cask install path is opted out via requireNixHomebrew=false. User
@@ -365,7 +367,13 @@ in
   services.juicefs = {
     enable = true;
     mounts.shared = {
-      metaUrl = "tikv://luna.local:2379/shared";
+      # Migrated from `tikv://luna.local:2379/shared` when luna's
+      # JuiceFS metadata backend flipped to Redis (TiKV 8.5.0 didn't
+      # build under gcc 15 / cmake 4.1, see luna config). luna's redis
+      # is now LAN-bound on 6379 with mandatory auth — keep this URL
+      # credential-free; metaPasswordFile injects it as META_PASSWORD.
+      metaUrl = "redis://luna.local:6379/0";
+      metaPasswordFile = "/var/lib/juicefs-secrets/meta-password";
       storageType = "s3";
       bucket = "http://luna.local:8333/shared";
       mountPoint = "/Volumes/juicefs";

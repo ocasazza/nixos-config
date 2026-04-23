@@ -1243,14 +1243,19 @@ in
     enable = true;
     bindIP = "0.0.0.0"; # LAN-only; tighten when Tailscale is in place
     cluster = {
-      # Single-host deployment: one master, pointed at loopback so
-      # SeaweedFS resolves exactly one peer (odd count required by
-      # Raft quorum). Earlier `[ "luna.local:9333" ]` combined with
-      # `bindIP = "0.0.0.0"` was resolved as two peers (even) and
-      # master fatal-exited. `[ ]` broke filer, which requires a
-      # non-empty master list. `localhost:9333` satisfies both.
-      # Scale to an odd N ≥ 3 when federating.
-      masterPeers = [ "localhost:9333" ];
+      # Single-host deployment: peer entry must STRING-MATCH the
+      # self-bind (`-ip:-port` = `0.0.0.0:9333`) so SeaweedFS' peer
+      # dedup collapses them to 1 (odd, satisfies Raft quorum).
+      # Past attempts and why they failed:
+      #   * `[ "luna.local:9333" ]` — string ≠ `0.0.0.0:9333`, counted
+      #     as 2 peers, master fatal-exited.
+      #   * `[ ]` — master ok, but filer requires ≥1 master peer.
+      #   * `[ "localhost:9333" ]` — also string ≠ `0.0.0.0:9333`,
+      #     same 2-peer crash (an earlier attempt mistakenly believed
+      #     it deduped).
+      # `[ "0.0.0.0:9333" ]` matches the bind literal, dedupes to 1.
+      # Scale to an odd N ≥ 3 (with real hostnames) when federating.
+      masterPeers = [ "0.0.0.0:9333" ];
       dataCenter = "home";
       rack = "luna";
     };
@@ -1262,10 +1267,16 @@ in
       enable = true;
       maxVolumes = 100; # ~3 TB at 30 GB/volume; well within luna's free space
       port = 8081; # default 8080 collides with Open WebUI
+      metricsPort = 8082; # default 8081 collides with the new -port above
     };
     filer = {
       enable = true;
       mount.enable = false; # JuiceFS handles the POSIX mount, not weed
+      port = 8887; # default 8888 collides with otelcol-contrib self-metrics
+      # `weed s3 -filer=$BIND_IP:$port` derives the filer gRPC port as
+      # `port + 10000` internally — must match filer's actual grpcPort
+      # below, otherwise S3 hangs trying to dial the wrong gRPC port.
+      grpcPort = 18887;
       metricsPort = 8890; # default 8889 collides with OTel collector Prom bridge
     };
     s3 = {
@@ -1276,20 +1287,45 @@ in
     openFirewall = true;
   };
 
-  # Redis — JuiceFS metadata KV. Single instance on loopback only.
-  # JuiceFS connects via `redis://:$META_PASSWORD@127.0.0.1:6379/0`;
-  # `metaPasswordFile` below injects the password into the env at
-  # unit-start without landing it in /nix/store. RDB snapshotting is
-  # on by default (services.redis.servers.<name>.save = default), so
-  # a luna reboot doesn't lose the metadata index.
+  # Materialize AWS_SECRET_ACCESS_KEY into the S3 gateway's environment.
+  # The upstream seaweedfs module intentionally omits this when
+  # `secretKeyFile != null` (see comment at the module's s3 script:
+  # "gfr relies on a separate mechanism to materialize the env var"),
+  # so without this drop-in the gateway boots without a usable secret
+  # and every authenticated request returns InvalidAccessKeyId.
+  systemd.services.seaweedfs-s3.serviceConfig = {
+    EnvironmentFile = "-/run/seaweedfs-s3.env";
+    ExecStartPre = [
+      ("+" + (pkgs.writeShellScript "seaweedfs-s3-render-env" ''
+        set -eu
+        umask 077
+        printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$(cat /var/lib/seaweedfs/admin-secret)" > /run/seaweedfs-s3.env
+        chown seaweedfs:seaweedfs /run/seaweedfs-s3.env
+      ''))
+    ];
+  };
+
+  # Redis — JuiceFS metadata KV. LAN-exposed so the Mac fleet's
+  # JuiceFS clients can reach this metadata KV. Auth is mandatory
+  # (`requirePassFile` below) — the password is the only thing
+  # standing between any LAN host and the metadata store. Tighten
+  # to a Tailscale-only bind when that mesh is in place.
+  #
+  # IPv4 + IPv6: macOS's mDNS resolves `luna.local` to both A and
+  # AAAA records; Go's Redis client often picks the IPv6 link-local
+  # first, so redis must also accept on `::` or Mac clients stall
+  # on i/o timeout before retrying IPv4.
+  #
+  # JuiceFS on luna connects via `redis://:$META_PASSWORD@127.0.0.1:6379/0`
+  # (loopback still works after flipping bind to dual-stack).
+  # RDB snapshotting is on by default (services.redis.servers.<name>.save
+  # = default), so a luna reboot doesn't lose the metadata index.
   services.redis.servers.seaweedfs = {
     enable = true;
-    bind = "127.0.0.1"; # loopback-only; no LAN/10G NIC exposure
+    bind = "0.0.0.0 ::";
     port = 6379;
-    # Auth required even on loopback — matches "Redis everywhere"
-    # direction where any future federation (Tailscale, WireGuard,
-    # etc.) already has credentials in place.
     requirePassFile = config.sops.secrets.redis-seaweedfs-password.path;
+    openFirewall = true;
   };
 
   # TiKV via OCI container (parallel-track, not in the hot JuiceFS path).
