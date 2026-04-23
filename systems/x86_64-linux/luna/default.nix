@@ -143,9 +143,6 @@ in
   services = {
     dbus.enable = true;
     openssh.enable = true;
-    # Open SSH port (22) for remote builders and SSH access.
-    # Luna acts as a remote builder for darwin hosts and needs to be reachable.
-    networking.firewall.allowedTCPPorts = [ 22 ];
     gnome.gnome-keyring.enable = true;
     hardware.bolt.enable = true;
     # Avahi/mDNS: publish luna as `luna.local` on the LAN so any host
@@ -1575,9 +1572,16 @@ in
     # etc.) already has credentials in place.
     requirePassFile = config.sops.secrets.redis-seaweedfs-password.path;
   };
-  # `services.redis.servers.<name>` doesn't have an `openFirewall`
-  # option; open :6379 manually so Macs in the fleet can reach it.
-  networking.firewall.allowedTCPPorts = [ 6379 ];
+  # Top-level firewall opens. Aggregated here because nix's module
+  # system would otherwise reject duplicate `allowedTCPPorts` lists
+  # if we sprinkled them across the file.
+  #   * 22  — SSH (remote-builder access from darwin hosts)
+  #   * 6379 — Redis (JuiceFS metadata KV; `services.redis.servers.<name>`
+  #             has no `openFirewall` option)
+  networking.firewall.allowedTCPPorts = [
+    22
+    6379
+  ];
 
   # TiKV via OCI container (parallel-track, not in the hot JuiceFS path).
   # JuiceFS metadata lives in Redis above; this runs pingcap/pd +
