@@ -98,7 +98,7 @@ let
     };
     litellm_settings = {
       drop_params = true;
-      set_verbose = true;
+      set_verbose = false;
     }
     // lib.optionalAttrs cfg.metrics.otelCallbacks {
       success_callback = [ "otel" ];
@@ -106,7 +106,6 @@ let
     };
     environment_variables = {
       OTEL_SERVICE_NAME = "litellm";
-      LITELLM_LOG = "DEBUG";
     };
     general_settings = {
       master_key = "os.environ/LITELLM_MASTER_KEY";

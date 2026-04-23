@@ -1202,17 +1202,21 @@ in
 
     # /vertex/* → vertex-proxy. Clients keep their apiKeyHelper
     # (gcloud id-token); LiteLLM forwards the bearer untouched.
+    #
+    # IMPORTANT: vertex-proxy.sdgr.app is corp-VPN-gated (only
+    # reachable from inside Schrodinger's AppGate SDP tunnel).
+    # Macs route to it via utun5 (the AppGate tunnel); luna goes
+    # over the public internet and gets 403'd by the corp firewall.
+    # This pass-through endpoint will only work once luna also joins
+    # the AppGate VPN \u2014 see todo.md for the SDP-on-luna plan.
+    # Until then, claude-code from darwin hosts uses vertex.enable
+    # = true (direct to vertex-proxy via the Mac's VPN tunnel)
+    # rather than routing through this LiteLLM endpoint.
     passthroughEndpoints.vertex = {
       path = "/vertex";
       target = "https://vertex-proxy.sdgr.app";
       forwardHeaders = true;
     };
-
-    # TODO(debug): remove after diagnosing why /vertex passthrough
-    # forwards the wrong Authorization header to vertex-proxy. Sets
-    # LITELLM_LOG=DEBUG in the container env so verbose request logs
-    # show what's actually being sent upstream.
-    extraEnv.LITELLM_LOG = "DEBUG";
 
     # Router-level model name aliases. Lets clients reference Anthropic
     # upstream model ids directly (the ones models.dev publishes and
