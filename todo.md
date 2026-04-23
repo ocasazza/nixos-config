@@ -148,6 +148,65 @@ Trade: extra hop (Mac → NFS → luna → JuiceFS → SeaweedFS) vs. direct
   JuiceFS. So this section is genuinely independent of the main
   ingest effort and can stay parked until a reboot is convenient.
 
+## Cloud-claude routing through luna's LiteLLM — parked
+
+**Status (2026-04-23):** parked until luna joins the corp network
+(physically on-prem, dropping the need for AppGate VPN).
+
+**What's already in place** (kept ready for activation):
+
+- `local.litellm.passthroughEndpoints.vertex` on luna →
+  `https://vertex-proxy.sdgr.app` with `forwardHeaders = true` and
+  `includeSubpath = true`. Once luna can reach vertex-proxy, this
+  endpoint plus virtual-key auth (`x-litellm-api-key` + forwarded
+  `Authorization: Bearer <gcloud-id-token>`) gives Phoenix
+  per-host attribution for cloud claude calls.
+- `local.litellm.routerSettings.modelGroupAlias` populated with
+  every Anthropic model id models.dev publishes
+  (`claude-{opus,sonnet,haiku}-4-{5,6,7}`) → all alias to
+  `coder-cloud-claude` group. Lets clients reference upstream
+  model ids without polluting `modelGroups`.
+- `dev` team's `models = [...]` allowlist gates on the alias names
+  too (LiteLLM enforces team ACL on the raw incoming `model:`
+  value, BEFORE alias rewrite). Both layers are ready.
+- Per-host virtual keys (`litellm-key-claude-code-darwin`,
+  `litellm-key-opencode-darwin`) are minted on luna and
+  sops-encrypted into nixos-config. The
+  `programs.claude-code.litellm.cloudPassthrough` toggle on the
+  darwin module flips between `vertex.enable=true` (current,
+  direct vertex-proxy via Mac VPN tunnel) and the router-routed
+  path. Today every darwin host runs vertex-direct
+  (`programs.claude-code.vertex.enable = true`) because luna
+  can't reach vertex-proxy.
+
+**What was investigated and rejected:**
+
+1. AppGate SDP on luna (the Linux headless client). Setup is real
+   and a working derivation lives in `git reflog | grep
+appgate-sdp` (commit `4ed9e2e`, deleted from `feat/appgate-sdp-luna`
+   branch on 2026-04-23). Blocker: the corp profile bundle in
+   `git-fleet/secrets/.env.prod` is bound to Okta SSO with MFA;
+   headless Linux can't complete the interactive login. Would
+   require IT to provision a service-account IdP on the AppGate
+   Controller for headless servers.
+2. SOCKS / SSH tunnel from luna through one Mac. Works but
+   operationally fragile (Mac must stay up + Okta-logged-in).
+
+**Activation steps (when luna goes on-prem):**
+
+1. Confirm luna can reach `vertex-proxy.sdgr.app` (`curl
+https://vertex-proxy.sdgr.app/` should not be 403'd at the
+   network layer — auth-related 401/403 with a real id-token is
+   expected and tolerated).
+2. Flip `programs.claude-code.vertex.enable = false` and
+   `programs.claude-code.litellm.cloudPassthrough = true` in
+   `hosts/darwin/default.nix`. Set `litellm.endpoint =
+"http://luna:4000"` (already configured).
+3. nh switch every darwin host. Smoke-test:
+   `claude -p --model claude-opus-4-7 "say OK"`.
+4. Verify Phoenix dashboard shows per-host virtual-key attribution
+   for the resulting span.
+
 ---
 
 ## Stage 8 — Atlassian ingest (cme + langgraph throttling)
@@ -189,7 +248,7 @@ for all three sources. Pending `nixos-rebuild switch` on luna.
 
 - `/var/lib/ingest/state.json` does NOT exist — the venv was
   bootstrapped on every failed run (confirmed by `ingest: syncing
-  deps from ...` log line) but the actual `ingest run-once <src>`
+deps from ...` log line) but the actual `ingest run-once <src>`
   call was never reached. So no data has ever been pulled, into
   Open WebUI or anywhere else.
 - `baseUrl = "https://schrodinger.atlassian.net"` is already set on
