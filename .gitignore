@@ -10,3 +10,16 @@ __pycache__/
 projects/*/.venv/
 projects/*/.run/
 projects/*/.env
+
+# Hippo MCP server runtime state — local memory store + log file.
+# Path is per-user (~/.hippo) and never belongs in the repo. The
+# stray `~/.hippo/hippo.log` checked in earlier (literal-tilde
+# directory name) is removed by the same commit that adds this
+# rule.
+.hippo/
+~/.hippo/
+
+# Stray literal-tilde paths that occasionally land here from tools
+# that didn't expand $HOME. If you see one, ignore the dir, don't
+# track it.
+~

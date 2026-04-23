@@ -15,12 +15,6 @@
 # every module under `modules/nixos/` (cachix, claude-code, nvidia,
 # nvidia-verify, vllm, etc.); we just configure their options below.
 #
-# IMPORTANT: luna was bootstrapped with a stock NixOS installer (not
-# disko) by an earlier `olive` user. We:
-#   1. Preserve the existing partition layout (no disko import) by
-#      mirroring /etc/nixos/hardware-configuration.nix here.
-#   2. Migrate `olive` -> `casazza` (the canonical user across this
-#      flake) via a one-shot system activation script that renames
 #      the home directory if the migration hasn't happened yet.
 
 let
@@ -106,6 +100,16 @@ in
     '';
     settings = {
       allowed-users = [ "${user.name}" ];
+      # `casazza` listed as trusted-user so the Macs can use luna as a
+      # remote builder via `ssh-ng://casazza@luna.local` (see
+      # `modules/shared/distributed-builds/`). Without this, `nix store
+      # info --store ssh-ng://casazza@luna.local` reports `Trusted: 0`
+      # and the daemon refuses to accept arbitrary nars from the
+      # client.
+      trusted-users = [
+        "root"
+        "${user.name}"
+      ];
       auto-optimise-store = true;
       substituters = [ "https://nix-community.cachix.org" ];
       trusted-public-keys = [ "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=" ];
@@ -139,9 +143,11 @@ in
   services = {
     dbus.enable = true;
     openssh.enable = true;
+    # Open SSH port (22) for remote builders and SSH access.
+    # Luna acts as a remote builder for darwin hosts and needs to be reachable.
+    networking.firewall.allowedTCPPorts = [ 22 ];
     gnome.gnome-keyring.enable = true;
     hardware.bolt.enable = true;
-
     # Avahi/mDNS: publish luna as `luna.local` on the LAN so any host
     # (Mac, Linux, browser via Bonjour) can hit
     # http://luna.local:8000  →  vllm coder OpenAI-compatible API
@@ -808,11 +814,39 @@ in
         group = "litellm";
         mode = "0400";
       };
+      litellm-key-opencode-darwin = {
+        sopsFile = ../../../secrets/litellm-key-opencode-darwin.yaml;
+        key = "litellm_api_key";
+        owner = "litellm";
+        group = "litellm";
+        mode = "0400";
+      };
       litellm-key-hermes = {
         sopsFile = ../../../secrets/litellm-key-hermes.yaml;
         key = "litellm_api_key";
         owner = "litellm";
         group = "litellm";
+        mode = "0400";
+      };
+
+      # LiteLLM OCI-mode secrets. Consumed by the litellm module when
+      # `useOciContainer = true`. Both decrypt into dotenv-style
+      # `KEY=VALUE` files that systemd/podman load directly via
+      # `environmentFiles` / `EnvironmentFile`. Owner is `root`
+      # because the render-env-file oneshot and the postgres+litellm
+      # container units all run as root (podman backend).
+      litellm-salt-key = {
+        sopsFile = ../../../secrets/litellm-salt-key.yaml;
+        key = "litellm_salt_key";
+        owner = "root";
+        group = "root";
+        mode = "0400";
+      };
+      litellm-pg-password = {
+        sopsFile = ../../../secrets/litellm-pg-password.yaml;
+        key = "litellm_pg_password";
+        owner = "root";
+        group = "root";
         mode = "0400";
       };
 
@@ -942,11 +976,89 @@ in
       enable = true;
       # loopback to avoid the LAN hop for luna's own claude-code
       endpoint = "http://localhost:4000";
-      virtualKeyFile = config.sops.secrets.litellm-key-claude-code-nixos.path;
+      # In useVirtualKeys mode the bootstrap oneshot writes the minted
+      # key to /run/litellm-oci/keys/<keyAlias>; the wrapper reads it
+      # via `cut -d= -f2-` at every invocation. Falling back to the
+      # sops path requires flipping useVirtualKeys = false (rollback).
+      virtualKeyFile = "/run/litellm-oci/keys/claude-code-nixos";
       defaultGroup = "coder-local";
       cloudPassthrough = true;
+      # Team membership — contributes to local.litellm.clientKeys via
+      # the nixos claude-code module, so the bootstrap mints this key
+      # under the dev team's ACL/budget.
+      team = "dev";
+      keyAlias = "claude-code-nixos";
     };
     telemetry.enable = false;
+  };
+
+  # ── opencode ─────────────────────────────────────────────────────────
+  # opencode running on luna, routed exclusively through LiteLLM at
+  # localhost:4000. Local-only — no anthropic/cloud passthrough is
+  # exposed via `enabled_providers`, even though LiteLLM upstream supports
+  # /vertex. The point of running opencode here at all is to drive the
+  # archive ingestion + graphify pipelines (vault todo Stages 5-6) using
+  # the local vLLM, free at the marginal call.
+  #
+  # The clientKeys.opencode entry below in `local.litellm` provisions the
+  # key; the bootstrap oneshot mints it post-rebuild and writes
+  # /run/litellm-oci/keys/opencode in dotenv shape
+  # (`LITELLM_API_KEY_OPENCODE=sk-...`). The opencode wrapper sources
+  # that file via `secrets.file`.
+  programs.opencode = {
+    enable = true;
+    package = inputs.opencode.packages.${pkgs.system}.default;
+    telemetry = {
+      enable = true;
+      # Same otelcol that claude-code on the Macs feeds — see
+      # modules/nixos/observability/. Spans land in Phoenix at :6006.
+      endpoint = "http://localhost:4318";
+    };
+    managedConfig = {
+      share = "disabled";
+      # ONLY luna-litellm. No cloud, no exo (exo on the Macs is for
+      # hermes; luna-side opencode goes through luna-litellm which can
+      # itself federate to exo via the `coder-remote` model group).
+      enabled_providers = [ "luna-litellm" ];
+      provider.luna-litellm = {
+        npm = "@ai-sdk/openai-compatible";
+        name = "Luna LiteLLM";
+        options = {
+          baseURL = "http://localhost:4000/v1";
+          # Read at runtime from the dotenv file sourced via secrets.file;
+          # the {env:...} interpolation is opencode's standard shape.
+          apiKey = "{env:LITELLM_API_KEY_OPENCODE}";
+        };
+        models = {
+          # Mirror the model entries from the obsidian repo's
+          # .opencode/opencode.json so user-level config and managed
+          # config agree on names. Model IDs match LiteLLM model groups
+          # declared in `local.litellm.modelGroups` below.
+          coder-local = {
+            name = "Luna coder (local vLLM, Qwen3-Coder-30B AWQ)";
+            limit = {
+              context = 32768;
+              output = 8192;
+            };
+          };
+          coder-remote = {
+            name = "Coder remote (exo + GFR federation)";
+            limit = {
+              context = 262144;
+              output = 8192;
+            };
+          };
+          embedding = {
+            name = "Qwen3-Embedding-0.6B";
+            limit = {
+              context = 2048;
+              output = 0;
+            };
+          };
+        };
+      };
+    };
+    secrets.file = "/run/litellm-oci/keys/opencode";
   };
 
   # ── Phoenix (OTLP trace sink + UI) ──────────────────────────────────
@@ -991,17 +1103,21 @@ in
     openFirewall = true;
     masterKeyFile = config.sops.secrets.litellm-master-key.path;
 
-    # SQLite keystore for per-client virtual keys. Disabled until the
-    # Prisma-on-NixOS gap is resolved: LiteLLM's auth path imports
-    # prisma-python which tries to download Rust query/schema engines
-    # from binaries.prisma.sh for platform "linux-nixos" (404 — not
-    # a supported build target). Workarounds: patchelf prebuilt debian
-    # engines, run LiteLLM via OCI container, or swap to Postgres in
-    # a container with the official litellm-database image.
+    # OCI-container mode. Swaps the nix-native venv systemd unit for
+    # `ghcr.io/berriai/litellm-database:main-stable` + a sidecar
+    # Postgres container. The UI at /ui is broken on the venv path
+    # because prisma-python has no `linux-nixos` Rust query-engine
+    # build to fetch; the official image bundles both engines and runs
+    # `prisma db push` at start.
     #
-    # All clients currently auth with the master key; per-client
-    # isolation is deferred.
-    # databaseUrl = "sqlite:////var/lib/litellm/keys.db";
+    # Salt key AES-encrypts DB-stored credentials — NEVER rotate once
+    # seeded or the DB rows become undecryptable. Placeholder ships
+    # encrypted; replace with `openssl rand -hex 32` via
+    #   sops edit secrets/litellm-salt-key.yaml
+    # (and the Postgres password similarly).
+    useOciContainer = true;
+    saltKeyFile = config.sops.secrets.litellm-salt-key.path;
+    postgres.passwordFile = config.sops.secrets.litellm-pg-password.path;
 
     modelGroups = {
       # luna's vLLM coder — always-on anchor for plan/reduce/any
@@ -1095,15 +1211,116 @@ in
       forwardHeaders = true;
     };
 
+    # Router-level model name aliases. Lets clients reference Anthropic
+    # upstream model ids directly (the ones models.dev publishes and
+    # claude-code defaults to) without us having to duplicate model_list
+    # rows. All aliased names land in the `coder-cloud-claude` group,
+    # which routes to vertex-proxy and is gated by the dev team
+    # allowlist on top.
+    #
+    # Add a new upstream model id by appending one line here — no team
+    # or virtual-key change needed.
+    routerSettings.modelGroupAlias = {
+      "claude-opus-4-7" = "coder-cloud-claude";
+      "claude-opus-4-6" = "coder-cloud-claude";
+      "claude-opus-4-5" = "coder-cloud-claude";
+      "claude-sonnet-4-7" = "coder-cloud-claude";
+      "claude-sonnet-4-6" = "coder-cloud-claude";
+      "claude-sonnet-4-5" = "coder-cloud-claude";
+      "claude-haiku-4-5" = "coder-cloud-claude";
+    };
+
     # Per-client virtual keys: each sops-decrypted EnvironmentFile is
-    # added to the proxy's env. Once bootstrap values are in place
-    # (via POST /key/generate), these activate LiteLLM's virtual-key
-    # ACL for external clients without touching the master key path.
+    # added to the proxy's env when the legacy venv path is in use.
+    # In OCI+useVirtualKeys mode the bootstrap oneshot writes minted
+    # values to /run/litellm-oci/keys/<client> instead and this option
+    # is unused — kept populated so a `useOciContainer = false`
+    # rollback still finds the sops paths.
     virtualKeys = {
       claude-code-nixos = config.sops.secrets.litellm-key-claude-code-nixos.path;
       claude-code-darwin = config.sops.secrets.litellm-key-claude-code-darwin.path;
       opencode = config.sops.secrets.litellm-key-opencode.path;
+      opencode-darwin = config.sops.secrets.litellm-key-opencode-darwin.path;
       hermes = config.sops.secrets.litellm-key-hermes.path;
+    };
+
+    # ── Declarative team + virtual-key provisioning ─────────────────
+    # The `litellm-team-bootstrap.service` oneshot reconciles these
+    # against LiteLLM's admin API on every rebuild. See
+    # `~/.claude/plans/litellm-teams.md` for the full design. Minted
+    # key values land in /run/litellm-oci/keys/<client>; darwin hosts
+    # pick up the same values via sops-nix after the operator copies
+    # them into `secrets/litellm-key-<client>.yaml` via `sops edit`
+    # (writeback automation is a follow-up, §1g of the plan).
+    useVirtualKeys = true;
+
+    teams = {
+      dev = {
+        description = "Interactive-dev: claude-code (both) + opencode";
+        models = [
+          "coder-local"
+          "coder-remote"
+          "coder-cloud-claude"
+          "embedding"
+        ];
+        tpm = 400000;
+        rpm = 1200;
+        maxBudget = 50.0;
+        budgetDuration = "30d";
+      };
+
+      prod = {
+        description = "Always-on agents: hermes";
+        models = [
+          "coder-local"
+          "embedding"
+        ];
+        tpm = 60000;
+        rpm = 120;
+        maxBudget = 10.0;
+        budgetDuration = "30d";
+      };
+    };
+
+    # Client-key declarations on luna. The local claude-code nixos
+    # module contributes `claude-code-nixos` automatically via its
+    # `litellm.team` option; the other three (darwin claude-code,
+    # opencode, hermes) live in separate host/module configs that
+    # don't run on luna, so their entries are declared explicitly here
+    # so the bootstrap mints their keys.
+    clientKeys = {
+      claude-code-darwin = {
+        team = "dev";
+        keyAlias = "claude-code-darwin";
+        # Darwin hosts need the value in sops so sops-nix can surface
+        # it at /run/secrets on the Mac. Writeback unit TBD (plan
+        # §1g); until it lands, the operator manually copies the
+        # minted value from /run/litellm-oci/keys/claude-code-darwin
+        # on luna into the sops yaml via `sops edit`.
+        sopsFile = ../../../secrets/litellm-key-claude-code-darwin.yaml;
+      };
+      opencode = {
+        team = "dev";
+        keyAlias = "opencode";
+        sopsFile = ../../../secrets/litellm-key-opencode.yaml;
+      };
+      opencode-darwin = {
+        team = "dev";
+        keyAlias = "opencode-darwin";
+        # Per-system opencode key. Mirrors the claude-code-nixos /
+        # claude-code-darwin split: each platform-specific opencode
+        # client gets an independently-revocable key. Real value was
+        # minted ad-hoc against the LiteLLM admin API and committed
+        # to secrets/litellm-key-opencode-darwin.yaml; bootstrap will
+        # see it on /run/litellm-oci/keys/opencode-darwin and skip
+        # re-minting on future rebuilds.
+        sopsFile = ../../../secrets/litellm-key-opencode-darwin.yaml;
+      };
+      hermes = {
+        team = "prod";
+        keyAlias = "hermes";
+        sopsFile = ../../../secrets/litellm-key-hermes.yaml;
+      };
     };
   };
 
@@ -1243,14 +1460,19 @@ in
     enable = true;
     bindIP = "0.0.0.0"; # LAN-only; tighten when Tailscale is in place
     cluster = {
-      # Single-host deployment: one master, pointed at loopback so
-      # SeaweedFS resolves exactly one peer (odd count required by
-      # Raft quorum). Earlier `[ "luna.local:9333" ]` combined with
-      # `bindIP = "0.0.0.0"` was resolved as two peers (even) and
-      # master fatal-exited. `[ ]` broke filer, which requires a
-      # non-empty master list. `localhost:9333` satisfies both.
-      # Scale to an odd N ≥ 3 when federating.
-      masterPeers = [ "localhost:9333" ];
+      # Single-host deployment: peer entry must STRING-MATCH the
+      # self-bind (`-ip:-port` = `0.0.0.0:9333`) so SeaweedFS' peer
+      # dedup collapses them to 1 (odd, satisfies Raft quorum).
+      # Past attempts and why they failed:
+      #   * `[ "luna.local:9333" ]` — string ≠ `0.0.0.0:9333`, counted
+      #     as 2 peers, master fatal-exited.
+      #   * `[ ]` — master ok, but filer requires ≥1 master peer.
+      #   * `[ "localhost:9333" ]` — also string ≠ `0.0.0.0:9333`,
+      #     same 2-peer crash (commit 21fb208 mistakenly believed it
+      #     deduped).
+      # `[ "0.0.0.0:9333" ]` matches the bind literal, dedupes to 1.
+      # Scale to an odd N ≥ 3 (with real hostnames) when federating.
+      masterPeers = [ "0.0.0.0:9333" ];
       dataCenter = "home";
       rack = "luna";
     };
@@ -1262,10 +1484,23 @@ in
       enable = true;
       maxVolumes = 100; # ~3 TB at 30 GB/volume; well within luna's free space
       port = 8081; # default 8080 collides with Open WebUI
+      # metricsPort defaults to 8081 in the seaweedfs module — collides
+      # with the volume server's main port. Bump to 8082 (free) so
+      # both can bind. Without this, seaweedfs-volume crash-loops with
+      # `bind: address already in use` even though no other process
+      # has the port (the volume server's own metricsPort grabbed it
+      # first within the same process and the volume listener fails).
+      metricsPort = 8082;
     };
     filer = {
       enable = true;
       mount.enable = false; # JuiceFS handles the POSIX mount, not weed
+      # otelcol-contrib's internal-metrics listener was moved off
+      # 127.0.0.1:8888 → 127.0.0.1:8893 in modules/nixos/observability
+      # specifically so seaweedfs-filer can keep its standard port
+      # (and its computed gRPC port 18888, which `weed s3 -filer=…` and
+      # any future `weed mount` clients hardcode by deriving from the
+      # http port).
       metricsPort = 8890; # default 8889 collides with OTel collector Prom bridge
     };
     s3 = {
@@ -1276,21 +1511,56 @@ in
     openFirewall = true;
   };
 
-  # Redis — JuiceFS metadata KV. Single instance on loopback only.
-  # JuiceFS connects via `redis://:$META_PASSWORD@127.0.0.1:6379/0`;
-  # `metaPasswordFile` below injects the password into the env at
-  # unit-start without landing it in /nix/store. RDB snapshotting is
-  # on by default (services.redis.servers.<name>.save = default), so
-  # a luna reboot doesn't lose the metadata index.
+  # The seaweedfs nixos module's s3 unit exports `AWS_ACCESS_KEY_ID=admin`
+  # but intentionally skips `AWS_SECRET_ACCESS_KEY` (a comment in the
+  # module's start script says gfr handles this via a "separate
+  # mechanism"). Without the secret in env, the S3 server has no
+  # credentials registered and every call returns InvalidAccessKeyId.
+  # We splice the secret in here as a runtime env-file rendered from
+  # /var/lib/seaweedfs/admin-secret (root-owned, mode 0600), matching
+  # the litellm OCI db-url pattern: render-then-include, never bake
+  # plaintext into /nix/store.
+  systemd.services."seaweedfs-s3" = {
+    serviceConfig.EnvironmentFile = "/run/seaweedfs-s3-env";
+  };
+  systemd.services."seaweedfs-s3-env" = {
+    description = "Render runtime EnvironmentFile (AWS_SECRET_ACCESS_KEY) for seaweedfs-s3";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "seaweedfs-s3.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "root";
+    };
+    script = ''
+      umask 077
+      install -m 0600 -o root -g root /dev/null /run/seaweedfs-s3-env
+      printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$(cat /var/lib/seaweedfs/admin-secret)" \
+        > /run/seaweedfs-s3-env
+    '';
+  };
+
+  # Redis — JuiceFS metadata KV. LAN-exposed so Macs can mount JuiceFS
+  # with metaUrl=redis://luna.local:6379/0. Auth via requirePassFile is
+  # the only thing standing between any LAN host and the metadata KV;
+  # the password (sops-managed) is re-encrypted to every host_*  age
+  # key in `.sops.yaml` so each Mac surfaces it at activation. RDB
+  # snapshotting is on by default so a luna reboot doesn't lose the
+  # metadata index.
   services.redis.servers.seaweedfs = {
     enable = true;
-    bind = "127.0.0.1"; # loopback-only; no LAN/10G NIC exposure
+    # WAS bind = "127.0.0.1"; flipped to 0.0.0.0 for the JuiceFS-on-
+    # all-Macs rollout — see todo.md Stage 0.9.
+    bind = "0.0.0.0";
     port = 6379;
     # Auth required even on loopback — matches "Redis everywhere"
     # direction where any future federation (Tailscale, WireGuard,
     # etc.) already has credentials in place.
     requirePassFile = config.sops.secrets.redis-seaweedfs-password.path;
   };
+  # `services.redis.servers.<name>` doesn't have an `openFirewall`
+  # option; open :6379 manually so Macs in the fleet can reach it.
+  networking.firewall.allowedTCPPorts = [ 6379 ];
 
   # TiKV via OCI container (parallel-track, not in the hot JuiceFS path).
   # JuiceFS metadata lives in Redis above; this runs pingcap/pd +
@@ -1323,6 +1593,28 @@ in
       cacheDir = "/var/cache/juicefs/shared";
       cacheSize = 10240; # 10 GiB local read cache
     };
+  };
+
+  # ── git-daemon: read-only LAN git transport for flake inputs ────
+  # Bare repos at /srv/git/<name>.git served at git://luna.local/<name>
+  # on port 9418. Pushes go via ssh (casazza@luna.local:/srv/git/...).
+  # See modules/nixos/git-daemon/ for the module + nixos-config/todo.md
+  # Stage 0 for why this exists.
+  #
+  # Bootstrap (one-time, out-of-band — module never auto-creates repos):
+  #   sudo install -d -m 0755 -o git-daemon -g git-daemon /srv/git
+  #   sudo -u git-daemon git clone --bare \
+  #     /home/casazza/Repositories/schrodinger/opencode \
+  #     /srv/git/opencode.git
+  #   # ditto for hermes-agent and obsidian
+  local.gitDaemon = {
+    enable = true;
+    openFirewall = true; # LAN-only; tighten if luna gains untrusted IFs
+    repos = [
+      "opencode"
+      "hermes-agent"
+      "obsidian"
+    ];
   };
 
   # luna shipped as NixOS 25.11 by the original installer; honor the
