@@ -915,17 +915,29 @@ in
             '';
           }
           {
-            assertion = lib.all (team: lib.all (m: cfg.modelGroups ? ${m}) team.models) (
-              lib.attrValues cfg.teams
-            );
+            # Each team `models` entry must resolve to either:
+            #   * a real model-group key in `modelGroups`, OR
+            #   * an alias key in `routerSettings.modelGroupAlias`
+            #     (those rewrite to a real group at routing time, but
+            #     LiteLLM's team ACL gates on the raw incoming `model:`
+            #     value BEFORE the alias rewrite — so aliases must be
+            #     in the team allowlist too).
+            assertion =
+              let
+                validNames = (lib.attrNames cfg.modelGroups) ++ (lib.attrNames cfg.routerSettings.modelGroupAlias);
+                isValid = m: lib.elem m validNames;
+              in
+              lib.all (team: lib.all isValid team.models) (lib.attrValues cfg.teams);
             message = ''
               local.litellm.teams: every team's `models` entry must reference a
-              model-group declared under `local.litellm.modelGroups`. Unknown
-              model-groups detected: ${
+              model-group declared under `local.litellm.modelGroups` OR an alias
+              key declared under `local.litellm.routerSettings.modelGroupAlias`.
+              Unknown names detected: ${
+                let
+                  validNames = (lib.attrNames cfg.modelGroups) ++ (lib.attrNames cfg.routerSettings.modelGroupAlias);
+                in
                 lib.concatStringsSep ", " (
-                  lib.flatten (
-                    lib.mapAttrsToList (_: t: lib.filter (m: !(cfg.modelGroups ? ${m})) t.models) cfg.teams
-                  )
+                  lib.flatten (lib.mapAttrsToList (_: t: lib.filter (m: !(lib.elem m validNames)) t.models) cfg.teams)
                 )
               }
             '';
