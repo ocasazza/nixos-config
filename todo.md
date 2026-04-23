@@ -189,16 +189,15 @@ for all three sources. Pending `nixos-rebuild switch` on luna.
 
 - `/var/lib/ingest/state.json` does NOT exist — the venv was
   bootstrapped on every failed run (confirmed by `ingest: syncing
-deps from ...` log line) but the actual `ingest run-once <src>`
+  deps from ...` log line) but the actual `ingest run-once <src>`
   call was never reached. So no data has ever been pulled, into
   Open WebUI or anywhere else.
 - `baseUrl = "https://schrodinger.atlassian.net"` is already set on
   luna's running config (confirmed by reading the wrapper script at
-  `/nix/store/...-ingest-atlassian-start`). Whoever last edited this
-  file already made that change; my earlier "set the real tenant URL"
-  todo was already done. What WAS still placeholder until 2026-04-23:
-  `confluenceSpaces` (`["IT", "OPS"]` → narrowed to `["SYSMGR"]`) and
-  `jiraProjects` (`["OPS", "IT"]` → narrowed to `[]`).
+  `/nix/store/...-ingest-atlassian-start`). What was still placeholder
+  in main until 2026-04-23: `confluenceSpaces` (`["IT", "OPS"]` →
+  narrowed to `["SYSMGR"]`) and `jiraProjects` (`["OPS", "IT"]` →
+  narrowed to `[]`).
 
 **Architecture (locked 2026-04-23):**
 
