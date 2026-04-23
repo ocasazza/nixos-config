@@ -51,11 +51,27 @@ creation_rules:
   # `local.openWebUI`. Encrypted to an admin key (for editing from darwin
   # via `sops edit`) and to luna's host key (for in-place decryption at
   # nixos-rebuild activation, no private-key copy).
-  - path_regex: secrets/(openwebui-api-token|openwebui-admin-password|openwebui-secret-key|atlassian-email|atlassian-api-token|github-api-token|grafana-admin-password|redis-seaweedfs-password)\.yaml$
+  - path_regex: secrets/(openwebui-api-token|openwebui-admin-password|openwebui-secret-key|atlassian-email|atlassian-api-token|github-api-token|grafana-admin-password)\.yaml$
     key_groups:
       - age:
           - *admin_olive
           - *host_luna
+  # JuiceFS-related secrets (Redis password for metadata KV +
+  # SeaweedFS S3 admin secret). luna runs both backends; every Mac
+  # mounts JuiceFS as a client and needs `META_PASSWORD` (redis) +
+  # `--secret-key <admin-secret>` (S3). Hence: admin (for editing) +
+  # host_luna (for in-place activation decryption) + every darwin
+  # host_* anchor (so each Mac's darwin-rebuild can surface the
+  # secret at activation).
+  - path_regex: secrets/(redis-seaweedfs-password|seaweedfs-admin-secret)\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
+          - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
+          # L75T4YHXV7-MBA host key not yet provisioned; add when available.
   # GFR exo federation: bearer token luna presents to the GFR-side
   # authenticated reverse proxy that fronts exo on nodes 02/03. Same
   # admin+host key group as the ingest secrets so luna can decrypt at
@@ -91,6 +107,14 @@ creation_rules:
           - *admin_olive
           - *host_luna
   - path_regex: secrets/litellm-key-claude-code-darwin\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_luna
+          - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
+  - path_regex: secrets/litellm-key-opencode-darwin\.yaml$
     key_groups:
       - age:
           - *admin_olive

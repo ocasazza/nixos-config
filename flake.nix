@@ -71,12 +71,18 @@
       url = "git+ssh://git@github.com/schrodinger/git-fleet-runner";
     };
 
+    # Flake inputs served from luna's local git-daemon (see
+    # modules/nixos/git-daemon/ + luna's local.gitDaemon block).
+    # Both Mac and luna evaluate the same URL — reads via ssh transport
+    # against luna's bare repo at /srv/git/<name>.git. Pushes too go via
+    # ssh (`casazza@luna.local:/srv/git/<name>.git`); see CLAUDE.md
+    # Stage 0 in nixos-config/todo.md for the rationale.
     opencode = {
-      url = "git+file:///Users/casazza/Repositories/schrodinger/opencode?ref=dev";
+      url = "git+ssh://casazza@luna.local/srv/git/opencode.git?ref=dev";
     };
 
     hermes = {
-      url = "git+file:///Users/casazza/Repositories/schrodinger/hermes-agent?ref=schrodinger";
+      url = "git+ssh://casazza@luna.local/srv/git/hermes-agent.git?ref=schrodinger";
     };
 
     hippo = {
@@ -91,7 +97,7 @@
     # Obsidian vault flake: provides vault-snapshot + vault-snapshot-watch
     # for the auto-snapshot launchd agent on darwin.
     obsidian-vault = {
-      url = "git+file:///Users/casazza/Repositories/ocasazza/obsidian";
+      url = "git+ssh://casazza@luna.local/srv/git/obsidian.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -267,7 +273,8 @@
             };
           }
         )
-      ];
+      ]
+      ++ inputs.nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.nixosModules.default;
 
       # No aliases needed — snowfall auto-discovers shells/default
     };

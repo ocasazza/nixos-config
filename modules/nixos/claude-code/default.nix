@@ -223,6 +223,37 @@ in
           can audit intent.
         '';
       };
+
+      team = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Name of a team declared under `config.local.litellm.teams` on
+          the luna host running the proxy. When set, this client's
+          virtual key is scoped to that team and inherits its model ACL
+          / rate limits / budget. When null (default), the client
+          presents the proxy's master key (shared-key rollback).
+
+          Setting this on luna (same host as the proxy) contributes to
+          `local.litellm.clientKeys` automatically so the bootstrap
+          oneshot mints the key. On darwin hosts the option is
+          informational-only — luna's host config is the source of
+          truth for which clients get keys (see the plan at
+          `~/.claude/plans/litellm-teams.md`).
+        '';
+      };
+
+      keyAlias = lib.mkOption {
+        type = lib.types.str;
+        default = "claude-code-nixos";
+        description = ''
+          Stable handle used as idempotency key against
+          `POST /key/generate`. Keep in sync with the sops file stem
+          (`secrets/litellm-key-<alias>.yaml`). On the luna host the
+          bootstrap oneshot writes the minted value to
+          `/run/litellm-oci/keys/<keyAlias>`.
+        '';
+      };
     };
 
     apiKeyHelper = lib.mkEnableOption "API key helper script for Vertex AI";
@@ -296,53 +327,73 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    assertions = [
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
       {
-        assertion = !(cfg.vertex.enable && cfg.litellm.enable);
-        message = ''
-          programs.claude-code: vertex.enable and litellm.enable are
-          mutually exclusive. Pick one — either the legacy direct
-          vertex-proxy path (vertex.enable) or the new LiteLLM-routed
-          path (litellm.enable).
-        '';
-      }
-    ];
+        assertions = [
+          {
+            assertion = !(cfg.vertex.enable && cfg.litellm.enable);
+            message = ''
+              programs.claude-code: vertex.enable and litellm.enable are
+              mutually exclusive. Pick one — either the legacy direct
+              vertex-proxy path (vertex.enable) or the new LiteLLM-routed
+              path (litellm.enable).
+            '';
+          }
+        ];
 
-    environment.systemPackages = [
-      wrappedClaude
-      pkgs.bubblewrap
-      pkgs.socat
+        environment.systemPackages = [
+          wrappedClaude
+          pkgs.bubblewrap
+          pkgs.socat
+        ]
+        # google-cloud-sdk is needed for either path: legacy vertex uses it
+        # directly; LiteLLM passthrough also needs it because the wrapper's
+        # apiKeyHelper shells out to `gcloud auth print-identity-token`.
+        ++ lib.optionals (cfg.vertex.enable || (cfg.litellm.enable && cfg.litellm.cloudPassthrough)) [
+          pkgs.google-cloud-sdk
+        ];
+
+        # System-wide settings
+        environment.etc."claude-code/settings.json".text = builtins.toJSON (
+          cfg.settings
+          // {
+            model = cfg.model;
+          }
+        );
+
+        # Profile.d env: only emitted for the legacy vertex path so
+        # interactive shells (and random subprocesses that read env from
+        # /etc/profile.d) see the same CLAUDE_CODE_* / ANTHROPIC_VERTEX_*
+        # values the wrapper bakes in. The LiteLLM path doesn't need this —
+        # the wrapper is self-contained and there's no shell-exported
+        # apiKeyHelper contract to maintain.
+        environment.etc."profile.d/claude-code.sh" = lib.mkIf useLegacyVertex {
+          text = ''
+            export CLAUDE_CODE_USE_VERTEX=1
+            export CLAUDE_CODE_SKIP_VERTEX_AUTH=1
+            export ANTHROPIC_VERTEX_PROJECT_ID="${cfg.vertex.projectId}"
+            export ANTHROPIC_VERTEX_BASE_URL="${cfg.vertex.baseURL}"
+            export CLOUD_ML_REGION="${cfg.vertex.region}"
+          '';
+        };
+      }
+
+      # Contribute to the aggregate clientKeys registry on the host
+      # running the proxy. Gated on litellm.team != null so hosts that
+      # only use the master-key rollback path don't materialize a DB row.
+      (lib.mkIf (cfg.litellm.enable && cfg.litellm.team != null) {
+        local.litellm.clientKeys.${cfg.litellm.keyAlias} = {
+          team = cfg.litellm.team;
+          keyAlias = cfg.litellm.keyAlias;
+          # luna reads /run/litellm-oci/keys directly; no sops round-
+          # trip needed for this host's own key. Host configs that want
+          # the minted value materialized into a sops yaml (e.g. to
+          # propagate to darwin hosts) can override via
+          # `local.litellm.clientKeys.<alias>.sopsFile = ...`.
+          sopsFile = null;
+        };
+      })
     ]
-    # google-cloud-sdk is needed for either path: legacy vertex uses it
-    # directly; LiteLLM passthrough also needs it because the wrapper's
-    # apiKeyHelper shells out to `gcloud auth print-identity-token`.
-    ++ lib.optionals (cfg.vertex.enable || (cfg.litellm.enable && cfg.litellm.cloudPassthrough)) [
-      pkgs.google-cloud-sdk
-    ];
-
-    # System-wide settings
-    environment.etc."claude-code/settings.json".text = builtins.toJSON (
-      cfg.settings
-      // {
-        model = cfg.model;
-      }
-    );
-
-    # Profile.d env: only emitted for the legacy vertex path so
-    # interactive shells (and random subprocesses that read env from
-    # /etc/profile.d) see the same CLAUDE_CODE_* / ANTHROPIC_VERTEX_*
-    # values the wrapper bakes in. The LiteLLM path doesn't need this —
-    # the wrapper is self-contained and there's no shell-exported
-    # apiKeyHelper contract to maintain.
-    environment.etc."profile.d/claude-code.sh" = lib.mkIf useLegacyVertex {
-      text = ''
-        export CLAUDE_CODE_USE_VERTEX=1
-        export CLAUDE_CODE_SKIP_VERTEX_AUTH=1
-        export ANTHROPIC_VERTEX_PROJECT_ID="${cfg.vertex.projectId}"
-        export ANTHROPIC_VERTEX_BASE_URL="${cfg.vertex.baseURL}"
-        export CLOUD_ML_REGION="${cfg.vertex.region}"
-      '';
-    };
-  };
+  );
 }

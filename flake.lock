@@ -846,18 +846,18 @@
         "uv2nix": "uv2nix_2"
       },
       "locked": {
-        "lastModified": 1775793886,
-        "narHash": "sha256-+c/PAy2rkzUXRKtI+1Qha98iVVJ5ohvJekZyjhD6UDM=",
+        "lastModified": 1775881823,
+        "narHash": "sha256-vkGqA3lrBYCSGbJqjxOJH5hapr1WqQqbuOwBKOfpmis=",
         "ref": "schrodinger",
-        "rev": "8bccd82e7ef7ab6dbf1bf520b611c07856521dcf",
-        "revCount": 3395,
+        "rev": "944d281fc0cd74dd8b01e539612c52feeecb134f",
+        "revCount": 3396,
         "type": "git",
-        "url": "file:///Users/casazza/Repositories/schrodinger/hermes-agent"
+        "url": "ssh://casazza@luna.local/srv/git/hermes-agent.git"
       },
       "original": {
         "ref": "schrodinger",
         "type": "git",
-        "url": "file:///Users/casazza/Repositories/schrodinger/hermes-agent"
+        "url": "ssh://casazza@luna.local/srv/git/hermes-agent.git"
       }
     },
     "hippo": {
@@ -1340,16 +1340,17 @@
         "snowfall-lib": "snowfall-lib"
       },
       "locked": {
-        "lastModified": 1776760077,
-        "narHash": "sha256-r/5gqsyMCWWyiuSuvUvwM01Z8AKZ+wDmMchQrHPKwnk=",
-        "rev": "12295498c3ef78b101ae5fec205bc0fb7f392a7d",
-        "revCount": 35,
+        "lastModified": 1776921694,
+        "narHash": "sha256-Unca/8ZaEc3PVFkY2tJgMP6ZV3WR3uqRO+VlL1X/g5Q=",
+        "ref": "refs/heads/main",
+        "rev": "716c1138f9c5bfbe263a7754dc52907927b036dd",
+        "revCount": 219,
         "type": "git",
-        "url": "file:///Users/casazza/Repositories/ocasazza/obsidian"
+        "url": "ssh://casazza@luna.local/srv/git/obsidian.git"
       },
       "original": {
         "type": "git",
-        "url": "file:///Users/casazza/Repositories/ocasazza/obsidian"
+        "url": "ssh://casazza@luna.local/srv/git/obsidian.git"
       }
     },
     "opencode": {
@@ -1357,18 +1358,18 @@
         "nixpkgs": "nixpkgs_13"
       },
       "locked": {
-        "lastModified": 1776899109,
-        "narHash": "sha256-vmex6aG8ypram8hZu6CoHwLayUT4cFGEg1yAVZcsMD0=",
+        "lastModified": 1776949901,
+        "narHash": "sha256-d9MAgBarsTd0+BajjJvbFStkEQya8mv6kynevjiayik=",
         "ref": "dev",
-        "rev": "1f20c0a83c451b0784a33ac3fb5e017787310527",
-        "revCount": 11099,
+        "rev": "5559e3b7f48c879189e537cc52cd5dd3b0dc1263",
+        "revCount": 11104,
         "type": "git",
-        "url": "file:///Users/casazza/Repositories/schrodinger/opencode"
+        "url": "ssh://casazza@luna.local/srv/git/opencode.git"
       },
       "original": {
         "ref": "dev",
         "type": "git",
-        "url": "file:///Users/casazza/Repositories/schrodinger/opencode"
+        "url": "ssh://casazza@luna.local/srv/git/opencode.git"
       }
     },
     "pyproject-build-systems": {
