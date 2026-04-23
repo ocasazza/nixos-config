@@ -218,70 +218,61 @@ in
     '';
   };
 
-  # Claude Code routed through the LiteLLM passthrough on luna.
-  # Identical across every darwin host in this fleet, so the per-host
-  # files at systems/aarch64-darwin/<host>/default.nix only need to
-  # override what's actually host-specific (hostname, exo peers,
-  # distributed-builds toggle).
+  # Claude Code direct to vertex-proxy. Identical across every darwin
+  # host in this fleet, so the per-host files at
+  # systems/aarch64-darwin/<host>/default.nix only need to override
+  # what's actually host-specific (hostname, exo peers, distributed-
+  # builds toggle).
   #
-  # cloudPassthrough = true (back to the original design): cloud-claude
-  # calls go via `darwin -> luna:4000/vertex/v1 -> vertex-proxy` with
-  # a per-request gcloud identity token (apiKeyHelper provides it).
-  # We tried cloudPassthrough = false to get per-virtual-key Phoenix
-  # attribution, but the router-routed path requires the upstream
-  # deployment's `api_key` to be a real gcloud id-token, not a
-  # LiteLLM virtual key — `forwarded-per-request` on the
-  # coder-cloud-claude deployment forwards the inbound `Authorization`
-  # header, which would be the virtual key, and vertex-proxy 403s.
-  # Per CLAUDE.md "passthrough 4 vertex is needed".
+  # We tried routing through luna's LiteLLM (both /v1 router with
+  # virtual keys and /vertex/v1 passthrough) for Phoenix attribution.
+  # Both paths are blocked:
+  #   * Router /v1 + virtual key: the coder-cloud-claude deployment
+  #     uses `api_key = "forwarded-per-request"`, which forwards the
+  #     LiteLLM virtual key to vertex-proxy as Authorization. vertex-
+  #     proxy expects a real gcloud id-token, so 403s.
+  #   * Passthrough /vertex/v1 + gcloud id-token: LiteLLM enforces
+  #     virtual-key auth on every route by default, including
+  #     passthroughs. The `public_routes` config flag that would let
+  #     us skip auth on /vertex/* is a LiteLLM Enterprise feature.
   #
-  # Phoenix attribution for cloud calls becomes anonymous /vertex
-  # traffic (acceptable cost). Local model groups (coder-local,
-  # coder-remote, embedding) still go through /v1 with virtual keys
-  # and DO get per-key attribution.
-  #
-  # Telemetry is off here — LiteLLM's OTEL callbacks cover per-call
-  # tracing into Phoenix with richer attribution; the client telemetry
-  # would duplicate spans.
+  # So claude-code talks straight to vertex-proxy with a gcloud
+  # id-token from apiKeyHelper. We lose Phoenix attribution for
+  # cloud-claude calls (acceptable). Local model groups (coder-local,
+  # coder-remote, embedding) still route through luna's /v1 with
+  # per-host virtual keys and DO get per-key attribution, but
+  # neither claude-code nor opencode calls those today \u2014
+  # they're consumed by hermes / ingest / open-webui instead.
   programs.claude-code = {
     enable = true;
-    # claude-opus-4-7 is the upstream Vertex model name; the
-    # /vertex/v1 passthrough forwards `model:` untouched to
-    # vertex-proxy which knows it directly. (When cloudPassthrough is
-    # false, you'd use a router group name like `coder-cloud-claude`
-    # instead — but we're back on passthrough now.)
     model = "claude-opus-4-7";
-    litellm = {
+    vertex = {
       enable = true;
-      # Bare `luna` (DNS / ssh-config alias) instead of `luna.local`
-      # (mDNS) — mDNS is unreliable from many Macs in this fleet (see
-      # `modules/darwin/observability/default.nix:49` and the homepage
-      # dashboard "Use bare `luna` (192.168.1.57) — confirmed working
-      # from LAN clients" guidance).
-      endpoint = "http://luna:4000";
-      virtualKeyFile = "/run/secrets/litellm-key-claude-code-darwin";
-      defaultGroup = "coder-cloud-claude";
-      cloudPassthrough = true;
+      projectId = "vertex-code-454718";
+      region = "us-east5";
+      baseURL = "https://vertex-proxy.sdgr.app/v1";
     };
+    apiKeyHelper = true;
     telemetry.enable = false;
   };
 
   # Opencode + Claude Code Vertex AI proxy.
   #
-  # Default route: vertex-direct (gcloud id-token via apiKeyHelper).
-  # The schrodinger fork's bundled managed config pins
+  # Vertex-direct: gcloud id-token via apiKeyHelper. The schrodinger
+  # fork's bundled managed config pins
   # provider.anthropic.options.baseURL = https://vertex-proxy.sdgr.app,
   # which trips the hardcoded vertex codepath in
   # `packages/opencode/src/provider/provider.ts:170-264`. That
   # codepath shells out to `gcloud auth print-identity-token` per
   # request and forwards directly to vertex-proxy.
   #
-  # For router-routed opencode (Phoenix attribution, per-host virtual
-  # keys, model group aliases) use the separate `opencode-luna`
-  # binary defined further down in this file — it points the same
-  # opencode build at http://luna.local:4000 with the
-  # opencode-darwin virtual key. Vertex-direct stays the default for
-  # this binary so existing muscle memory keeps working.
+  # We tried building a router-routed opencode-luna sibling binary
+  # for Phoenix attribution \u2014 see commit history. Blocked on
+  # LiteLLM's free-tier route auth (would need Enterprise's
+  # public_routes flag to skip auth on /vertex/*). Reverted to
+  # vertex-direct for now; opencode-luna lives in the schrodinger
+  # opencode flake's `packages.<system>.opencode-luna` for future
+  # use if vertex-proxy's auth model changes.
   programs.opencode = {
     enable = true;
     package = opencode.packages.${pkgs.system}.default;
@@ -820,16 +811,19 @@ in
   # `modules/darwin/system-packages` (snowfall auto-discovery). Only
   # host-level additions go here.
   #
-  # opencode-luna (router-routed sibling of the vertex-direct
-  # `opencode` binary above) ships from the schrodinger opencode
-  # flake input — see ~/Repositories/schrodinger/opencode/flake.nix
-  # `packages.<system>.opencode-luna`. It exec's the same Bun build
-  # with a different OPENCODE_MANAGED_CONFIG_DIR (luna baseURL) and
-  # reads the per-host virtual key from
-  # /run/secrets/litellm-key-opencode-darwin.
+  # opencode-luna (router-routed sibling) was removed when we
+  # discovered LiteLLM's free tier doesn't support `public_routes`,
+  # so the /vertex/v1 passthrough requires a virtual key, but
+  # virtual keys can't carry the gcloud id-token vertex-proxy
+  # needs. The regular `opencode` binary (vertex-direct) is the
+  # supported path for cloud claude. The opencode-luna derivation
+  # still exists in the schrodinger opencode flake's
+  # `packages.<system>.opencode-luna` for future use if/when
+  # vertex-proxy auth model changes (e.g. accepts service account
+  # JSON, then we can configure LiteLLM's native vertex_ai
+  # deployment with `vertex_credentials`).
   environment.systemPackages = [
     consortium.packages.${pkgs.system}.consortium-cli
-    opencode.packages.${pkgs.system}.opencode-luna
   ];
 
   # Set system-wide environment variables
