@@ -79,6 +79,7 @@ let
     path = ep.path;
     target = ep.target;
     forward_headers = ep.forwardHeaders;
+    include_subpath = ep.includeSubpath;
   }) cfg.passthroughEndpoints;
 
   # The full rendered config structure. Emitted to YAML via `builtins.toJSON`
@@ -276,6 +277,22 @@ let
           Authorization) to the upstream. With `true`, LiteLLM adds no
           auth state of its own for this path — the client's bearer is
           what reaches the upstream.
+        '';
+      };
+      includeSubpath = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Whether the passthrough route accepts sub-paths under
+          `path`. With `true` (default), `POST /vertex/v1/projects/...`
+          forwards to `<target>/v1/projects/...`. With `false`,
+          ONLY exact `POST /vertex` matches; sub-paths 404. We default
+          true because the typical use case (vertex-proxy, anthropic
+          SDK pass-through, etc.) needs sub-path forwarding.
+
+          Maps to LiteLLM's `pass_through_endpoints[].include_subpath`
+          config field — see
+          https://docs.litellm.ai/docs/proxy/pass_through#sub-path-routing
         '';
       };
     };
