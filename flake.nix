@@ -73,16 +73,28 @@
 
     # Flake inputs served from luna's local git-daemon (see
     # modules/nixos/git-daemon/ + luna's local.gitDaemon block).
-    # Both Mac and luna evaluate the same URL — reads via ssh transport
-    # against luna's bare repo at /srv/git/<name>.git. Pushes too go via
-    # ssh (`casazza@luna.local:/srv/git/<name>.git`); see CLAUDE.md
-    # Stage 0 in nixos-config/todo.md for the rationale.
+    # Read transport is anonymous `git://luna/<name>` over the
+    # daemon (port 9418), so:
+    #   * Macs fetch via DNS-resolved `luna` (their ssh-config alias
+    #     covers `luna luna.local 192.168.1.57` so this resolves
+    #     even when mDNS is flaky — confirmed empirically on
+    #     2026-04-23 that `luna.local` resolution fails from this
+    #     fleet, hence the move off `luna.local`).
+    #   * luna fetches its own inputs the same way during
+    #     nixos-rebuild without needing root SSH credentials. This
+    #     dodges the bootstrapping-circle where root would otherwise
+    #     need to ssh as casazza to itself just to fetch a flake
+    #     input that the very same nixos-rebuild is going to make
+    #     possible (git-daemon is enabled by this same config).
+    # Pushes still go via ssh
+    # (`casazza@luna.local:/srv/git/<name>.git`); see CLAUDE.md
+    # `Cross-repo push targets` for the rationale.
     opencode = {
-      url = "git+ssh://casazza@luna.local/srv/git/opencode.git?ref=dev";
+      url = "git://luna/opencode?ref=dev";
     };
 
     hermes = {
-      url = "git+ssh://casazza@luna.local/srv/git/hermes-agent.git?ref=schrodinger";
+      url = "git://luna/hermes-agent?ref=schrodinger";
     };
 
     hippo = {
@@ -95,9 +107,10 @@
     };
 
     # Obsidian vault flake: provides vault-snapshot + vault-snapshot-watch
-    # for the auto-snapshot launchd agent on darwin.
+    # for the auto-snapshot launchd agent on darwin. Same git-daemon
+    # transport as opencode/hermes above.
     obsidian-vault = {
-      url = "git+ssh://casazza@luna.local/srv/git/obsidian.git";
+      url = "git://luna/obsidian";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
