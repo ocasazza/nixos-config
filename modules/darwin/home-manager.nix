@@ -57,11 +57,15 @@
     brews = [
       "vjeantet/tap/alerter"
     ];
+    # mas (Mac App Store) apps intentionally empty — the only previous
+    # entry, `"Fresco" = 1251572132`, fails `brew bundle` fleet-wide
+    # with "No apps found in the App Store for ADAM ID 1251572132"
+    # (likely account/region-bound), which breaks activation now that
+    # homebrew.enable=true. Add specific apps only after confirming the
+    # Apple ID that each Mac runs under can actually see them.
     # $ nix shell nixpkgs#mas
     # $ mas search <app name>
-    masApps = {
-      "Fresco" = 1251572132;
-    };
+    masApps = { };
   };
 
   local.dock = {
