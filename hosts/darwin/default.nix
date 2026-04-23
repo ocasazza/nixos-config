@@ -218,34 +218,39 @@ in
     '';
   };
 
-  # Claude Code routed through the LiteLLM router on luna. Identical
-  # across every darwin host in this fleet, so the per-host files at
-  # systems/aarch64-darwin/<host>/default.nix only need to override
-  # what's actually host-specific (hostname, exo peers, distributed-
-  # builds toggle).
+  # Claude Code routed through the LiteLLM passthrough on luna.
+  # Identical across every darwin host in this fleet, so the per-host
+  # files at systems/aarch64-darwin/<host>/default.nix only need to
+  # override what's actually host-specific (hostname, exo peers,
+  # distributed-builds toggle).
   #
-  # cloudPassthrough = false: the request goes
-  # `darwin -> luna:4000/v1 (router) -> vertex-proxy` and authenticates
-  # with the per-system virtual key sops-decrypted into
-  # /run/secrets/litellm-key-claude-code-darwin (rather than the
-  # gcloud id-token going through the /vertex/v1 passthrough). Two
-  # consequences vs. cloudPassthrough=true:
-  #   1. Phoenix sees these calls under the `claude-code-darwin`
-  #      virtual-key alias instead of as anonymous /vertex traffic,
-  #      so the usage dashboards actually attribute spend per host.
-  #   2. The router's `model:` field is the LiteLLM group name
-  #      (`coder-cloud-claude`), not the upstream model id
-  #      (`claude-opus-4-7`). `claude-opus-4-7` only resolves inside
-  #      the router's group definition on luna. Switching providers
-  #      (sonnet, haiku, a different region) is a one-line edit on
-  #      luna with zero client churn.
+  # cloudPassthrough = true (back to the original design): cloud-claude
+  # calls go via `darwin -> luna:4000/vertex/v1 -> vertex-proxy` with
+  # a per-request gcloud identity token (apiKeyHelper provides it).
+  # We tried cloudPassthrough = false to get per-virtual-key Phoenix
+  # attribution, but the router-routed path requires the upstream
+  # deployment's `api_key` to be a real gcloud id-token, not a
+  # LiteLLM virtual key — `forwarded-per-request` on the
+  # coder-cloud-claude deployment forwards the inbound `Authorization`
+  # header, which would be the virtual key, and vertex-proxy 403s.
+  # Per CLAUDE.md "passthrough 4 vertex is needed".
+  #
+  # Phoenix attribution for cloud calls becomes anonymous /vertex
+  # traffic (acceptable cost). Local model groups (coder-local,
+  # coder-remote, embedding) still go through /v1 with virtual keys
+  # and DO get per-key attribution.
   #
   # Telemetry is off here — LiteLLM's OTEL callbacks cover per-call
   # tracing into Phoenix with richer attribution; the client telemetry
   # would duplicate spans.
   programs.claude-code = {
     enable = true;
-    model = "coder-cloud-claude";
+    # claude-opus-4-7 is the upstream Vertex model name; the
+    # /vertex/v1 passthrough forwards `model:` untouched to
+    # vertex-proxy which knows it directly. (When cloudPassthrough is
+    # false, you'd use a router group name like `coder-cloud-claude`
+    # instead — but we're back on passthrough now.)
+    model = "claude-opus-4-7";
     litellm = {
       enable = true;
       # Bare `luna` (DNS / ssh-config alias) instead of `luna.local`
@@ -256,7 +261,7 @@ in
       endpoint = "http://luna:4000";
       virtualKeyFile = "/run/secrets/litellm-key-claude-code-darwin";
       defaultGroup = "coder-cloud-claude";
-      cloudPassthrough = false;
+      cloudPassthrough = true;
     };
     telemetry.enable = false;
   };

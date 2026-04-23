@@ -344,7 +344,11 @@ let
         export INGEST_OBSIDIAN_BRANCH="${src.branch}"
         export INGEST_OBSIDIAN_FOLDER_MAP='${obsidianFolderMapJSON src}'
         ${venvBootstrap}
-        exec ${toString cfg.projectDir}/scripts/obsidian-sync.sh
+        # Invoke bash explicitly: scripts use `#!/usr/bin/env bash` but the
+        # systemd unit's PATH (coreutils + findutils + grep + sed + systemd)
+        # has no bash, so `env bash` exits 127. See ingest-atlassian failure
+        # mode 2026-04-23.
+        exec ${pkgs.bash}/bin/bash ${toString cfg.projectDir}/scripts/obsidian-sync.sh
       ''
     else if src.type == "atlassian" then
       pkgs.writeShellScript "ingest-${name}-start" ''
@@ -359,7 +363,7 @@ let
         export INGEST_ATLASSIAN_JIRA_PROJECTS="${concatStringsSep "," src.jiraProjects}"
         export INGEST_ATLASSIAN_CONFLUENCE_SPACES="${concatStringsSep "," src.confluenceSpaces}"
         ${venvBootstrap}
-        exec ${toString cfg.projectDir}/scripts/atlassian-sync.sh
+        exec ${pkgs.bash}/bin/bash ${toString cfg.projectDir}/scripts/atlassian-sync.sh
       ''
     else
       # github
@@ -370,7 +374,7 @@ let
         ''}
         export INGEST_GITHUB_REPOS='${githubReposJSON src}'
         ${venvBootstrap}
-        exec ${toString cfg.projectDir}/scripts/github-sync.sh
+        exec ${pkgs.bash}/bin/bash ${toString cfg.projectDir}/scripts/github-sync.sh
       '';
 
   enabledSources = filterAttrs (_: s: s.enabled) cfg.sources;

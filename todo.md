@@ -152,11 +152,53 @@ Trade: extra hop (Mac → NFS → luna → JuiceFS → SeaweedFS) vs. direct
 
 ## Stage 8 — Atlassian ingest (cme + langgraph throttling)
 
-**Status (2026-04-23):** the atlassian source in `local.ingest` is
-**already enabled on luna** with placeholder credentials. The systemd
-timer `ingest-atlassian.timer` has been firing every 30 min returning
-"credentials missing, skipping" since the source was first wired.
-Discovered during a vault-side ingest survey on 2026-04-23.
+**Status (2026-04-23, verified by `ssh luna systemctl status`):** ALL
+THREE ingest services (`ingest-atlassian`, `ingest-obsidian`,
+`ingest-github`) have been **failing with exit 127** every time their
+timer fires, since they were first enabled.
+
+The actual failure mode is **NOT** "credentials missing, skipping"
+(my earlier write-up of this todo was wrong — I had only read the
+config files and inferred behavior; first verification on 2026-04-23
+showed the truth):
+
+```
+env: 'bash': No such file or directory
+```
+
+The wrapper at `modules/nixos/ingest/default.nix:327-374` calls
+`exec ${cfg.projectDir}/scripts/<src>-sync.sh`. The shell script
+starts with `#!/usr/bin/env bash`. The systemd unit's PATH (set
+implicitly by NixOS systemd defaults — coreutils + findutils +
+gnugrep + gnused + systemd, no bash) means `env` runs but can't find
+bash → exit 127. The wrapper itself uses an absolute /nix/store
+shebang via `pkgs.writeShellScript`, so it gets past its own line 1;
+the failure is on the `exec` of the project script.
+
+**This is the same class of bug** as the CLAUDE.md ToDo for
+`local.reingest-auto`'s launchd PATH (vault todo, top of "ToDo"
+section) — both fail when a script depends on a tool that the
+launcher's PATH doesn't include.
+
+**Fix landed in `modules/nixos/ingest/default.nix` 2026-04-23:**
+replaced `exec ${cfg.projectDir}/scripts/<src>-sync.sh` with
+`exec ${pkgs.bash}/bin/bash ${cfg.projectDir}/scripts/<src>-sync.sh`
+for all three sources. Pending `nixos-rebuild switch` on luna.
+
+**State as of 2026-04-23 first verification:**
+
+- `/var/lib/ingest/state.json` does NOT exist — the venv was
+  bootstrapped on every failed run (confirmed by `ingest: syncing
+deps from ...` log line) but the actual `ingest run-once <src>`
+  call was never reached. So no data has ever been pulled, into
+  Open WebUI or anywhere else.
+- `baseUrl = "https://schrodinger.atlassian.net"` is already set on
+  luna's running config (confirmed by reading the wrapper script at
+  `/nix/store/...-ingest-atlassian-start`). Whoever last edited this
+  file already made that change; my earlier "set the real tenant URL"
+  todo was already done. What WAS still placeholder until 2026-04-23:
+  `confluenceSpaces` (`["IT", "OPS"]` → narrowed to `["SYSMGR"]`) and
+  `jiraProjects` (`["OPS", "IT"]` → narrowed to `[]`).
 
 **Architecture (locked 2026-04-23):**
 
@@ -193,52 +235,53 @@ deferral, capacity-via-langgraph). **This file** carries the infra
 pieces: package cme, redirect the systemd unit, secrets, NixOS module
 schema for the new sink and target list, observability.
 
-### Stage 8a — turn on real Atlassian credentials
+### Stage 8a — get the existing pipeline running at all
 
-- [ ] **Decrypt and verify** `secrets/atlassian-email.yaml` and
-      `secrets/atlassian-api-token.yaml`. User stated 2026-04-23
-      both contain real values. Confirm with
-      `sops -d secrets/atlassian-api-token.yaml | head -c 20`. If
-      the API token needs rotation, generate at
-      <https://id.atlassian.com/manage-profile/security/api-tokens>.
-      For cme + the existing `atlassian-python-api`, scoped tokens
-      need the cme README's listed scopes (read:confluence-content.all,
-      read:account, etc.) — confirm the existing token has these.
-- [ ] **Set the real tenant URL** in
-      `systems/x86_64-linux/luna/default.nix:919`:
-      `baseUrl = "https://schrodinger.atlassian.net"` → replaces
-      the literal placeholder. Locked.
-- [ ] **Switch the source's Confluence config** at
-      `systems/x86_64-linux/luna/default.nix:927-930`. Replace
-      `confluenceSpaces` with the new `confluenceTargets` list (see
-      Stage 8c for the schema change):
-  ```nix
-  confluenceTargets = [
-    "https://schrodinger.atlassian.net/wiki/spaces/itkb"
-    "https://schrodinger.atlassian.net/wiki/spaces/SYSMGR"
-  ];
-  # Keep the legacy field set so pull_jira's cousin code isn't
-  # surprised; cme will ignore it. Drop in a follow-up cleanup.
-  confluenceSpaces = [ "itkb" "SYSMGR" ];
-  ```
-- [ ] **Cap the targets list to ONE for the first real run.** Set
-      `confluenceTargets = [ ".../SYSMGR" ]` (smaller of the two)
-      until Stage 8b/c land. Then add itkb. Until cme is wired (Stage
-      8b), the existing `pull_confluence` runs against
-      `confluenceSpaces` — set that to `[ "SYSMGR" ]` for the same
-      reason.
-- [ ] **`nixos-rebuild switch`** on luna, then verify:
+The cme + langgraph rewrite (Stages 8b–8g) is irrelevant until the
+pipeline runs end-to-end ONCE with the existing code. This stage is
+"prove the wiring works against `SYSMGR` with the bare-minimum
+`pull_confluence`," then move to the rewrite.
+
+- [x] **Bash-not-in-PATH bug fix** in
+      `modules/nixos/ingest/default.nix` (2026-04-23). Both
+      `obsidian-sync.sh`, `atlassian-sync.sh`, `github-sync.sh` now
+      invoked via `${pkgs.bash}/bin/bash <script>` from the wrapper.
+      Pending `nixos-rebuild switch` on luna.
+- [x] **luna config narrowed** to `confluenceSpaces = [ "SYSMGR" ]`
+      and `jiraProjects = [ ]` for the first real run
+      (2026-04-23). Pending the same rebuild.
+- [ ] **`nixos-rebuild switch` on luna**:
   ```sh
-  systemctl status ingest-atlassian.service
-  journalctl -u ingest-atlassian.service -n 200 --no-pager
-  # First post-rebuild run should now exit non-no-op:
-  #   pull_jira: backfilling N issues for project=OPS (cursor: empty)
-  #   pull_confluence: backfilling N pages for space=SYSMGR (cursor: empty)
-  cat /var/lib/ingest/state.json | jq '.cursors | with_entries(select(.key | startswith("atlassian")))'
+  ssh luna sudo nixos-rebuild switch --flake ~/.config/nixos-config#luna
+  ```
+  Then immediately:
+  ```sh
+  ssh luna sudo systemctl start ingest-atlassian.service
+  ssh luna sudo journalctl -u ingest-atlassian.service -n 200 --no-pager
+  ```
+  Expected (post-fix): the wrapper completes the venv bootstrap, then
+  reaches `ingest run-once atlassian`, and either succeeds (creates
+  `/var/lib/ingest/state.json` + new entries in Open WebUI) or fails
+  with a NEW error mode that's actually about Atlassian / config /
+  network — not exit 127.
+- [ ] **Verify Atlassian credentials work** by inspecting the first
+      real run's logs. If credentials are wrong, the
+      `atlassian-python-api` library raises a 401 — that surfaces in
+      the journal as a clear traceback. Rotate at
+      <https://id.atlassian.com/manage-profile/security/api-tokens>
+      if needed.
+- [ ] **Verify state file lands**:
+  ```sh
+  ssh luna sudo cat /var/lib/ingest/state.json | jq '.cursors | with_entries(select(.key | startswith("atlassian")))'
+  # expect non-empty cursor entries after first successful run
   ```
 - [ ] **Smoke-test sink writes**: `curl http://localhost:8080/api/v1/knowledges/`
-      on luna; `kb-it-tickets` and `kb-it-docs` knowledges should
-      exist with non-zero file counts after the first successful run.
+      on luna; `kb-it-docs` should exist with non-zero file count
+      after the first successful Confluence pull. Same for
+      `kb-it-tickets` once Jira is re-enabled.
+- [ ] **Confirm the other two timers also recover.** The bug
+      affected all three sources identically; rebuild fixes all three.
+      Verify obsidian + github also exit successfully on next tick.
 
 ### Stage 8b — package and integrate cme
 
@@ -363,7 +406,7 @@ auth.confluence.<base-url>.username=... auth.confluence.<base-url>.api_token=...
 - [ ] **New writer-PAT secret**:
       `secrets/obsidian-vault-writer-token.yaml`. Fine-grained GitHub
       PAT scoped to `ocasazza/obsidian` with `Contents: Read and
-  write` permission. Wire as `cfg.sinks.vaultGithub.tokenFile`,
+write` permission. Wire as `cfg.sinks.vaultGithub.tokenFile`,
       exported into the atlassian start-script wrapper as
       `INGEST_VAULT_GITHUB_TOKEN` at the last possible moment (matches
       the secret-handling pattern at `default.nix:330-335`).
@@ -459,7 +502,7 @@ For the FIRST backfill only (until cme reports `Skipped N pages
 
 - [ ] **Off-hours `OnCalendar` override**: temporarily set
       `services.timers.ingest-atlassian.timerConfig.OnCalendar =
-  "02:00..06:00/0:30"` (every 30 min between 2 AM and 6 AM) on
+"02:00..06:00/0:30"` (every 30 min between 2 AM and 6 AM) on
       luna. Lasts for the duration of the first sync (~2-3 nights
       per the vault-side capacity estimate).
 - [ ] **Revert to `*:0/30`** after `vllm_num_waiting_requests` stays
