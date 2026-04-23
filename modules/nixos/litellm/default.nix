@@ -98,7 +98,7 @@ let
     };
     litellm_settings = {
       drop_params = true;
-      set_verbose = false;
+      set_verbose = true;
     }
     // lib.optionalAttrs cfg.metrics.otelCallbacks {
       success_callback = [ "otel" ];
