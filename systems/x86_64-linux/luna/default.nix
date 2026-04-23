@@ -1208,6 +1208,12 @@ in
       forwardHeaders = true;
     };
 
+    # TODO(debug): remove after diagnosing why /vertex passthrough
+    # forwards the wrong Authorization header to vertex-proxy. Sets
+    # LITELLM_LOG=DEBUG in the container env so verbose request logs
+    # show what's actually being sent upstream.
+    extraEnv.LITELLM_LOG = "DEBUG";
+
     # Router-level model name aliases. Lets clients reference Anthropic
     # upstream model ids directly (the ones models.dev publishes and
     # claude-code defaults to) without us having to duplicate model_list
