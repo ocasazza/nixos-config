@@ -25,11 +25,37 @@ let
   # LiteLLM env vars — same shape as the nixos module. See
   # modules/nixos/claude-code/default.nix for the `cloudPassthrough`
   # rationale.
+  #
+  # cloudPassthrough = true: ALSO emit the vertex-mode env vars
+  # (CLAUDE_CODE_USE_VERTEX, ANTHROPIC_VERTEX_PROJECT_ID,
+  # CLOUD_ML_REGION) — without them Claude Code posts to
+  # `${ANTHROPIC_BASE_URL}/messages`, which the LiteLLM /vertex
+  # passthrough forwards to vertex-proxy as `/v1/messages`,
+  # which vertex-proxy 404s because it expects the full Vertex AI
+  # URL shape (`/v1/projects/.../streamRawPredict`). Setting
+  # CLAUDE_CODE_USE_VERTEX=1 makes Claude Code construct the
+  # correct Vertex AI URL itself, then the passthrough just
+  # forwards bytes verbatim.
+  #
+  # Project / region come from the legacy `vertex` block on the
+  # claude-code option since both paths talk to the same Vertex
+  # backend; pull defaults from there if they're set, otherwise
+  # use the fleet defaults baked into this module.
+  vertexProjectIdResolved =
+    if cfg.vertex.projectId != "" then cfg.vertex.projectId else "vertex-code-454718";
+  vertexRegionResolved = if cfg.vertex.region != "" then cfg.vertex.region else "us-east5";
+
   litellmEnvVars = lib.optionalAttrs cfg.litellm.enable (
     if cfg.litellm.cloudPassthrough then
       {
         ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/vertex/v1";
         CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
+        # Make Claude Code emit Vertex-shape URLs (the passthrough
+        # forwards verbatim to vertex-proxy which only speaks Vertex AI).
+        CLAUDE_CODE_USE_VERTEX = "1";
+        CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
+        ANTHROPIC_VERTEX_PROJECT_ID = vertexProjectIdResolved;
+        CLOUD_ML_REGION = vertexRegionResolved;
       }
     else
       {
