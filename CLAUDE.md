@@ -33,6 +33,38 @@ Before acting:
   `systems/x86_64-linux/luna`).
 - Secrets: sops-nix, decrypted via host keys — don't commit plaintext.
 
+## Cross-repo push targets
+
+The fleet pulls private flake inputs over a `git-daemon` running on luna —
+not GitHub. Pushing to a public origin instead of luna will leave nh switch
+unable to fetch your changes on every other host.
+
+- `~/Repositories/schrodinger/opencode` → **always push to the `luna` remote**
+  (`casazza@luna.local:/srv/git/opencode.git`), not `origin`
+  (anomalyco/opencode on GitHub). The fork's `dev` branch is the integration
+  line; there is no `main` on luna. nixos-config consumes
+  `git+ssh://casazza@luna.local/srv/git/opencode.git?ref=dev`, so anything
+  you don't push to luna is invisible to every other Mac on the next nh
+  switch. Husky's pre-push hook needs `bun` on PATH; `HUSKY=0` to skip when
+  iterating.
+- `~/Repositories/schrodinger/hermes-agent` → same pattern (luna mirror at
+  `casazza@luna.local:/srv/git/hermes-agent.git`, branch `schrodinger`).
+- `~/.config/nixos-config` → push to GitHub `origin/main`. This repo
+  isn't proxied through luna; siblings pull directly from GitHub.
+
+## Conflict resolution: merge, don't rebase
+
+- For ANY conflict against published refs (origin/main on nixos-config,
+  luna/dev on opencode/hermes), resolve via a **merge commit**, not a
+  rebase. Other hosts and other agents may have already fetched those
+  commits; rewriting them strands their views.
+- Never `git push --force` or `--force-with-lease` to published branches.
+- Avoid `git commit --amend` once a commit is pushed — make a follow-up
+  commit instead.
+- If you need to merge and there are conflicts, take the time to actually
+  resolve them by reading both sides — don't `git checkout --theirs/--ours`
+  blanket-style on a file you don't fully understand.
+
 ## Before reporting something as "missing"
 
 Grep the repo, check `jj log -r 'all()'`, and check sibling trees. The most

@@ -35,12 +35,15 @@ let
   cfg = config.casazza.distributedBuilds;
 
   sshKey = "/Users/casazza/.ssh/id_ed25519";
-  sshUser = "casazza";
+
+  # SSH user per system - darwin uses casazza, NixOS (luna) also uses casazza
+  sshUserForSystem = system: if system == "x86_64-linux" then "casazza" else "casazza";
 
   # Define cluster nodes. Each gets two builder entries: TB (preferred) + .local (fallback).
   clusterNodes = [
     {
       hostname = "GN9CFLM92K-MBP";
+      system = "aarch64-darwin";
       maxJobs = 6;
       supportedFeatures = [
         "nixos-test"
@@ -51,6 +54,7 @@ let
     }
     {
       hostname = "CK2Q9LN7PM-MBA";
+      system = "aarch64-darwin";
       maxJobs = 6;
       supportedFeatures = [
         "nixos-test"
@@ -60,6 +64,7 @@ let
     }
     {
       hostname = "GJHC5VVN49-MBP";
+      system = "aarch64-darwin";
       maxJobs = 6;
       supportedFeatures = [
         "nixos-test"
@@ -69,11 +74,23 @@ let
     }
     {
       hostname = "L75T4YHXV7-MBA";
+      system = "aarch64-darwin";
       maxJobs = 6;
       supportedFeatures = [
         "nixos-test"
         "benchmark"
         "big-parallel"
+      ];
+    }
+    {
+      hostname = "luna";
+      system = "x86_64-linux";
+      maxJobs = 4;
+      supportedFeatures = [
+        "nixos-test"
+        "benchmark"
+        "big-parallel"
+        "kvm"
       ];
     }
   ];
@@ -83,16 +100,18 @@ let
   allBuilders = lib.concatMap (node: [
     # {
     #   hostName = "${node.hostname}.tb";
-    #   system = "aarch64-darwin";
-    #   inherit sshUser sshKey;
+    #   system = node.system;
+    #   sshUser = sshUserForSystem node.system;
+    #   inherit sshKey;
     #   maxJobs = node.maxJobs;
     #   speedFactor = 2;
     #   supportedFeatures = node.supportedFeatures;
     # }
     {
       hostName = "${node.hostname}.local";
-      system = "aarch64-darwin";
-      inherit sshUser sshKey;
+      system = node.system;
+      sshUser = sshUserForSystem node.system;
+      inherit sshKey;
       maxJobs = node.maxJobs;
       speedFactor = 1;
       supportedFeatures = node.supportedFeatures;

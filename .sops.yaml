@@ -56,13 +56,14 @@ creation_rules:
       - age:
           - *admin_olive
           - *host_luna
-  # Redis password backing the JuiceFS metadata KV. luna runs the
-  # redis instance; every Mac in the fleet mounts JuiceFS as a client
-  # and needs to authenticate to that redis with `META_PASSWORD`.
-  # Hence: admin (for editing) + host_luna (for in-place activation
-  # decryption) + every darwin host_* anchor (so each Mac's
-  # darwin-rebuild can surface the secret at activation).
-  - path_regex: secrets/redis-seaweedfs-password\.yaml$
+  # JuiceFS-related secrets (Redis password for metadata KV +
+  # SeaweedFS S3 admin secret). luna runs both backends; every Mac
+  # mounts JuiceFS as a client and needs `META_PASSWORD` (redis) +
+  # `--secret-key <admin-secret>` (S3). Hence: admin (for editing) +
+  # host_luna (for in-place activation decryption) + every darwin
+  # host_* anchor (so each Mac's darwin-rebuild can surface the
+  # secret at activation).
+  - path_regex: secrets/(redis-seaweedfs-password|seaweedfs-admin-secret)\.yaml$
     key_groups:
       - age:
           - *admin_olive

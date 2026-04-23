@@ -15,12 +15,6 @@
 # every module under `modules/nixos/` (cachix, claude-code, nvidia,
 # nvidia-verify, vllm, etc.); we just configure their options below.
 #
-# IMPORTANT: luna was bootstrapped with a stock NixOS installer (not
-# disko) by an earlier `olive` user. We:
-#   1. Preserve the existing partition layout (no disko import) by
-#      mirroring /etc/nixos/hardware-configuration.nix here.
-#   2. Migrate `olive` -> `casazza` (the canonical user across this
-#      flake) via a one-shot system activation script that renames
 #      the home directory if the migration hasn't happened yet.
 
 let
@@ -151,7 +145,6 @@ in
     openssh.enable = true;
     gnome.gnome-keyring.enable = true;
     hardware.bolt.enable = true;
-
     # Avahi/mDNS: publish luna as `luna.local` on the LAN so any host
     # (Mac, Linux, browser via Bonjour) can hit
     # http://luna.local:8000  →  vllm coder OpenAI-compatible API
@@ -922,19 +915,19 @@ in
         type = "atlassian";
         enabled = true;
         schedule = "*:0/30"; # every 30 minutes
-        # TODO(ingest): USER EDIT — set to your Atlassian Cloud tenant URL.
-        baseUrl = "https://yourdomain.atlassian.net";
+        baseUrl = "https://schrodinger.atlassian.net";
         emailFile = config.sops.secrets.atlassian-email.path;
         tokenFile = config.sops.secrets.atlassian-api-token.path;
-        # TODO(ingest): USER EDIT — empty lists = pull every accessible project/space.
-        jiraProjects = [
-          "OPS"
-          "IT"
-        ];
-        confluenceSpaces = [
-          "IT"
-          "OPS"
-        ];
+        # First-run scope: SYSMGR only (smaller of the two locked
+        # Confluence targets) until the cme + langgraph rewrite lands.
+        # Once Stage 8b is done, switch to confluenceTargets (URL list)
+        # per the new module schema in
+        # ~/.config/nixos-config/todo.md Stage 8c. Add itkb at that
+        # point. See ~/Repositories/ocasazza/obsidian/todo.md Stage 8a.
+        # Jira is similarly capped — turn on real projects when the
+        # langgraph throttling work is done.
+        jiraProjects = [ ];
+        confluenceSpaces = [ "SYSMGR" ];
       };
 
       github = {
@@ -1215,6 +1208,25 @@ in
       forwardHeaders = true;
     };
 
+    # Router-level model name aliases. Lets clients reference Anthropic
+    # upstream model ids directly (the ones models.dev publishes and
+    # claude-code defaults to) without us having to duplicate model_list
+    # rows. All aliased names land in the `coder-cloud-claude` group,
+    # which routes to vertex-proxy and is gated by the dev team
+    # allowlist on top.
+    #
+    # Add a new upstream model id by appending one line here — no team
+    # or virtual-key change needed.
+    routerSettings.modelGroupAlias = {
+      "claude-opus-4-7" = "coder-cloud-claude";
+      "claude-opus-4-6" = "coder-cloud-claude";
+      "claude-opus-4-5" = "coder-cloud-claude";
+      "claude-sonnet-4-7" = "coder-cloud-claude";
+      "claude-sonnet-4-6" = "coder-cloud-claude";
+      "claude-sonnet-4-5" = "coder-cloud-claude";
+      "claude-haiku-4-5" = "coder-cloud-claude";
+    };
+
     # Per-client virtual keys: each sops-decrypted EnvironmentFile is
     # added to the proxy's env when the legacy venv path is in use.
     # In OCI+useVirtualKeys mode the bootstrap oneshot writes minted
@@ -1242,11 +1254,28 @@ in
     teams = {
       dev = {
         description = "Interactive-dev: claude-code (both) + opencode";
+        # Allowlist gates the raw `model:` value the client sends, BEFORE
+        # router_settings.model_group_alias rewrites it. So even though
+        # `claude-opus-4-7` aliases to `coder-cloud-claude` at routing
+        # time, the team ACL would still reject the request unless the
+        # alias name is in this list. Keep these in sync with the
+        # `routerSettings.modelGroupAlias` map below — every alias key
+        # needs an entry here.
         models = [
           "coder-local"
           "coder-remote"
           "coder-cloud-claude"
           "embedding"
+          # Anthropic upstream model ids opencode picks from models.dev
+          # and that claude-code might default to. Each routes back to
+          # `coder-cloud-claude` via modelGroupAlias.
+          "claude-opus-4-7"
+          "claude-opus-4-6"
+          "claude-opus-4-5"
+          "claude-sonnet-4-7"
+          "claude-sonnet-4-6"
+          "claude-sonnet-4-5"
+          "claude-haiku-4-5"
         ];
         tpm = 400000;
         rpm = 1200;
@@ -1543,9 +1572,16 @@ in
     # etc.) already has credentials in place.
     requirePassFile = config.sops.secrets.redis-seaweedfs-password.path;
   };
-  # `services.redis.servers.<name>` doesn't have an `openFirewall`
-  # option; open :6379 manually so Macs in the fleet can reach it.
-  networking.firewall.allowedTCPPorts = [ 6379 ];
+  # Top-level firewall opens. Aggregated here because nix's module
+  # system would otherwise reject duplicate `allowedTCPPorts` lists
+  # if we sprinkled them across the file.
+  #   * 22  — SSH (remote-builder access from darwin hosts)
+  #   * 6379 — Redis (JuiceFS metadata KV; `services.redis.servers.<name>`
+  #             has no `openFirewall` option)
+  networking.firewall.allowedTCPPorts = [
+    22
+    6379
+  ];
 
   # TiKV via OCI container (parallel-track, not in the hot JuiceFS path).
   # JuiceFS metadata lives in Redis above; this runs pingcap/pd +

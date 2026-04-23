@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macFUSE kernel-extension allowlist for the personal cluster.
+
+  Pre-approves Benjamin Fleischer's developer ID (Team ID 3T5GSNBU6W,
+  the publisher of macFUSE) so kexts signed by that team load without
+  the per-Mac "allow loading system software from developer Benjamin
+  Fleischer" prompt in System Settings → Privacy & Security.
+
+  Applies to the macFUSE 5.x bundle at /Library/Filesystems/macfuse.fs/
+  Contents/Extensions/<sdk>/macfuse.kext (bundle id
+  io.macfuse.filesystems.macfuse.<sdk>).
+
+  Why a profile and not in nix:
+    Mac kext approval is a per-machine boot-time policy enforced by the
+    kernel (CoreKextManagement). nix-darwin can drop files in /etc but
+    can't toggle this policy. The profile route is the standard answer.
+    Once installed, the policy persists across reboots and across
+    nixos-rebuilds.
+
+  Install (per Mac, one-time):
+    sudo profiles install -path /Users/casazza/.config/nixos-config/profiles/macfuse-kext-allowlist.mobileconfig
+
+    OR double-click the file in Finder, then approve in
+    System Settings → Privacy & Security → Profiles.
+
+  Verify:
+    sudo profiles list -all | grep -i casazza.macfuse
+    spctl kext-consent list | grep 3T5GSNBU6W
+
+  Remove:
+    sudo profiles remove -identifier net.casazza.macfuse-kext-allowlist
+-->
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.syspolicy.kernel-extension-policy</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadIdentifier</key>
+            <string>net.casazza.macfuse-kext-allowlist.payload</string>
+            <key>PayloadUUID</key>
+            <string>6EF1AC88-E4CB-44E7-9BC5-DE5EBD15F4B5</string>
+            <key>PayloadDisplayName</key>
+            <string>Allow macFUSE Kernel Extension</string>
+            <key>PayloadDescription</key>
+            <string>Whitelists kernel extensions signed by Benjamin Fleischer (Team ID 3T5GSNBU6W) so macFUSE loads without per-Mac approval.</string>
+            <key>PayloadOrganization</key>
+            <string>casazza.net</string>
+            <!--
+              AllowUserOverrides=true lets the user still toggle individual
+              kexts in System Settings if they want; we're only changing
+              the default from "deny by team" to "allow by team".
+            -->
+            <key>AllowUserOverrides</key>
+            <true/>
+            <!--
+              The team-ID-only allowlist. Any kext signed by 3T5GSNBU6W
+              loads without prompt. macFUSE bundle IDs vary per SDK
+              (io.macfuse.filesystems.macfuse.25, .26, etc.) so listing
+              by team ID is more durable than by bundle.
+            -->
+            <key>AllowedTeamIdentifiers</key>
+            <array>
+                <string>3T5GSNBU6W</string>
+            </array>
+        </dict>
+    </array>
+    <key>PayloadDescription</key>
+    <string>Whitelist macFUSE (Benjamin Fleischer, Team ID 3T5GSNBU6W) for kernel-extension loading on this Mac. Required for JuiceFS and other macFUSE-backed filesystems to mount without per-machine "allow loading system software" prompts.</string>
+    <key>PayloadDisplayName</key>
+    <string>Allow macFUSE Kernel Extension (casazza)</string>
+    <key>PayloadIdentifier</key>
+    <string>net.casazza.macfuse-kext-allowlist</string>
+    <key>PayloadOrganization</key>
+    <string>casazza.net</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadScope</key>
+    <string>System</string>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>C5657059-7DCB-4FE1-9336-C78FC0A998FD</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>

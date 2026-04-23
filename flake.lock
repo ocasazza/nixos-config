@@ -1358,11 +1358,11 @@
         "nixpkgs": "nixpkgs_13"
       },
       "locked": {
-        "lastModified": 1776923224,
-        "narHash": "sha256-VFbCRJ74I6r9fJl9x0hotQuyC8fOUt2WFr9tAeP2bF4=",
+        "lastModified": 1776956701,
+        "narHash": "sha256-rt8okkejp1fTFLb3w8UH4pAJZxPXlwReSww/y6dvsts=",
         "ref": "dev",
-        "rev": "9e691d3d662d07ba13ec8479c4deb541ece4ba74",
-        "revCount": 11101,
+        "rev": "9fb2aa3f37dd5f516ca736ba743245e926ca66f2",
+        "revCount": 11105,
         "type": "git",
         "url": "ssh://casazza@luna.local/srv/git/opencode.git"
       },

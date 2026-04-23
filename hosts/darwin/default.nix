@@ -44,9 +44,10 @@ in
   # runtime-only. Consumers are written to tolerate this:
   #   * fleet.env → the system.activationScripts.fleetSecrets block
   #     below guards on `if [ -f "$FLEET_SECRETS_FILE" ]`.
-  #   * litellm-key-claude-code-darwin → cloudPassthrough=true on the
-  #     programs.claude-code block below means the wrapper never reads
-  #     the file anyway.
+  #   * litellm-key-{claude-code,opencode}-darwin → the consuming
+  #     wrappers (claude-code, opencode-luna) guard on `[ -r FILE ]`
+  #     and fall through to a clear error message if the file is
+  #     missing, rather than crashing the shell.
   sops = {
     defaultSopsFile = ../../secrets/fleet.env;
     defaultSopsFormat = "dotenv";
@@ -100,6 +101,16 @@ in
         sopsFile = ../../secrets/redis-seaweedfs-password.yaml;
         format = "yaml";
         key = "redis_seaweedfs_password";
+      };
+      # SeaweedFS S3 admin secret. Same key group as redis above. The
+      # juicefs mount script reads this as `--secret-key <value>` so
+      # the per-Mac S3 client auths against luna's S3 gateway. Without
+      # this, the operator had to manually `cp /var/lib/seaweedfs/...`
+      # onto each Mac (recorded in earlier doc comments below).
+      seaweedfs-admin-secret = {
+        sopsFile = ../../secrets/seaweedfs-admin-secret.yaml;
+        format = "yaml";
+        key = "seaweedfs_admin_secret";
       };
     };
   };
@@ -237,7 +248,12 @@ in
     model = "coder-cloud-claude";
     litellm = {
       enable = true;
-      endpoint = "http://luna.local:4000";
+      # Bare `luna` (DNS / ssh-config alias) instead of `luna.local`
+      # (mDNS) — mDNS is unreliable from many Macs in this fleet (see
+      # `modules/darwin/observability/default.nix:49` and the homepage
+      # dashboard "Use bare `luna` (192.168.1.57) — confirmed working
+      # from LAN clients" guidance).
+      endpoint = "http://luna:4000";
       virtualKeyFile = "/run/secrets/litellm-key-claude-code-darwin";
       defaultGroup = "coder-cloud-claude";
       cloudPassthrough = false;
@@ -245,34 +261,22 @@ in
     telemetry.enable = false;
   };
 
-  # Opencode routed through the LiteLLM router on luna. Same
-  # rationale as claude-code above: per-host virtual-key auth gives
-  # Phoenix proper attribution, and the router's group-name surface
-  # decouples client config from upstream model selection.
+  # Opencode + Claude Code Vertex AI proxy.
   #
-  # IMPORTANT — opencode's schrodinger fork has a hardcoded
-  # vertex-proxy codepath in
-  # `packages/opencode/src/provider/provider.ts:170-264` that fires
-  # whenever the resolved baseURL contains the substring "vertex".
-  # That codepath ignores ANTHROPIC_API_KEY and shells out to
-  # `gcloud auth print-identity-token` instead. We deliberately use
-  # `http://luna.local:4000/v1` (no "vertex" substring) so the
-  # standard @ai-sdk/anthropic loader takes over and authenticates
-  # with our virtual key. Side effect: we lose the
-  # `interleaved-thinking-2025-05-14` beta header that the vertex
-  # codepath set; if that turns out to matter, push the header into
-  # luna's `coder-cloud-claude` group definition instead of
-  # client-side.
+  # Default route: vertex-direct (gcloud id-token via apiKeyHelper).
+  # The schrodinger fork's bundled managed config pins
+  # provider.anthropic.options.baseURL = https://vertex-proxy.sdgr.app,
+  # which trips the hardcoded vertex codepath in
+  # `packages/opencode/src/provider/provider.ts:170-264`. That
+  # codepath shells out to `gcloud auth print-identity-token` per
+  # request and forwards directly to vertex-proxy.
   #
-  # The virtual key reaches opencode via two paths:
-  #   1. `secrets.file` sources the sops-decrypted dotenv into every
-  #      interactive zsh session, exporting
-  #      LITELLM_API_KEY_OPENCODE_DARWIN.
-  #   2. `environment.ANTHROPIC_API_KEY` is set on the opencode
-  #      wrapper itself \u2014 but we can't read the sops file at
-  #      build time (it's a runtime secret), so we use a small
-  #      home-manager zshrc snippet below to alias the loaded var
-  #      to ANTHROPIC_API_KEY at shell start.
+  # For router-routed opencode (Phoenix attribution, per-host virtual
+  # keys, model group aliases) use the separate `opencode-luna`
+  # binary defined further down in this file — it points the same
+  # opencode build at http://luna.local:4000 with the
+  # opencode-darwin virtual key. Vertex-direct stays the default for
+  # this binary so existing muscle memory keeps working.
   programs.opencode = {
     enable = true;
     package = opencode.packages.${pkgs.system}.default;
@@ -288,20 +292,13 @@ in
       enable = true;
       endpoint = "http://luna:4318";
     };
-    # Source the sops-decrypted virtual-key dotenv into every shell.
-    # File contents: `LITELLM_API_KEY_OPENCODE_DARWIN=sk-...`. The
-    # zsh interactive-shell snippet below renames it to
-    # ANTHROPIC_API_KEY for opencode's anthropic loader.
-    secrets.file = "/run/secrets/litellm-key-opencode-darwin";
     managedConfig = {
       share = "disabled";
       enabled_providers = [
         "anthropic"
         "exo"
       ];
-      # Router endpoint, NOT /vertex/v1 (see note above re:
-      # provider.ts:170 hardcoded vertex codepath).
-      provider.anthropic.options.baseURL = "http://luna.local:4000";
+      provider.anthropic.options.baseURL = "https://vertex-proxy.sdgr.app/v1";
       # Exo cluster: OpenAI-compatible local endpoint for Qwen3 Coder Next.
       # Reuses the same apiPort declared in local.hermes.exo.apiPort above.
       provider.exo = {
@@ -318,9 +315,12 @@ in
         };
       };
     };
-    # vertex.enable = false (default) — we route via LiteLLM, not the
-    # direct vertex-proxy URL. apiKeyHelper still on so the helper
-    # script ships in case any other tool wants the gcloud id-token.
+    vertex = {
+      enable = true;
+      projectId = "vertex-code-454718";
+      region = "us-east5";
+      baseURL = "https://vertex-proxy.sdgr.app/v1";
+    };
     apiKeyHelper = true;
   };
 
@@ -345,7 +345,7 @@ in
         # ai.doStream, anthropic.messages.create, etc.) routes to the
         # same OTLP pipeline as Effects own spans. Needed here because
         # the system-wide managedConfig path (programs.opencode.managedConfig)
-        # is unreachable — see NOTE below.
+        # is unreachable — see NOTE above.
         experimental.openTelemetry = true;
         mcp = {
           hippo = {
@@ -442,8 +442,14 @@ in
       storageType = "s3";
       bucket = "http://luna.local:8333/shared";
       mountPoint = "/Volumes/juicefs";
-      accessKeyFile = "/var/lib/juicefs-secrets/access-key";
-      secretKeyFile = "/var/lib/juicefs-secrets/secret-key";
+      # accessKey is the literal string "admin" — bake it as a
+      # /nix/store text file so the upstream mount script (which only
+      # accepts a *file* path, not a literal value) can read it
+      # without manual seeding under /var/lib/juicefs-secrets/.
+      accessKeyFile = pkgs.writeText "juicefs-access-key" "admin";
+      # secretKey is the SeaweedFS S3 admin secret, decrypted by sops-nix
+      # at activation. See sops.secrets.seaweedfs-admin-secret above.
+      secretKeyFile = config.sops.secrets.seaweedfs-admin-secret.path;
       formatOnFirstBoot = false; # luna formats; clients only mount
       cacheDir = "/var/cache/juicefs/shared";
       cacheSize = 5120; # 5 GiB local read cache per Mac
@@ -808,8 +814,17 @@ in
   # System packages are auto-applied via
   # `modules/darwin/system-packages` (snowfall auto-discovery). Only
   # host-level additions go here.
+  #
+  # opencode-luna (router-routed sibling of the vertex-direct
+  # `opencode` binary above) ships from the schrodinger opencode
+  # flake input — see ~/Repositories/schrodinger/opencode/flake.nix
+  # `packages.<system>.opencode-luna`. It exec's the same Bun build
+  # with a different OPENCODE_MANAGED_CONFIG_DIR (luna baseURL) and
+  # reads the per-host virtual key from
+  # /run/secrets/litellm-key-opencode-darwin.
   environment.systemPackages = [
     consortium.packages.${pkgs.system}.consortium-cli
+    opencode.packages.${pkgs.system}.opencode-luna
   ];
 
   # Set system-wide environment variables
