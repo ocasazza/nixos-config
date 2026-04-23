@@ -852,12 +852,12 @@
         "rev": "944d281fc0cd74dd8b01e539612c52feeecb134f",
         "revCount": 3396,
         "type": "git",
-        "url": "ssh://casazza@luna.local/srv/git/hermes-agent.git"
+        "url": "git://luna/hermes-agent"
       },
       "original": {
         "ref": "schrodinger",
         "type": "git",
-        "url": "ssh://casazza@luna.local/srv/git/hermes-agent.git"
+        "url": "git://luna/hermes-agent"
       }
     },
     "hippo": {
@@ -1346,11 +1346,11 @@
         "rev": "716c1138f9c5bfbe263a7754dc52907927b036dd",
         "revCount": 219,
         "type": "git",
-        "url": "ssh://casazza@luna.local/srv/git/obsidian.git"
+        "url": "git://luna/obsidian"
       },
       "original": {
         "type": "git",
-        "url": "ssh://casazza@luna.local/srv/git/obsidian.git"
+        "url": "git://luna/obsidian"
       }
     },
     "opencode": {
@@ -1364,12 +1364,12 @@
         "rev": "9fb2aa3f37dd5f516ca736ba743245e926ca66f2",
         "revCount": 11105,
         "type": "git",
-        "url": "ssh://casazza@luna.local/srv/git/opencode.git"
+        "url": "git://luna/opencode"
       },
       "original": {
         "ref": "dev",
         "type": "git",
-        "url": "ssh://casazza@luna.local/srv/git/opencode.git"
+        "url": "git://luna/opencode"
       }
     },
     "pyproject-build-systems": {
