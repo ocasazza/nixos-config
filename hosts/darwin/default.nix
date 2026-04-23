@@ -60,15 +60,46 @@ in
         sopsFile = ../../secrets/fleet.env;
         format = "dotenv";
       };
-      # LiteLLM virtual key for the darwin claude-code client. Yaml
-      # secret with a single `litellm_api_key` scalar — sops-nix writes
-      # just the value to /run/secrets/litellm-key-claude-code-darwin.
-      # Mirrors the declaration on luna
-      # (systems/x86_64-linux/luna/default.nix).
+      # LiteLLM virtual keys for the two darwin clients (claude-code,
+      # opencode). Each yaml secret holds a single `litellm_api_key`
+      # scalar — sops-nix writes just the value to
+      # /run/secrets/litellm-key-<client>. Mirrors the declarations on
+      # luna (systems/x86_64-linux/luna/default.nix).
+      #
+      # Both keys are minted by luna's `litellm-team-bootstrap.service`
+      # and the values committed back into the sops yaml here. The
+      # claude-code wrapper reads the file at invocation time and
+      # exports the value as ANTHROPIC_API_KEY; opencode picks it up
+      # via the same env var, sourced into interactive shells by
+      # programs.opencode.secrets.file.
       litellm-key-claude-code-darwin = {
         sopsFile = ../../secrets/litellm-key-claude-code-darwin.yaml;
         format = "yaml";
         key = "litellm_api_key";
+        # Mode 0440 + group=staff so the user-shell sourcing the file
+        # (zsh interactive) can read it; default 0400 root would block
+        # opencode's per-shell load.
+        mode = "0440";
+        owner = "root";
+        group = "staff";
+      };
+      litellm-key-opencode-darwin = {
+        sopsFile = ../../secrets/litellm-key-opencode-darwin.yaml;
+        format = "yaml";
+        key = "litellm_api_key";
+        mode = "0440";
+        owner = "root";
+        group = "staff";
+      };
+      # Redis password for luna's JuiceFS metadata KV. Sops-nix writes
+      # just the value to /run/secrets/redis-seaweedfs-password.
+      # Re-encrypted to every host_*  age key in `.sops.yaml` so each
+      # Mac surfaces it at activation. See `nixos-config/todo.md`
+      # Stage 0.9.
+      redis-seaweedfs-password = {
+        sopsFile = ../../secrets/redis-seaweedfs-password.yaml;
+        format = "yaml";
+        key = "redis_seaweedfs_password";
       };
     };
   };
@@ -176,45 +207,72 @@ in
     '';
   };
 
-  # Claude Code routed through the LiteLLM proxy on luna. Identical
+  # Claude Code routed through the LiteLLM router on luna. Identical
   # across every darwin host in this fleet, so the per-host files at
   # systems/aarch64-darwin/<host>/default.nix only need to override
   # what's actually host-specific (hostname, exo peers, distributed-
   # builds toggle).
   #
-  # cloudPassthrough keeps the apiKeyHelper path alive so Claude Code's
-  # default (Opus via vertex-proxy) still works — the request goes
-  # `darwin -> luna:4000/vertex/v1 -> vertex-proxy` instead of
-  # `darwin -> vertex-proxy` directly. LiteLLM doesn't add any auth
-  # state for cloud; it just forwards the gcloud id-token. Explicit
-  # model-name selection (e.g. `claude --model coder-local`) routes
-  # via LiteLLM's OpenAI-compat router to luna's vLLM.
+  # cloudPassthrough = false: the request goes
+  # `darwin -> luna:4000/v1 (router) -> vertex-proxy` and authenticates
+  # with the per-system virtual key sops-decrypted into
+  # /run/secrets/litellm-key-claude-code-darwin (rather than the
+  # gcloud id-token going through the /vertex/v1 passthrough). Two
+  # consequences vs. cloudPassthrough=true:
+  #   1. Phoenix sees these calls under the `claude-code-darwin`
+  #      virtual-key alias instead of as anonymous /vertex traffic,
+  #      so the usage dashboards actually attribute spend per host.
+  #   2. The router's `model:` field is the LiteLLM group name
+  #      (`coder-cloud-claude`), not the upstream model id
+  #      (`claude-opus-4-7`). `claude-opus-4-7` only resolves inside
+  #      the router's group definition on luna. Switching providers
+  #      (sonnet, haiku, a different region) is a one-line edit on
+  #      luna with zero client churn.
   #
   # Telemetry is off here — LiteLLM's OTEL callbacks cover per-call
   # tracing into Phoenix with richer attribution; the client telemetry
   # would duplicate spans.
-  #
-  # virtualKeyFile resolves to /run/secrets/litellm-key-claude-code-darwin
-  # via the sops.secrets declaration below. Until each darwin host's
-  # ssh-to-age pubkey is added to .sops.yaml as `&host_<hostname>` and
-  # the yaml is `sops updatekeys`d, decryption at launchd activation
-  # will fail — but cloudPassthrough=true means the wrapper never reads
-  # the file, so claude-code still works against vertex-proxy in the
-  # meantime. See TODO(sops-darwin) below.
   programs.claude-code = {
     enable = true;
-    model = "claude-opus-4-7";
+    model = "coder-cloud-claude";
     litellm = {
       enable = true;
       endpoint = "http://luna.local:4000";
       virtualKeyFile = "/run/secrets/litellm-key-claude-code-darwin";
       defaultGroup = "coder-cloud-claude";
-      cloudPassthrough = true;
+      cloudPassthrough = false;
     };
     telemetry.enable = false;
   };
 
-  # Opencode + Claude Code Vertex AI proxy
+  # Opencode routed through the LiteLLM router on luna. Same
+  # rationale as claude-code above: per-host virtual-key auth gives
+  # Phoenix proper attribution, and the router's group-name surface
+  # decouples client config from upstream model selection.
+  #
+  # IMPORTANT — opencode's schrodinger fork has a hardcoded
+  # vertex-proxy codepath in
+  # `packages/opencode/src/provider/provider.ts:170-264` that fires
+  # whenever the resolved baseURL contains the substring "vertex".
+  # That codepath ignores ANTHROPIC_API_KEY and shells out to
+  # `gcloud auth print-identity-token` instead. We deliberately use
+  # `http://luna.local:4000/v1` (no "vertex" substring) so the
+  # standard @ai-sdk/anthropic loader takes over and authenticates
+  # with our virtual key. Side effect: we lose the
+  # `interleaved-thinking-2025-05-14` beta header that the vertex
+  # codepath set; if that turns out to matter, push the header into
+  # luna's `coder-cloud-claude` group definition instead of
+  # client-side.
+  #
+  # The virtual key reaches opencode via two paths:
+  #   1. `secrets.file` sources the sops-decrypted dotenv into every
+  #      interactive zsh session, exporting
+  #      LITELLM_API_KEY_OPENCODE_DARWIN.
+  #   2. `environment.ANTHROPIC_API_KEY` is set on the opencode
+  #      wrapper itself \u2014 but we can't read the sops file at
+  #      build time (it's a runtime secret), so we use a small
+  #      home-manager zshrc snippet below to alias the loaded var
+  #      to ANTHROPIC_API_KEY at shell start.
   programs.opencode = {
     enable = true;
     package = opencode.packages.${pkgs.system}.default;
@@ -230,13 +288,20 @@ in
       enable = true;
       endpoint = "http://luna:4318";
     };
+    # Source the sops-decrypted virtual-key dotenv into every shell.
+    # File contents: `LITELLM_API_KEY_OPENCODE_DARWIN=sk-...`. The
+    # zsh interactive-shell snippet below renames it to
+    # ANTHROPIC_API_KEY for opencode's anthropic loader.
+    secrets.file = "/run/secrets/litellm-key-opencode-darwin";
     managedConfig = {
       share = "disabled";
       enabled_providers = [
         "anthropic"
         "exo"
       ];
-      provider.anthropic.options.baseURL = "https://vertex-proxy.sdgr.app/v1";
+      # Router endpoint, NOT /vertex/v1 (see note above re:
+      # provider.ts:170 hardcoded vertex codepath).
+      provider.anthropic.options.baseURL = "http://luna.local:4000";
       # Exo cluster: OpenAI-compatible local endpoint for Qwen3 Coder Next.
       # Reuses the same apiPort declared in local.hermes.exo.apiPort above.
       provider.exo = {
@@ -253,12 +318,9 @@ in
         };
       };
     };
-    vertex = {
-      enable = true;
-      projectId = "vertex-code-454718";
-      region = "us-east5";
-      baseURL = "https://vertex-proxy.sdgr.app/v1";
-    };
+    # vertex.enable = false (default) — we route via LiteLLM, not the
+    # direct vertex-proxy URL. apiKeyHelper still on so the helper
+    # script ships in case any other tool wants the gcloud id-token.
     apiKeyHelper = true;
   };
 
@@ -337,7 +399,7 @@ in
     fi
   '';
 
-  # ── shared JuiceFS client (talks to luna's TiKV + S3) ────────────────
+  # ── shared JuiceFS client (talks to luna's Redis + S3) ───────────────
   # Every Mac in the fleet mounts the shared filesystem at /Volumes/juicefs
   # so writes from any host land in luna's SeaweedFS object store.
   #
@@ -345,10 +407,12 @@ in
   # daemon retries (KeepAlive=true). The mount-point exists but is empty
   # until the host is back on the home network or Tailscale (TBD).
   #
-  # Secret seeding (one-time, per-Mac, out-of-band):
+  # Secret seeding (one-time, per-Mac, out-of-band).
+  # `install` on macOS rejects /dev/stdin as source; use tee + chmod:
   #   sudo install -d -m 0700 -o root -g wheel /var/lib/juicefs-secrets
-  #   echo -n 'admin' | sudo install -m 0600 /dev/stdin /var/lib/juicefs-secrets/access-key
-  #   sudo install -m 0600 /dev/stdin /var/lib/juicefs-secrets/secret-key  # paste luna's seaweedfs admin secret
+  #   echo -n 'admin' | sudo tee /var/lib/juicefs-secrets/access-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/access-key
+  #   sudo tee /var/lib/juicefs-secrets/secret-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/secret-key  # paste luna's seaweedfs admin secret (/var/lib/seaweedfs/admin-secret on luna)
+  #   sudo tee /var/lib/juicefs-secrets/meta-password >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/meta-password  # paste luna's redis-seaweedfs password (sops decrypts to /run/secrets/redis-seaweedfs-password on luna)
   #
   # macFUSE: nix-homebrew is currently disabled in this flake so the
   # cask install path is opted out via requireNixHomebrew=false. User
@@ -365,7 +429,16 @@ in
   services.juicefs = {
     enable = true;
     mounts.shared = {
-      metaUrl = "tikv://luna.local:2379/shared";
+      # Migrated from `tikv://luna.local:2379/shared` when luna's
+      # JuiceFS metadata backend flipped to Redis (TiKV 8.5.0 didn't
+      # build under gcc 15 / cmake 4.1, see luna config). luna's redis
+      # is now LAN-bound on 6379 with mandatory auth — keep this URL
+      # credential-free; metaPasswordFile injects it as META_PASSWORD.
+      metaUrl = "redis://luna.local:6379/0";
+      # sops-nix surfaces the redis password at /run/secrets/...; the
+      # /var/lib/juicefs-secrets/meta-password manual-seed path is no
+      # longer needed.
+      metaPasswordFile = config.sops.secrets.redis-seaweedfs-password.path;
       storageType = "s3";
       bucket = "http://luna.local:8333/shared";
       mountPoint = "/Volumes/juicefs";

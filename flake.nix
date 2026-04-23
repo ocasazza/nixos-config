@@ -267,7 +267,8 @@
             };
           }
         )
-      ];
+      ]
+      ++ inputs.nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.nixosModules.default;
 
       # No aliases needed — snowfall auto-discovers shells/default
     };

@@ -63,7 +63,12 @@ let
   wrappedClaude = pkgs.symlinkJoin {
     name = "claude-code-wrapped-${cfg.package.version}";
     paths = [ cfg.package ];
-    nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+    # makeShellWrapper (not makeBinaryWrapper) — the latter dispatches
+    # to makeCWrapper on darwin which rejects `--run` (newer nixpkgs
+    # behavior, was silent fallthrough before). The shell wrapper is
+    # marginally slower at exec but supports the full --run/--prefix
+    # flag set we use to splice the virtual-key load.
+    nativeBuildInputs = [ pkgs.makeShellWrapper ];
     postBuild =
       let
         setFlags = lib.concatStringsSep " " (
