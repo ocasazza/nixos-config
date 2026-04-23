@@ -1358,11 +1358,11 @@
         "nixpkgs": "nixpkgs_13"
       },
       "locked": {
-        "lastModified": 1776956701,
-        "narHash": "sha256-rt8okkejp1fTFLb3w8UH4pAJZxPXlwReSww/y6dvsts=",
+        "lastModified": 1776960927,
+        "narHash": "sha256-ecfYNG4Mzwu52ZELKIbEWhfD8eJsFEKzOHK5N9p4cNY=",
         "ref": "dev",
-        "rev": "9fb2aa3f37dd5f516ca736ba743245e926ca66f2",
-        "revCount": 11105,
+        "rev": "65a529f85a486e492f25966c7ea420607db9042b",
+        "revCount": 11106,
         "type": "git",
         "url": "git://luna/opencode"
       },
