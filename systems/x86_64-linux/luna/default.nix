@@ -918,19 +918,19 @@ in
         type = "atlassian";
         enabled = true;
         schedule = "*:0/30"; # every 30 minutes
-        # TODO(ingest): USER EDIT — set to your Atlassian Cloud tenant URL.
-        baseUrl = "https://yourdomain.atlassian.net";
+        baseUrl = "https://schrodinger.atlassian.net";
         emailFile = config.sops.secrets.atlassian-email.path;
         tokenFile = config.sops.secrets.atlassian-api-token.path;
-        # TODO(ingest): USER EDIT — empty lists = pull every accessible project/space.
-        jiraProjects = [
-          "OPS"
-          "IT"
-        ];
-        confluenceSpaces = [
-          "IT"
-          "OPS"
-        ];
+        # First-run scope: SYSMGR only (smaller of the two locked
+        # Confluence targets) until the cme + langgraph rewrite lands.
+        # Once Stage 8b is done, switch to confluenceTargets (URL list)
+        # per the new module schema in
+        # ~/.config/nixos-config/todo.md Stage 8c. Add itkb at that
+        # point. See ~/Repositories/ocasazza/obsidian/todo.md Stage 8a.
+        # Jira is similarly capped — turn on real projects when the
+        # langgraph throttling work is done.
+        jiraProjects = [ ];
+        confluenceSpaces = [ "SYSMGR" ];
       };
 
       github = {
@@ -1257,11 +1257,28 @@ in
     teams = {
       dev = {
         description = "Interactive-dev: claude-code (both) + opencode";
+        # Allowlist gates the raw `model:` value the client sends, BEFORE
+        # router_settings.model_group_alias rewrites it. So even though
+        # `claude-opus-4-7` aliases to `coder-cloud-claude` at routing
+        # time, the team ACL would still reject the request unless the
+        # alias name is in this list. Keep these in sync with the
+        # `routerSettings.modelGroupAlias` map below — every alias key
+        # needs an entry here.
         models = [
           "coder-local"
           "coder-remote"
           "coder-cloud-claude"
           "embedding"
+          # Anthropic upstream model ids opencode picks from models.dev
+          # and that claude-code might default to. Each routes back to
+          # `coder-cloud-claude` via modelGroupAlias.
+          "claude-opus-4-7"
+          "claude-opus-4-6"
+          "claude-opus-4-5"
+          "claude-sonnet-4-7"
+          "claude-sonnet-4-6"
+          "claude-sonnet-4-5"
+          "claude-haiku-4-5"
         ];
         tpm = 400000;
         rpm = 1200;

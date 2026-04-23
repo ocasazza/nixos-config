@@ -135,12 +135,16 @@ in
 
       endpoint = lib.mkOption {
         type = lib.types.str;
-        default = "http://luna.local:4000";
+        default = "http://luna:4000";
         description = ''
           LiteLLM base URL (serves `/v1/messages` and `/vertex/*`).
-          Default uses `luna.local` (mDNS) so Macs on the home LAN
-          resolve without extra wiring; NixOS luna itself should
-          override to `http://localhost:4000` via its host config.
+          Default uses bare `luna` (DNS) instead of `luna.local`
+          (mDNS) because mDNS is unreliable from many Macs in this
+          fleet — see `modules/darwin/observability/default.nix:49`
+          for the same observation about OTLP traffic. Each Mac's
+          `~/.ssh/config` alias `luna luna.local 192.168.1.57`
+          provides the resolution. NixOS luna itself should override
+          to `http://localhost:4000` via its host config.
         '';
       };
 

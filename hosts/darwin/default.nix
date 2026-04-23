@@ -248,7 +248,12 @@ in
     model = "coder-cloud-claude";
     litellm = {
       enable = true;
-      endpoint = "http://luna.local:4000";
+      # Bare `luna` (DNS / ssh-config alias) instead of `luna.local`
+      # (mDNS) — mDNS is unreliable from many Macs in this fleet (see
+      # `modules/darwin/observability/default.nix:49` and the homepage
+      # dashboard "Use bare `luna` (192.168.1.57) — confirmed working
+      # from LAN clients" guidance).
+      endpoint = "http://luna:4000";
       virtualKeyFile = "/run/secrets/litellm-key-claude-code-darwin";
       defaultGroup = "coder-cloud-claude";
       cloudPassthrough = false;
