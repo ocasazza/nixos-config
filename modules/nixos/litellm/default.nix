@@ -106,6 +106,7 @@ let
     };
     environment_variables = {
       OTEL_SERVICE_NAME = "litellm";
+      LITELLM_LOG = "DEBUG";
     };
     general_settings = {
       master_key = "os.environ/LITELLM_MASTER_KEY";
