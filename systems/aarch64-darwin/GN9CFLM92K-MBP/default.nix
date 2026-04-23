@@ -23,6 +23,28 @@ in
   # is back on the same network.
   casazza.distributedBuilds.enable = false;
 
+  # Hold the JuiceFS mount launchd daemon offline until macFUSE's kext
+  # is approved in System Settings → Privacy & Security ("allow loading
+  # system software from developer Benjamin Fleischer", developer ID
+  # 3T5GSNBU6W). Without that approval, mount_macfuse pops a
+  # notification every few seconds and the launchd job thrashes.
+  #
+  # The mount config (services.juicefs.mounts.shared) stays defined so
+  # /var/lib/juicefs-secrets + the sops-managed redis password get
+  # provisioned by the rebuild as usual; only the launchd respawn loop
+  # is suppressed. Once the kext is approved (one-time, user-interactive),
+  # remove this override and re-run `darwin-rebuild switch` — or just
+  # `sudo launchctl load /Library/LaunchDaemons/org.juicefs.mount-shared.plist`.
+  #
+  # The upstream darwin juicefs module hardcodes KeepAlive=true /
+  # RunAtLoad=true; this `Disabled = true` override is the lowest-blast-
+  # radius way to neutralize them without forking the module.
+  launchd.daemons.juicefs-mount-shared.serviceConfig = {
+    RunAtLoad = lib.mkForce false;
+    KeepAlive = lib.mkForce false;
+    Disabled = lib.mkForce true;
+  };
+
   # Pass exo cluster args that exo-cluster.nix expects
   _module.args = {
     exoPeers = exoPeers;
