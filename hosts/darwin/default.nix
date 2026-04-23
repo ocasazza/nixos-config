@@ -70,6 +70,16 @@ in
         format = "yaml";
         key = "litellm_api_key";
       };
+      # Redis password for luna's JuiceFS metadata KV. Sops-nix writes
+      # just the value to /run/secrets/redis-seaweedfs-password.
+      # Re-encrypted to every host_*  age key in `.sops.yaml` so each
+      # Mac surfaces it at activation. See `nixos-config/todo.md`
+      # Stage 0.9.
+      redis-seaweedfs-password = {
+        sopsFile = ../../secrets/redis-seaweedfs-password.yaml;
+        format = "yaml";
+        key = "redis_seaweedfs_password";
+      };
     };
   };
 
@@ -373,7 +383,10 @@ in
       # is now LAN-bound on 6379 with mandatory auth — keep this URL
       # credential-free; metaPasswordFile injects it as META_PASSWORD.
       metaUrl = "redis://luna.local:6379/0";
-      metaPasswordFile = "/var/lib/juicefs-secrets/meta-password";
+      # sops-nix surfaces the redis password at /run/secrets/...; the
+      # /var/lib/juicefs-secrets/meta-password manual-seed path is no
+      # longer needed.
+      metaPasswordFile = config.sops.secrets.redis-seaweedfs-password.path;
       storageType = "s3";
       bucket = "http://luna.local:8333/shared";
       mountPoint = "/Volumes/juicefs";

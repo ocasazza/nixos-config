@@ -571,7 +571,24 @@ in
               exporters = [ "loki" ];
             };
           };
-          telemetry.logs.level = "info";
+          telemetry = {
+            logs.level = "info";
+            # Default internal-metrics listener is `127.0.0.1:8888` —
+            # collides with seaweedfs-filer (which wants `0.0.0.0:8888`
+            # by default). Move to 8893 so both can run; seaweedfs uses
+            # 8888-8892 for master/volume/filer/s3 + their metrics ports.
+            #
+            # Old `metrics.address` is deprecated in collector ≥ 0.124.
+            # Use the new `metrics.readers` shape.
+            metrics.readers = [
+              {
+                pull.exporter.prometheus = {
+                  host = "127.0.0.1";
+                  port = 8893;
+                };
+              }
+            ];
+          };
         };
       };
     };
