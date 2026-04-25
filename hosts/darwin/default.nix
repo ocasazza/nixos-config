@@ -304,6 +304,12 @@ in
           };
         };
       };
+      # NOTE: `luna-litellm` provider is declared in the user-level
+      # ~/.config/opencode/opencode.json block below, NOT here. The
+      # Schrodinger fork's wrapper hardcodes OPENCODE_MANAGED_CONFIG_DIR
+      # to its bundled etc/opencode dir, shadowing anything we add to
+      # this attrset. See the user-config block (~80 lines below) for
+      # the actual provider definition.
     };
     vertex = {
       enable = true;
@@ -312,6 +318,7 @@ in
       baseURL = "https://vertex-proxy.sdgr.app/v1";
     };
     apiKeyHelper = true;
+    secrets.file = config.sops.secrets.litellm-key-opencode-darwin.path;
   };
 
   # opencode user-level config: MCP servers for cross-conversation memory (hippo)
@@ -337,6 +344,53 @@ in
         # the system-wide managedConfig path (programs.opencode.managedConfig)
         # is unreachable — see NOTE above.
         experimental.openTelemetry = true;
+        # luna-litellm provider lives here (not managedConfig) for the
+        # same reason as the rest of this user-level config: the
+        # Schrodinger fork's wrapper hardcodes OPENCODE_MANAGED_CONFIG_DIR
+        # to its bundled etc/opencode dir, so anything we put in
+        # programs.opencode.managedConfig is shadowed. The user-level
+        # ~/.config/opencode/opencode.json IS read and merges with
+        # whatever the bundled etc/opencode declares.
+        enabled_providers = [
+          "anthropic"
+          "exo"
+          "luna-litellm"
+        ];
+        provider.luna-litellm = {
+          npm = "@ai-sdk/openai-compatible";
+          name = "Luna LiteLLM";
+          options = {
+            # localhost — AppGate doesn't forward :4000 from off-LAN, so
+            # we tunnel via the launchd.user.agents.litellm-fetch-tunnel
+            # autossh daemon (defined below) and point opencode at the
+            # local end of the tunnel.
+            baseURL = "http://localhost:4000/v1";
+            apiKey = "{env:LITELLM_API_KEY_OPENCODE_DARWIN}";
+          };
+          models = {
+            coder-local = {
+              name = "Luna coder (local vLLM, Qwen3-Coder-30B AWQ)";
+              limit = {
+                context = 32768;
+                output = 8192;
+              };
+            };
+            coder-remote = {
+              name = "Coder remote (exo + GFR federation)";
+              limit = {
+                context = 262144;
+                output = 8192;
+              };
+            };
+            embedding = {
+              name = "Qwen3-Embedding-0.6B";
+              limit = {
+                context = 2048;
+                output = 0;
+              };
+            };
+          };
+        };
         mcp = {
           hippo = {
             type = "local";
@@ -358,6 +412,57 @@ in
           };
         };
       };
+
+  # Forward SSH tunnel from this Mac → desk-nxst-001:4000 (LiteLLM).
+  # AppGate SDP only forwards :22, so opencode (and anything else
+  # talking to the LiteLLM federator) needs an SSH-tunneled path to
+  # reach :4000 from off-LAN. autossh + launchd.user.agents keeps the
+  # tunnel up across AppGate flaps and reboots; opencode's baseURL
+  # points at http://localhost:4000/v1 (see programs.opencode user
+  # config above).
+  #
+  # Per-user agent (not a system daemon) because:
+  #   - The remote end is `casazza@desk-nxst-001` (regular login user),
+  #     so it uses ~/.ssh/id_ed25519 and ~/.ssh/known_hosts directly.
+  #   - Local bind 127.0.0.1:4000 is per-user state anyway.
+  #
+  # If a manual `ssh -fN -L 4000:...` tunnel is already running, this
+  # agent will fail to bind 4000 — kill the manual proc first.
+  launchd.user.agents.litellm-fetch-tunnel = {
+    serviceConfig = {
+      Label = "local.litellm-fetch-tunnel";
+      RunAtLoad = true;
+      KeepAlive = true;
+      EnvironmentVariables = {
+        # autossh's "first connection must succeed within N seconds"
+        # would mark the tunnel dead during AppGate bring-up. 0 disables
+        # the gate; ServerAlive* handles liveness.
+        AUTOSSH_GATETIME = "0";
+        # ssh reads ~/.ssh/{config,known_hosts,id_*} via $HOME.
+        HOME = "/Users/${user.name}";
+      };
+      ProgramArguments = [
+        "${pkgs.autossh}/bin/autossh"
+        "-M"
+        "0"
+        "-N"
+        "-T"
+        "-o"
+        "ExitOnForwardFailure=yes"
+        "-o"
+        "ServerAliveInterval=30"
+        "-o"
+        "ServerAliveCountMax=3"
+        "-o"
+        "BatchMode=yes"
+        "-L"
+        "127.0.0.1:4000:127.0.0.1:4000"
+        "casazza@desk-nxst-001"
+      ];
+      StandardOutPath = "/tmp/litellm-fetch-tunnel.log";
+      StandardErrorPath = "/tmp/litellm-fetch-tunnel.err";
+    };
+  };
 
   # Enable autopkgserver for Fleet GitOps package building
   services.autopkgserver = {
