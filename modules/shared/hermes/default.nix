@@ -966,6 +966,47 @@ in
           Only set in the environment when non-empty.
         '';
       };
+
+      litellmTunnel = {
+        enable = mkEnableOption ''
+          Persistent reverse SSH tunnel from this Mac to a remote
+          LiteLLM host, exposing the local exo API as `127.0.0.1:apiPort`
+          on the remote so LiteLLM can route to it as a model deployment.
+
+          Self-gated to the relay node (myLinks > 1) inside the tb mesh —
+          the relay is the only node guaranteed to see the whole sharded
+          cluster, so a single tunnel covers all 3 mesh nodes. CK2/L75
+          set this option but emit no daemon
+        '';
+
+        remoteHost = mkOption {
+          type = types.str;
+          default = "desk-nxst-001";
+          description = "Hostname of the LiteLLM box that terminates the reverse tunnel.";
+        };
+
+        remoteUser = mkOption {
+          type = types.str;
+          default = "exo-tunnel";
+          description = ''
+            Account on `remoteHost` that accepts the reverse tunnel.
+            Convention: a dedicated system user whose authorized_keys
+            entry is locked to a single forced-command + permitlisten
+            for `127.0.0.1:apiPort`. See nixstation's host config.
+          '';
+        };
+
+        identityFile = mkOption {
+          type = types.path;
+          default = "/etc/ssh/ssh_host_ed25519_key";
+          description = ''
+            SSH private key the LaunchDaemon authenticates with. Defaults
+            to the host key (already present, identifies the Mac).
+            Its public counterpart must be in `remoteUser`'s
+            authorized_keys on `remoteHost`.
+          '';
+        };
+      };
     };
 
     voice = {
@@ -1512,6 +1553,57 @@ in
         </plist>
       '';
     })
+
+    # Reverse SSH tunnel from the relay → LiteLLM host. autossh keeps it
+    # up across AppGate flaps / desk-nxst-001 reboots; KeepAlive on the
+    # launchd side restarts the wrapper if autossh itself ever dies.
+    # Self-gated to the relay (myLinks > 1) so CK2/L75 are no-ops.
+    (mkIf
+      (isDarwin && cfg.exo.enable && cfg.exo.litellmTunnel.enable && tbEnabled && lib.length myLinks > 1)
+      {
+        environment.systemPackages = [ pkgs.autossh ];
+
+        launchd.daemons.exo-litellm-tunnel = {
+          serviceConfig = {
+            Label = "dev.exo.litellm-tunnel";
+            RunAtLoad = true;
+            KeepAlive = true;
+            EnvironmentVariables = {
+              # autossh's "first connection must succeed within N seconds"
+              # gate would mark the tunnel dead during AppGate bring-up.
+              # 0 disables the gate; we rely on ServerAlive* instead.
+              AUTOSSH_GATETIME = "0";
+            };
+            ProgramArguments = [
+              "${pkgs.autossh}/bin/autossh"
+              "-M"
+              "0" # no monitoring port; ServerAliveInterval handles liveness
+              "-N" # no remote command
+              "-T" # no TTY
+              "-o"
+              "ExitOnForwardFailure=yes"
+              "-o"
+              "ServerAliveInterval=30"
+              "-o"
+              "ServerAliveCountMax=3"
+              "-o"
+              "StrictHostKeyChecking=accept-new"
+              "-o"
+              "BatchMode=yes"
+              "-o"
+              "UserKnownHostsFile=/var/root/.ssh/known_hosts.exo-tunnel"
+              "-i"
+              (toString cfg.exo.litellmTunnel.identityFile)
+              "-R"
+              "127.0.0.1:${toString cfg.exo.apiPort}:127.0.0.1:${toString cfg.exo.apiPort}"
+              "${cfg.exo.litellmTunnel.remoteUser}@${cfg.exo.litellmTunnel.remoteHost}"
+            ];
+            StandardOutPath = "/tmp/exo-litellm-tunnel.log";
+            StandardErrorPath = "/tmp/exo-litellm-tunnel.err";
+          };
+        };
+      }
+    )
 
     # exo: distributed inference cluster (Linux systemd)
     (optionalAttrs isLinux (

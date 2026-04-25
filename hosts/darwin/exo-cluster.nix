@@ -22,5 +22,11 @@
     thunderboltHostname = exoThunderboltHostname;
     thunderboltCluster = exoThunderboltCluster;
     inherit thunderboltLinks;
+
+    # Reverse-tunnel the local exo API to desk-nxst-001 so its LiteLLM
+    # proxy can route a model group through 127.0.0.1:apiPort. Self-gated
+    # to the relay node (the only one with myLinks > 1) — CK2/L75 take
+    # the option but emit no daemon.
+    litellmTunnel.enable = true;
   };
 }
