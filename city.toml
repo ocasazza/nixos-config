@@ -3,6 +3,23 @@ provider = "opencode"
 install_agent_hooks = ["opencode"]
 global_fragments = ["command-glossary", "operational-awareness"]
 
+# Accounting pack — accountant agent + mol-accountant-audit formula.
+# Sits in gas town (city scope) and audits other agents' allocation
+# efficiency. Distilled rubric in packs/accounting/pack.toml.
+[imports.accounting]
+source = "packs/accounting"
+
+# schrodinger.cc — four-agent crew (dreamer/planner/implementer/reviewer)
+# that drives bd work using the host `claude` CLI directly (bypassing
+# LiteLLM). Sits at city scope so any rig can route work to cc.<role>
+# via metadata gc.routed_to=cc.implementer (etc).
+[imports.cc]
+source = "packs/schrodinger/cc"
+
+[[rigs]]
+name = "schrodan-oc"
+includes = ["packs/schrodinger/oc"]
+
 [daemon]
 patrol_interval = "30s"
 max_restarts = 5
