@@ -23,6 +23,10 @@ in
 {
   imports = [
     inputs.nix4nvchad.homeManagerModule
+    # Provides `programs.gascity` and `programs.beads` HM options.
+    # Snowfall auto-applies `modules/home/gascity/default.nix`, which
+    # flips both on for the fleet.
+    inputs.gascity-flake.homeManagerModules.default
   ];
 
   home = {
