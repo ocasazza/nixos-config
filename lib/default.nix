@@ -16,12 +16,22 @@ let
         iface = "en2";
       };
     }
+    {
+      subnet = "10.99.4"; # 10.99.4.0/30
+      a = {
+        host = "GJHC5VVN49-MBP";
+        iface = "en1";
+      };
+      b = {
+        host = "L75T4YHXV7-MBA";
+        iface = "en1";
+      };
+    }
   ];
 
   thunderboltHosts = lib.unique (
     [
       "GN9CFLM92K-MBP"
-      "L75T4YHXV7-MBA"
     ]
     ++ lib.concatMap (link: [
       link.a.host
