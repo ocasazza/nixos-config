@@ -199,16 +199,59 @@ let
       null
   ) indirectSubnets;
 
-  # /etc/hosts: map each peer to its IP on the link connecting us to it
-  # If no direct link, use the IP reachable via routing (peer's IP on any link)
-  tbHostsEntries = lib.concatMap (
-    link:
+  # All TB cluster hosts except this one
+  otherTbHosts = lib.filter (h: h != cfg.exo.thunderboltHostname) cfg.exo.thunderboltCluster;
+
+  # All (subnet, ip) tuples that a given host has across thunderboltLinks
+  hostIPsOnLinks =
+    host:
+    lib.concatMap (
+      link:
+      if link.a.host == host then
+        [
+          {
+            subnet = link.subnet;
+            ip = "${link.subnet}.1";
+          }
+        ]
+      else if link.b.host == host then
+        [
+          {
+            subnet = link.subnet;
+            ip = "${link.subnet}.2";
+          }
+        ]
+      else
+        [ ]
+    ) cfg.exo.thunderboltLinks;
+
+  # Pick the canonical IP to publish for a peer host:
+  #   - direct neighbor → use peer's IP on the link to us (no routing needed)
+  #   - indirect (multi-hop) → first IP on any link; static route handles the
+  #     forwarding via the relay
+  canonicalIPFor =
+    host:
     let
-      peerHost = link.peerHost;
-      peerIp = link.peerIp;
+      candidates = hostIPsOnLinks host;
+      direct = lib.findFirst (c: builtins.elem c.subnet mySubnets) null candidates;
     in
-    [ "${peerIp} ${peerHost}.tb ${peerHost}.thunderbolt" ]
-  ) myLinks;
+    if direct != null then
+      direct.ip
+    else if candidates != [ ] then
+      (builtins.head candidates).ip
+    else
+      null;
+
+  # /etc/hosts entries for every TB peer (direct or indirect via relay).
+  # Iterating over thunderboltCluster (not myLinks) ensures every host in
+  # the mesh is resolvable, even if reachable only via a static route.
+  tbHostsEntries = lib.concatMap (
+    host:
+    let
+      ip = canonicalIPFor host;
+    in
+    if ip != null then [ "${ip} ${host}.tb ${host}.thunderbolt" ] else [ ]
+  ) otherTbHosts;
 
   # This host's own .tb entry (use the IP from the first link, sorted for stability)
   tbMyIP = if myLinks != [ ] then (builtins.head myLinks).ip else null;
@@ -1398,16 +1441,47 @@ in
           ${routeCommands}
 
           # 3. Idempotent /etc/hosts management (replace existing block)
+          # Scrub legacy 10.99.x entries written by older module versions
+          # (those predate the marker). Match `IP HOSTNAME.tb` lines.
+          /usr/bin/sed -i.scrubbak '/^10\.99\.[0-9]\{1,3\}\.[0-9]\{1,3\} [A-Za-z0-9-]\{1,\}\.tb /d' /etc/hosts
           if grep -q '${marker}' /etc/hosts 2>/dev/null; then
-            # Remove old block and rewrite
-            sed -i.bak '/${marker}/,/${marker} end/d' /etc/hosts
+            # Remove old marked block and rewrite
+            /usr/bin/sed -i.bak '/${marker}/,/${marker} end/d' /etc/hosts
           fi
           printf '\n${marker}\n${hostsBlock}\n${marker} end\n' >> /etc/hosts
           echo "Updated TB cluster entries in /etc/hosts"
 
+          # 4. IP forwarding for relay hosts (those on >1 TB subnet).
+          # Without this, traffic between non-adjacent hosts can't transit
+          # through us. Sysctl is set immediately; the launchd daemon below
+          # restores it on boot.
+          ${lib.optionalString (builtins.length myLinks > 1) ''
+            /usr/sbin/sysctl -w net.inet.ip.forwarding=1
+            echo "IP forwarding enabled (relay node)"
+          ''}
+
           echo "==> Thunderbolt L3 mesh configured."
         ''
       );
+
+      # Boot-time IP forwarding restore for relay hosts. The activation
+      # sysctl above only fires on `nh switch`; this LaunchDaemon runs at
+      # boot to keep packet forwarding alive across reboots.
+      launchd.daemons = lib.mkIf (builtins.length myLinks > 1) {
+        tb-ip-forward = {
+          serviceConfig = {
+            Label = "dev.exo.tb-ip-forward";
+            RunAtLoad = true;
+            ProgramArguments = [
+              "/usr/sbin/sysctl"
+              "-w"
+              "net.inet.ip.forwarding=1"
+            ];
+            StandardOutPath = "/tmp/tb-ip-forward.log";
+            StandardErrorPath = "/tmp/tb-ip-forward.err";
+          };
+        };
+      };
     })
 
     # exo: distributed inference cluster (Darwin launchd)

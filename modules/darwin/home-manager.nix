@@ -1,6 +1,8 @@
 {
   pkgs,
   user,
+  lib,
+  config,
   ...
 }:
 
@@ -67,6 +69,28 @@
     # $ mas search <app name>
     masApps = { };
   };
+
+  # Make `brew bundle` non-fatal during activation. nix-darwin runs the
+  # bundle under `set -euo pipefail`, so a single failed cask (e.g.
+  # ghostty's stale .incomplete lock, meetingbar's overwrite conflict,
+  # alerter requiring a newer Xcode CommandLineTools) aborts the whole
+  # postActivation phase — including the Thunderbolt mesh setup further
+  # down. Per-host brew failures should warn but not block.
+  system.activationScripts.homebrew.text = lib.mkForce ''
+    echo >&2 "Homebrew bundle..."
+    if [ -f "${config.homebrew.prefix}/bin/brew" ]; then
+      PATH="${config.homebrew.prefix}/bin:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
+      sudo \
+        --preserve-env=PATH \
+        --user=${lib.escapeShellArg config.homebrew.user} \
+        --set-home \
+        env \
+        ${config.homebrew.onActivation.brewBundleCmd} || \
+        echo >&2 "warning: brew bundle exited non-zero; continuing activation"
+    else
+      echo -e "\e[1;31merror: Homebrew is not installed, skipping...\e[0m" >&2
+    fi
+  '';
 
   local.dock = {
     enable = true;

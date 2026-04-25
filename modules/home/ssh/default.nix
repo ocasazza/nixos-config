@@ -1,6 +1,5 @@
 {
   pkgs,
-  config,
   lib,
   ...
 }:
@@ -69,6 +68,16 @@ in
         addressFamily = "inet6";
         identitiesOnly = true;
         identityFile = "/Users/${user.name}/.ssh/olive_id_ed25519";
+        # seir runs zellij at login and we don't manage its config, so
+        # every plain `ssh seir` would `zellij attach` to the same
+        # default session and mirror panes across terminals. Force a
+        # fresh randomly-named session per interactive connect; ssh
+        # ignores RemoteCommand whenever an explicit command is given,
+        # so scp / rsync / git-over-ssh are unaffected.
+        extraOptions = {
+          RequestTTY = "yes";
+          RemoteCommand = "zellij";
+        };
       };
 
       # Personal home hosts — all share the olive user + key.
@@ -86,9 +95,14 @@ in
       # contra (cluster head?)
       "contra".hostname = "192.168.1.100";
 
-      # luna — NixOS box, RTX 3090 Ti, vLLM host
-      "luna luna.local 192.168.1.57" = {
-        hostname = "192.168.1.57";
+      # luna — NixOS box, RTX 3090 Ti, vLLM host. Same physical machine
+      # as `desk-nxst-001` (renamed in the 2026-04-24 split). The `luna`
+      # alias is kept because the flake's git-daemon transport URLs are
+      # `git://luna/<repo>` (see flake.nix opencode/hermes/obsidian
+      # inputs); rewriting the alias here lets every Mac resolve those
+      # URLs to the current host without a flake.nix bump.
+      "luna luna.local" = {
+        hostname = "desk-nxst-001";
         user = "casazza";
         identitiesOnly = true;
         identityFile =
@@ -96,7 +110,12 @@ in
             "/Users/${user.name}/.ssh/id_ed25519"
           else
             "/home/${user.name}/.ssh/id_ed25519";
-        extraOptions.ConnectTimeout = "5";
+        extraOptions = {
+          ConnectTimeout = "5";
+          CanonicalizeHostname = "yes";
+          CanonicalDomains = "schrodinger.com";
+          CanonicalizeMaxDots = "1";
+        };
       };
 
       # HPE iLO BMCs (out-of-band management).
