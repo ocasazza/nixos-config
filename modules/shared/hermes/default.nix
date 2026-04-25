@@ -981,8 +981,12 @@ in
 
         remoteHost = mkOption {
           type = types.str;
-          default = "desk-nxst-001";
-          description = "Hostname of the LiteLLM box that terminates the reverse tunnel.";
+          default = "desk-nxst-001.schrodinger.com";
+          description = ''
+            Hostname of the LiteLLM box that terminates the reverse tunnel.
+            Use the FQDN: corp DNS (via AppGate) doesn't serve a short
+            name, and relay nodes don't share GN9's per-user SSH alias.
+          '';
         };
 
         remoteUser = mkOption {
