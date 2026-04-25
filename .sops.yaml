@@ -19,6 +19,14 @@
 #
 # Full rotation procedure (admin compromise, host rebuild, root rotation):
 # see secrets/README.md.
+#
+# This repo is darwin-only. The desk-nxst-001 NixOS host and its
+# service-side secrets (litellm-master-key, openwebui-*, atlassian-*,
+# github-api-token, langgraph-pg-password, gfr-exo-auth-token, ...)
+# moved to ~/Repositories/schrodinger/nixstation as part of the
+# 2026-04-24 split. The remaining secrets here are darwin-side only:
+# fleet.env, opencode.env, JuiceFS client creds, and the per-client
+# LiteLLM virtual keys (which talk to nixstation's LiteLLM proxy).
 
 keys:
   # Admin keys: humans who can edit any secret. Any single admin suffices.
@@ -27,13 +35,11 @@ keys:
   # `ssh-to-age`. sops-nix uses the host's default sshKeyPaths
   # (e.g. [ /etc/ssh/ssh_host_ed25519_key ]) to decrypt at activation,
   # no private-key copy required.
-  - &host_luna age1jxcqkungt8kyu3mt5apf8xxw883j3pmug6kf0e7yhsas0yalxdwq3k5ufr
   - &host_gn9cflm92k_mbp age1uh7yfce4f6xj0s62ne5tz8r5uj5qk9hr3fy2kz8nptgag9cg4efq00vg7e
   - &host_ck2q9ln7pm_mba age144p4lzmv6r3kphxv3ldmu8rmr2a889zlveck5cnyce9pm8jmdc4qqylgfh
   - &host_gjhc5vvn49_mbp age1u2ks8pg77vmk64tcgv68qrm078s3sd8kze832u8xagmdfant7fksf7zd5r
-  # L75T4YHXV7-MBA pending — pubkey not reachable from luna right now
-  # (DNS) and couldn't be fetched via claw fan-out either. When that Mac
-  # is reachable (LAN or Thunderbolt), collect and add:
+  # L75T4YHXV7-MBA pending — pubkey not reachable when last attempted.
+  # When that Mac is reachable (LAN or Thunderbolt), collect and add:
   #   claw -w L75T4YHXV7-MBA 'cat /etc/ssh/ssh_host_ed25519_key.pub' | ssh-to-age
   # then re-run `sops updatekeys` on the files below.
 creation_rules:
@@ -46,71 +52,29 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
-  # Ingestion-pipeline secrets consumed by luna's `local.ingest`, plus
-  # Open WebUI's declarative admin-seed/env secrets consumed by
-  # `local.openWebUI`. Encrypted to an admin key (for editing from darwin
-  # via `sops edit`) and to luna's host key (for in-place decryption at
-  # nixos-rebuild activation, no private-key copy).
-  - path_regex: secrets/(openwebui-api-token|openwebui-admin-password|openwebui-secret-key|atlassian-email|atlassian-api-token|github-api-token|grafana-admin-password)\.yaml$
-    key_groups:
-      - age:
-          - *admin_olive
-          - *host_luna
   # JuiceFS-related secrets (Redis password for metadata KV +
-  # SeaweedFS S3 admin secret). luna runs both backends; every Mac
+  # SeaweedFS S3 admin secret). The backend runs on
+  # desk-nxst-001 (managed in nixstation); every Mac
   # mounts JuiceFS as a client and needs `META_PASSWORD` (redis) +
-  # `--secret-key <admin-secret>` (S3). Hence: admin (for editing) +
-  # host_luna (for in-place activation decryption) + every darwin
-  # host_* anchor (so each Mac's darwin-rebuild can surface the
+  # `--secret-key <admin-secret>` (S3). admin (for editing) + every
+  # darwin host_* anchor (so each Mac's darwin-rebuild can surface the
   # secret at activation).
   - path_regex: secrets/(redis-seaweedfs-password|seaweedfs-admin-secret)\.yaml$
     key_groups:
       - age:
           - *admin_olive
-          - *host_luna
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
           # L75T4YHXV7-MBA host key not yet provisioned; add when available.
-  # GFR exo federation: bearer token luna presents to the GFR-side
-  # authenticated reverse proxy that fronts exo on nodes 02/03. Same
-  # admin+host key group as the ingest secrets so luna can decrypt at
-  # activation and surface the value into LiteLLM's environment.
-  # Design spec: docs/design/gfr-exo-auth-proxy.md.
-  - path_regex: secrets/gfr-exo-auth-token\.yaml$
-    key_groups:
-      - age:
-          - *admin_olive
-          - *host_luna
-  # LiteLLM master key: bearer token clients present to the LiteLLM
-  # proxy at :4000. Admin + host_luna key group so luna can decrypt at
-  # activation and edits are possible from darwin via `sops edit`.
-  # Consumed by `modules/nixos/litellm/` via its `masterKeyFile` option.
-  # The decrypted file is a single line `LITELLM_MASTER_KEY=sk-...` so
-  # systemd can load it directly via `EnvironmentFile`.
-  - path_regex: secrets/litellm-master-key\.yaml$
-    key_groups:
-      - age:
-          - *admin_olive
-          - *host_luna
-  # Per-client LiteLLM virtual keys. One file per external client
-  # (claude-code on nixos, claude-code on darwin, opencode, hermes) so
-  # each module reads only its own decrypted EnvironmentFile. Same
-  # admin + host_luna group as the master key — luna decrypts at
-  # activation, admin rotates from darwin via `sops edit`. File
-  # content: a single `LITELLM_API_KEY_<CLIENT>=sk-...` line; placeholder
-  # values ship encrypted and are replaced post-rebuild via LiteLLM's
-  # `POST /key/generate` API.
-  - path_regex: secrets/litellm-key-claude-code-nixos\.yaml$
-    key_groups:
-      - age:
-          - *admin_olive
-          - *host_luna
+  # Per-client LiteLLM virtual keys. Each darwin client (claude-code,
+  # opencode, hermes) reads its own decrypted EnvironmentFile and
+  # presents the key to the LiteLLM proxy on desk-nxst-001:4000. File
+  # content: a single `LITELLM_API_KEY_<CLIENT>=sk-...` line.
   - path_regex: secrets/litellm-key-claude-code-darwin\.yaml$
     key_groups:
       - age:
           - *admin_olive
-          - *host_luna
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
@@ -118,7 +82,6 @@ creation_rules:
     key_groups:
       - age:
           - *admin_olive
-          - *host_luna
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
@@ -126,21 +89,6 @@ creation_rules:
     key_groups:
       - age:
           - *admin_olive
-          - *host_luna
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
-  # LangGraph OCI free-self-hosted stack: Postgres role password
-  # consumed by `modules/nixos/langgraph-oci/` via its
-  # `postgres.passwordFile` option. Admin + host_luna key group so luna
-  # can decrypt at activation and edits are possible from darwin.
-  - path_regex: secrets/langgraph-pg-password\.yaml$
-    key_groups:
-      - age:
-          - *admin_olive
-          - *host_luna
-  # Legacy/unused: kept so an ad-hoc `sops secrets/ingest.env` still
-  # encrypts under an admin key, even though luna now reads the four
-  # per-token YAMLs above instead of a monolithic env file.
-  - path_regex: secrets/ingest\.env$
-    age: *admin_olive

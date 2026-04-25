@@ -41,8 +41,8 @@ let
   # Model name hermes uses for "local" completions. When LiteLLM is in
   # the path, hermes talks to LiteLLM's router by model-GROUP name, not
   # by the underlying model id — the group maps to the right backend in
-  # luna's host config. Defaults to `coder-local` (burst-safe) but host
-  # configs can override via `local.hermes.litellm.defaultLocalGroup`.
+  # desk-nxst-001's host config. Defaults to `coder-local` (burst-safe)
+  # but host configs can override via `local.hermes.litellm.defaultLocalGroup`.
   localModelName = if cfg.litellm.enable then cfg.litellm.defaultLocalGroup else cfg.localModel;
 
   # api_key injected into hermes' generated config. LiteLLM's router
@@ -592,7 +592,7 @@ in
     };
 
     # ── LiteLLM-routed path ───────────────────────────────────────────
-    # Route all hermes calls through the LiteLLM proxy on luna:
+    # Route all hermes calls through the LiteLLM proxy on desk-nxst-001:
     #   - `vertexProxy.baseURL` references become `<endpoint>/vertex/v1`
     #     (passthrough — gcloud id-token still flows via the refresh_token
     #     shim into ~/.hermes/.env)
@@ -607,7 +607,7 @@ in
 
       endpoint = mkOption {
         type = types.str;
-        default = "http://luna.local:4000";
+        default = "http://desk-nxst-001:4000";
         description = ''
           LiteLLM base URL. Serves `/vertex/v1` (passthrough for cloud
           Claude) and `/v1` (OpenAI-compat router for local groups).
@@ -625,9 +625,10 @@ in
           file to pick up via its `env:LITELLM_HERMES_API_KEY` indirect
           reference.
 
-          On luna this is `config.sops.secrets.litellm-key-hermes.path`;
-          on darwin it's the /run/secrets path once sops-nix is wired
-          on darwin hosts.
+          On desk-nxst-001 this is
+          `config.sops.secrets.litellm-key-hermes.path`; on darwin
+          it's the /run/secrets path once sops-nix is wired on darwin
+          hosts.
         '';
       };
 
@@ -637,8 +638,8 @@ in
         description = ''
           LiteLLM model-group name hermes refers to when picking a
           "local" model (delegation in non-vertex mode, auxiliary
-          in non-vertex mode). Options: coder-local (always-on, luna
-          vLLM) or coder-remote (burst pool: exo + GFR).
+          in non-vertex mode). Options: coder-local (always-on,
+          desk-nxst-001 vLLM) or coder-remote (burst pool: exo + GFR).
         '';
       };
     };

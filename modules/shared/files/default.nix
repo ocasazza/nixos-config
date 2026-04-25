@@ -31,7 +31,7 @@
   # .claude/settings.json intentionally NOT managed here. It used to be,
   # but home-manager evaluates `config.programs.claude-code` in its own
   # option namespace where that option isn't declared — so every Mac
-  # and luna ended up with a minimal `{model, skipDangerousModePermissionPrompt}`
+  # and desk-nxst-001 ended up with a minimal `{model, skipDangerousModePermissionPrompt}`
   # symlink into /nix/store, silently clobbering the full LiteLLM env
   # block written by the darwin/nixos activation script (which runs
   # first, then is overwritten by home-manager's symlink).

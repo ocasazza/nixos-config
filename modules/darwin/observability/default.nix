@@ -1,4 +1,4 @@
-# Darwin OpenTelemetry Collector — pushes Mac telemetry to luna.
+# Darwin OpenTelemetry Collector — pushes Mac telemetry to desk-nxst-001.
 #
 # This is the Mac-side counterpart to modules/nixos/observability. It runs
 # a single otelcol-contrib daemon under launchd with three intake paths:
@@ -12,26 +12,28 @@
 #      hosts that do have node_exporter.
 #
 #   2. filelog receiver tailing opencode pipeline logs
-#      (scripts/{ingest,reingest-auto}.log). They ship to Loki on luna.
+#      (scripts/{ingest,reingest-auto}.log). They ship to Loki on
+#      desk-nxst-001.
 #
 #   3. hostmetrics receiver — CPU / memory / disk / load / network /
 #      filesystem. Replaces the need to install/manage node_exporter
 #      on every Mac.
 #
-# All three pipelines forward via OTLP/gRPC to luna's collector at
-# luna:4317. The `resource` processor stamps host.name and
+# All three pipelines forward via OTLP/gRPC to desk-nxst-001's collector
+# at desk-nxst-001:4317. The `resource` processor stamps host.name and
 # service.namespace on every signal so Grafana queries can slice by
-# `host_name` consistently across luna and all Macs (matches the
+# `host_name` consistently across the server and all Macs (matches the
 # claude-code OTel attribute convention in modules/darwin/claude-code).
 #
 # Why a local collector instead of curl-to-pushgateway / direct OTLP:
 #   * pushgateway aggregates by job — we'd lose per-host slicing.
 #   * Logs and metrics need different transports / endpoints — one
 #     daemon owns both.
-#   * Symmetric with luna's collector (same package, same config shape,
-#     same OTLP egress) so adding receivers/exporters is one place.
+#   * Symmetric with desk-nxst-001's collector (same package, same
+#     config shape, same OTLP egress) so adding receivers/exporters
+#     is one place.
 #   * Local OTLP loopback means scripts don't need network reachability
-#     to luna — the collector batches and retries on flaky LANs.
+#     to desk-nxst-001 — the collector batches and retries on flaky LANs.
 {
   config,
   lib,
@@ -43,14 +45,14 @@ let
   cfg = config.local.darwinObservability;
 
   # Match claude-code module's host.name source — single attribute the
-  # luna dashboards filter on.
+  # central dashboards filter on.
   hostName = config.networking.hostName or "darwin";
 
-  # Default OTLP target. luna.local mDNS isn't reliable from every Mac
-  # (see CLAUDE.md / SETUP.md notes), so the bare hostname is the
-  # working fallback. Override per-host via cfg.endpoint if mDNS works
-  # on that LAN segment.
-  defaultEndpoint = "luna:4317";
+  # Default OTLP target. The bare `desk-nxst-001` hostname resolves via
+  # the corp DNS canonicalisation pushed by AppGate (`schrodinger.com`
+  # search domain). Override per-host via cfg.endpoint if name resolution
+  # is flaky off-corp.
+  defaultEndpoint = "desk-nxst-001:4317";
 
   # Conditionally-included pipeline fragments. We can't use lib.mkIf
   # inside the attrset that gets toJSON'd — mkIf becomes a literal
@@ -113,7 +115,7 @@ let
       };
 
       processors = {
-        # Standard OTel hygiene processors, mirroring luna's collector.
+        # Standard OTel hygiene processors, mirroring desk-nxst-001's collector.
         memory_limiter = {
           check_interval = "1s";
           limit_mib = 256;
@@ -123,7 +125,7 @@ let
           send_batch_size = 1024;
         };
         # Stamp every signal with host identity so Grafana can slice
-        # by host_name across all Macs + luna.
+        # by host_name across all Macs + desk-nxst-001.
         resource = {
           attributes = [
             {
@@ -184,8 +186,8 @@ in
   options.local.darwinObservability = {
     enable = lib.mkEnableOption ''
       OpenTelemetry collector daemon that pushes this Mac's host metrics
-      and opencode pipeline logs to luna's collector. Counterpart to the
-      `local.observability` module on NixOS hosts.
+      and opencode pipeline logs to desk-nxst-001's collector. Counterpart
+      to the `local.observability` module on NixOS hosts.
     '';
 
     package = lib.mkOption {
@@ -199,9 +201,9 @@ in
       type = lib.types.str;
       default = defaultEndpoint;
       description = ''
-        OTLP/gRPC endpoint on luna. Bare `luna` hostname by default
-        because mDNS to `luna.local` is flaky from many Macs; override
-        to `luna.local:4317` or `192.168.1.57:4317` per-host as needed.
+        OTLP/gRPC endpoint on desk-nxst-001. Bare hostname resolves via
+        the corp DNS canonicalisation pushed by AppGate; override
+        per-host if name resolution is flaky off-corp.
       '';
     };
 
@@ -211,7 +213,7 @@ in
       description = ''
         Port for the loopback OTLP/gRPC receiver. Local SDKs / scripts
         can push to `127.0.0.1:<port>` and the collector will relay to
-        luna with the right host.name/service.namespace stamps.
+        desk-nxst-001 with the right host.name/service.namespace stamps.
       '';
     };
 
@@ -240,8 +242,8 @@ in
     # no node_exporter-style textfile receiver, so reingest metric
     # ingestion happens via the loopback OTLP/HTTP push path documented
     # at the top of this file. The script's .prom write remains as a
-    # fallback for hosts that do run node_exporter (luna). Add a
-    # `textfileDir` option here only if otelcol-contrib gains a
+    # fallback for hosts that do run node_exporter (desk-nxst-001).
+    # Add a `textfileDir` option here only if otelcol-contrib gains a
     # textfile receiver in a future release.
 
     debugExporter = lib.mkOption {

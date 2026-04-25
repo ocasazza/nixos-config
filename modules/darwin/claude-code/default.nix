@@ -67,10 +67,11 @@ let
     CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
   };
 
-  # OTel pipeline → luna's collector. Same env-var contract as the NixOS
-  # module so a Mac wired to luna shows up in the same Grafana dashboards
-  # alongside luna-local Claude Code sessions. host.name comes from
-  # nix-darwin's networking.hostName (set per-host under systems/).
+  # OTel pipeline → desk-nxst-001's collector. Same env-var contract as
+  # the NixOS module so a Mac wired to desk-nxst-001 shows up in the
+  # same Grafana dashboards alongside server-local Claude Code sessions.
+  # host.name comes from nix-darwin's networking.hostName (set per-host
+  # under systems/).
   telemetryEnvVars = lib.optionalAttrs cfg.telemetry.enable {
     CLAUDE_CODE_ENABLE_TELEMETRY = "1";
     OTEL_METRICS_EXPORTER = "otlp";
@@ -161,16 +162,13 @@ in
 
       endpoint = lib.mkOption {
         type = lib.types.str;
-        default = "http://luna:4000";
+        default = "http://desk-nxst-001:4000";
         description = ''
           LiteLLM base URL (serves `/v1/messages` and `/vertex/*`).
-          Default uses bare `luna` (DNS) instead of `luna.local`
-          (mDNS) because mDNS is unreliable from many Macs in this
-          fleet — see `modules/darwin/observability/default.nix:49`
-          for the same observation about OTLP traffic. Each Mac's
-          `~/.ssh/config` alias `luna luna.local 192.168.1.57`
-          provides the resolution. NixOS luna itself should override
-          to `http://localhost:4000` via its host config.
+          Default resolves the bare `desk-nxst-001` short hostname via
+          the corp DNS canonicalisation pushed by AppGate (`schrodinger.com`
+          search domain). desk-nxst-001 itself should override this to
+          `http://localhost:4000` in its own host config.
         '';
       };
 
@@ -231,12 +229,12 @@ in
 
       endpoint = lib.mkOption {
         type = lib.types.str;
-        default = "http://luna.local:4317";
+        default = "http://desk-nxst-001:4317";
         description = ''
-          OTLP endpoint URL. Defaults to luna's collector on the home LAN;
-          override per-host (e.g. `http://192.168.1.57:4317`) if mDNS is
-          flaky off-LAN. nix-darwin hosts never run the collector locally
-          (no `local.observability` module on darwin), so unlike the NixOS
+          OTLP endpoint URL. Defaults to desk-nxst-001's collector;
+          override per-host if name resolution is flaky off-corp.
+          nix-darwin hosts never run the collector locally (no
+          `local.observability` module on darwin), so unlike the NixOS
           module this default isn't loopback-aware.
         '';
       };

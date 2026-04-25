@@ -5,7 +5,7 @@ Cross-agent coordination doc. Companion file:
 sync; if you change one, glance at the other.
 
 **Last updated:** 2026-04-23 (Stage 8 retargeted: cme + langgraph-as-throttle for itkb/SYSMGR)
-**Owner:** opencode session, on Mac, working against luna over ssh
+**Owner:** opencode session, on Mac, working against desk-nxst-001 over ssh
 
 ## Mac JuiceFS — blocked on reboot
 
@@ -103,19 +103,19 @@ net.casazza.macfuse-kext-allowlist` on every host. Currently
     The host _is_ declared in nix (`systems/aarch64-darwin/L75T4YHXV7-MBA/`),
     so this is purely an MDM operational gap, not a config drift.
 
-### Workaround / parallel path: NFS export from luna
+### Workaround / parallel path: NFS export from desk-nxst-001
 
 If reboots stay deferred and we still need cluster-shared FS on Macs
-**now**, the kext-free option is to export `/mnt/juicefs` from luna
+**now**, the kext-free option is to export `/mnt/juicefs` from desk-nxst-001
 via NFS and mount it on each Mac with the macOS built-in NFS client
-(no kext, no profile, no AuxKC). luna-side juicefs mount at
+(no kext, no profile, no AuxKC). desk-nxst-001-side juicefs mount at
 `/mnt/juicefs` already works (verified: writes/reads succeed).
 
 Sketch (do NOT implement yet — separate todo item, evaluate after
 Stage 1a lands):
 
 ```nix
-# luna systems file, x86_64-linux/luna/default.nix
+# desk-nxst-001 systems file, x86_64-linux/desk-nxst-001/default.nix
 services.nfs.server = {
   enable = true;
   exports = ''
@@ -128,8 +128,8 @@ networking.firewall.allowedUDPPorts = [ 2049 111 ];
 
 Mac mount via `services.juicefs.mounts.shared` would be replaced by a
 plain `launchd.daemons.nfs-juicefs` running
-`mount_nfs -o nolocks,resvport luna.local:/mnt/juicefs /Volumes/juicefs-shared`.
-Trade: extra hop (Mac → NFS → luna → JuiceFS → SeaweedFS) vs. direct
+`mount_nfs -o nolocks,resvport desk-nxst-001:/mnt/juicefs /Volumes/juicefs-shared`.
+Trade: extra hop (Mac → NFS → desk-nxst-001 → JuiceFS → SeaweedFS) vs. direct
 (Mac → JuiceFS-FUSE → SeaweedFS), but no kext approval ever needed.
 
 ## Cross-cutting notes
@@ -141,23 +141,23 @@ Trade: extra hop (Mac → NFS → luna → JuiceFS → SeaweedFS) vs. direct
   removes it.
 - See vault-side `~/Repositories/ocasazza/obsidian/todo.md` for the
   bigger picture: the unblocked Mac JuiceFS mount is on the critical
-  path for the Confluence-archive ingest only inasmuch as `luna:~/archive/`
+  path for the Confluence-archive ingest only inasmuch as `desk-nxst-001:~/archive/`
   needs to be reachable from wherever opencode runs. Stage 1a
-  (opencode-on-luna) sidesteps this entirely — opencode-on-luna reads
-  the archive **directly** from luna's local filesystem, not via Mac
+  (opencode-on-desk-nxst-001) sidesteps this entirely — opencode-on-desk-nxst-001 reads
+  the archive **directly** from desk-nxst-001's local filesystem, not via Mac
   JuiceFS. So this section is genuinely independent of the main
   ingest effort and can stay parked until a reboot is convenient.
 
-## Cloud-claude routing through luna's LiteLLM — parked
+## Cloud-claude routing through desk-nxst-001's LiteLLM — parked
 
-**Status (2026-04-23):** parked until luna joins the corp network
+**Status (2026-04-23):** parked until desk-nxst-001 joins the corp network
 (physically on-prem, dropping the need for AppGate VPN).
 
 **What's already in place** (kept ready for activation):
 
-- `local.litellm.passthroughEndpoints.vertex` on luna →
+- `local.litellm.passthroughEndpoints.vertex` on desk-nxst-001 →
   `https://vertex-proxy.sdgr.app` with `forwardHeaders = true` and
-  `includeSubpath = true`. Once luna can reach vertex-proxy, this
+  `includeSubpath = true`. Once desk-nxst-001 can reach vertex-proxy, this
   endpoint plus virtual-key auth (`x-litellm-api-key` + forwarded
   `Authorization: Bearer <gcloud-id-token>`) gives Phoenix
   per-host attribution for cloud claude calls.
@@ -170,38 +170,38 @@ Trade: extra hop (Mac → NFS → luna → JuiceFS → SeaweedFS) vs. direct
   too (LiteLLM enforces team ACL on the raw incoming `model:`
   value, BEFORE alias rewrite). Both layers are ready.
 - Per-host virtual keys (`litellm-key-claude-code-darwin`,
-  `litellm-key-opencode-darwin`) are minted on luna and
+  `litellm-key-opencode-darwin`) are minted on desk-nxst-001 and
   sops-encrypted into nixos-config. The
   `programs.claude-code.litellm.cloudPassthrough` toggle on the
   darwin module flips between `vertex.enable=true` (current,
   direct vertex-proxy via Mac VPN tunnel) and the router-routed
   path. Today every darwin host runs vertex-direct
-  (`programs.claude-code.vertex.enable = true`) because luna
+  (`programs.claude-code.vertex.enable = true`) because desk-nxst-001
   can't reach vertex-proxy.
 
 **What was investigated and rejected:**
 
-1. AppGate SDP on luna (the Linux headless client). Setup is real
+1. AppGate SDP on desk-nxst-001 (the Linux headless client). Setup is real
    and a working derivation lives in `git reflog | grep
-appgate-sdp` (commit `4ed9e2e`, deleted from `feat/appgate-sdp-luna`
+appgate-sdp` (commit `4ed9e2e`, deleted from `feat/appgate-sdp-desk-nxst-001`
    branch on 2026-04-23). Blocker: the corp profile bundle in
    `git-fleet/secrets/.env.prod` is bound to Okta SSO with MFA;
    headless Linux can't complete the interactive login. Would
    require IT to provision a service-account IdP on the AppGate
    Controller for headless servers.
-2. SOCKS / SSH tunnel from luna through one Mac. Works but
+2. SOCKS / SSH tunnel from desk-nxst-001 through one Mac. Works but
    operationally fragile (Mac must stay up + Okta-logged-in).
 
-**Activation steps (when luna goes on-prem):**
+**Activation steps (when desk-nxst-001 goes on-prem):**
 
-1. Confirm luna can reach `vertex-proxy.sdgr.app` (`curl
+1. Confirm desk-nxst-001 can reach `vertex-proxy.sdgr.app` (`curl
 https://vertex-proxy.sdgr.app/` should not be 403'd at the
    network layer — auth-related 401/403 with a real id-token is
    expected and tolerated).
 2. Flip `programs.claude-code.vertex.enable = false` and
    `programs.claude-code.litellm.cloudPassthrough = true` in
    `hosts/darwin/default.nix`. Set `litellm.endpoint =
-"http://luna:4000"` (already configured).
+"http://desk-nxst-001:4000"` (already configured).
 3. nh switch every darwin host. Smoke-test:
    `claude -p --model claude-opus-4-7 "say OK"`.
 4. Verify Phoenix dashboard shows per-host virtual-key attribution
@@ -211,7 +211,7 @@ https://vertex-proxy.sdgr.app/` should not be 403'd at the
 
 ## Stage 8 — Atlassian ingest (cme + langgraph throttling)
 
-**Status (2026-04-23, verified by `ssh luna systemctl status`):** ALL
+**Status (2026-04-23, verified by `ssh desk-nxst-001 systemctl status`):** ALL
 THREE ingest services (`ingest-atlassian`, `ingest-obsidian`,
 `ingest-github`) have been **failing with exit 127** every time their
 timer fires, since they were first enabled.
@@ -242,7 +242,7 @@ launcher's PATH doesn't include.
 **Fix landed in `modules/nixos/ingest/default.nix` 2026-04-23:**
 replaced `exec ${cfg.projectDir}/scripts/<src>-sync.sh` with
 `exec ${pkgs.bash}/bin/bash ${cfg.projectDir}/scripts/<src>-sync.sh`
-for all three sources. Pending `nixos-rebuild switch` on luna.
+for all three sources. Pending `nixos-rebuild switch` on desk-nxst-001.
 
 **State as of 2026-04-23 first verification:**
 
@@ -252,7 +252,7 @@ deps from ...` log line) but the actual `ingest run-once <src>`
   call was never reached. So no data has ever been pulled, into
   Open WebUI or anywhere else.
 - `baseUrl = "https://schrodinger.atlassian.net"` is already set on
-  luna's running config (confirmed by reading the wrapper script at
+  desk-nxst-001's running config (confirmed by reading the wrapper script at
   `/nix/store/...-ingest-atlassian-start`). What was still placeholder
   in main until 2026-04-23: `confluenceSpaces` (`["IT", "OPS"]` →
   narrowed to `["SYSMGR"]`) and `jiraProjects` (`["OPS", "IT"]` →
@@ -278,7 +278,7 @@ deps from ...` log line) but the actual `ingest run-once <src>`
   `max_concurrency`. No drip-feed counters bolted onto the sink, no
   reingest-auto cadence bumps, no pause sentinels. The orchestrator
   handles queueing, checkpointing, and parallelism; this is what
-  langgraph-server on luna at `:2025` is for.
+  langgraph-server on desk-nxst-001 at `:2025` is for.
 - **Two sinks fan out from the graph:** `push_to_openwebui` (existing,
   kb-it-docs) and `push_to_vault` (new, GitHub PAT push).
 - **reingest-auto is bypassed** for cme content. The launchd agent
@@ -304,18 +304,18 @@ pipeline runs end-to-end ONCE with the existing code. This stage is
       `modules/nixos/ingest/default.nix` (2026-04-23). Both
       `obsidian-sync.sh`, `atlassian-sync.sh`, `github-sync.sh` now
       invoked via `${pkgs.bash}/bin/bash <script>` from the wrapper.
-      Pending `nixos-rebuild switch` on luna.
-- [x] **luna config narrowed** to `confluenceSpaces = [ "SYSMGR" ]`
+      Pending `nixos-rebuild switch` on desk-nxst-001.
+- [x] **desk-nxst-001 config narrowed** to `confluenceSpaces = [ "SYSMGR" ]`
       and `jiraProjects = [ ]` for the first real run
       (2026-04-23). Pending the same rebuild.
-- [ ] **`nixos-rebuild switch` on luna**:
+- [ ] **`nixos-rebuild switch` on desk-nxst-001**:
   ```sh
-  ssh luna sudo nixos-rebuild switch --flake ~/.config/nixos-config#luna
+  ssh desk-nxst-001 sudo nixos-rebuild switch --flake ~/.config/nixos-config#desk-nxst-001
   ```
   Then immediately:
   ```sh
-  ssh luna sudo systemctl start ingest-atlassian.service
-  ssh luna sudo journalctl -u ingest-atlassian.service -n 200 --no-pager
+  ssh desk-nxst-001 sudo systemctl start ingest-atlassian.service
+  ssh desk-nxst-001 sudo journalctl -u ingest-atlassian.service -n 200 --no-pager
   ```
   Expected (post-fix): the wrapper completes the venv bootstrap, then
   reaches `ingest run-once atlassian`, and either succeeds (creates
@@ -330,11 +330,11 @@ pipeline runs end-to-end ONCE with the existing code. This stage is
       if needed.
 - [ ] **Verify state file lands**:
   ```sh
-  ssh luna sudo cat /var/lib/ingest/state.json | jq '.cursors | with_entries(select(.key | startswith("atlassian")))'
+  ssh desk-nxst-001 sudo cat /var/lib/ingest/state.json | jq '.cursors | with_entries(select(.key | startswith("atlassian")))'
   # expect non-empty cursor entries after first successful run
   ```
 - [ ] **Smoke-test sink writes**: `curl http://localhost:8080/api/v1/knowledges/`
-      on luna; `kb-it-docs` should exist with non-zero file count
+      on desk-nxst-001; `kb-it-docs` should exist with non-zero file count
       after the first successful Confluence pull. Same for
       `kb-it-tickets` once Jira is re-enabled.
 - [ ] **Confirm the other two timers also recover.** The bug
@@ -428,7 +428,7 @@ auth.confluence.<base-url>.username=... auth.confluence.<base-url>.api_token=...
 - [ ] **Test the new graph in `langgraph dev`** before
       production-enabling. The langgraph-server module already
       runs `ingest` at `:2025`; visit
-      `http://luna.local:2025/info` to confirm the new `atlassian`
+      `http://desk-nxst-001:2025/info` to confirm the new `atlassian`
       graph shape, then click through a single-page run in the
       Studio UI.
 
@@ -477,7 +477,7 @@ To prevent ingest from starving interactive opencode/swarm requests:
       containing a LiteLLM virtual key distinct from the existing
       `LITELLM_OPENCODE_KEY`.
 - [ ] **Update LiteLLM config** (path TBD — find via
-      `rg LITELLM_OPENCODE_KEY systems/x86_64-linux/luna/`). Add the
+      `rg LITELLM_OPENCODE_KEY systems/x86_64-linux/desk-nxst-001/`). Add the
       ingest key with:
   - `rpm_limit: 60` (60 requests per minute hard ceiling, regardless
     of what the graph requests).
@@ -546,10 +546,10 @@ backpressure visibility called out in the vault todo Stage 8g.
       thermal panel; add a recording rule for "delta vs. yesterday's
       no-ingest hour mean" so the dashboard has a clear "yes the
       backfill is running hot" signal.
-- [ ] **Add a `luna-stack` Grafana dashboard panel** for atlassian
+- [ ] **Add a `desk-nxst-001-stack` Grafana dashboard panel** for atlassian
       ingest health. Mirrors the existing reingest panels per CLAUDE.md
       "Observability / Dashboards". File:
-      `modules/nixos/observability/dashboards/luna-stack-panels.md` —
+      `modules/nixos/observability/dashboards/desk-nxst-001-stack-panels.md` —
       add a row under "ingest health" for atlassian timer freshness +
       document throughput + the new vLLM saturation panels above.
 
@@ -561,7 +561,7 @@ For the FIRST backfill only (until cme reports `Skipped N pages
 - [ ] **Off-hours `OnCalendar` override**: temporarily set
       `services.timers.ingest-atlassian.timerConfig.OnCalendar =
 "02:00..06:00/0:30"` (every 30 min between 2 AM and 6 AM) on
-      luna. Lasts for the duration of the first sync (~2-3 nights
+      desk-nxst-001. Lasts for the duration of the first sync (~2-3 nights
       per the vault-side capacity estimate).
 - [ ] **Revert to `*:0/30`** after `vllm_num_waiting_requests` stays
       at zero during a daytime test pull, OR three consecutive
@@ -569,10 +569,10 @@ For the FIRST backfill only (until cme reports `Skipped N pages
 
 ---
 
-## Stage 9 — langflow on luna
+## Stage 9 — langflow on desk-nxst-001
 
 **Decision (locked 2026-04-23 in vault todo Stage 9):** enable the
-existing langflow module on luna. Routes through LiteLLM at
+existing langflow module on desk-nxst-001. Routes through LiteLLM at
 `localhost:4000` like everything else. CLAUDE.md ToDo entry "Wire
 langflow as an ingest backend" gets struck once this lands.
 
@@ -583,7 +583,7 @@ modules/nixos/langflow/ module" at line 405 is stale.
 
 ### Stage 9a — turn it on
 
-- [ ] **Import + enable** in `systems/x86_64-linux/luna/default.nix`:
+- [ ] **Import + enable** in `systems/x86_64-linux/desk-nxst-001/default.nix`:
   ```nix
   local.langflow = {
     enable = true;
@@ -601,11 +601,11 @@ modules/nixos/langflow/ module" at line 405 is stale.
 - [ ] **Provision LiteLLM virtual key** for langflow:
       `secrets/litellm-virtual-key-langflow.yaml`. New sops secret. The
       pattern mirrors `LITELLM_OPENCODE_KEY` — see CLAUDE.md "LiteLLM
-      virtual key on luna" risk in vault todo Stage 1.
+      virtual key on desk-nxst-001" risk in vault todo Stage 1.
 - [ ] **`nixos-rebuild switch`**, verify:
   ```sh
   systemctl status langflow.service
-  curl http://luna.local:7860/api/v1/health  # langflow health endpoint
+  curl http://desk-nxst-001:7860/api/v1/health  # langflow health endpoint
   ```
 - [ ] **CLAUDE.md update**: strike the "Wire langflow as an ingest
       backend" ToDo at line 405. Add langflow to the orchestrator
@@ -644,7 +644,7 @@ exist.
   (118 lines, `pname = "graphifyy"`, vendors 6 of 16 tree-sitter
   parsers after `postPatch`). Available in `nix develop` and
   `nix develop .#full` as `ns.graphify`.
-- The luna comment at `systems/x86_64-linux/luna/default.nix:997` is
+- The desk-nxst-001 comment at `systems/x86_64-linux/desk-nxst-001/default.nix:997` is
   the only nixos-config reference, and it's purely aspirational:
   _"The point of running opencode here at all is to drive the
   archive ingestion + graphify pipelines (vault todo Stages 5-6)
@@ -658,7 +658,7 @@ exist.
       opencode command can shell out to it. No need for a service.
       HOWEVER, if you want graphify runs to be scheduled (e.g.
       weekly cluster refresh of `30-Knowledge-Base/`), wrap it in a
-      systemd timer on luna similar to the ingest timers. Sketch:
+      systemd timer on desk-nxst-001 similar to the ingest timers. Sketch:
   ```nix
   systemd.services.graphify-refresh = {
     description = "Weekly /graphify pass over the vault checkout";
@@ -681,7 +681,7 @@ exist.
 - [ ] If vault todo Stage 10's "fetch embedding by external_id rather
       than re-embedding" optimization lands, graphify needs Qdrant API
       access. The Qdrant service from vault todo Stage 2 listens on
-      `:6333` (HTTP) on luna; the graphify CLI invocation in the
+      `:6333` (HTTP) on desk-nxst-001; the graphify CLI invocation in the
       systemd timer above must include `QDRANT_URL=http://localhost:6333`
       in its env.
 
@@ -692,9 +692,9 @@ exist.
 - **Atlassian backfill capacity.** Vault todo Stage 8g now carries
   the canonical capacity model (langgraph-orchestrated, node-level
   `max_concurrency=2`, ~10h wall clock for ~2,500 pages). The
-  binding constraint is luna's vLLM, not Atlassian's API. Open
+  binding constraint is desk-nxst-001's vLLM, not Atlassian's API. Open
   WebUI's file ingest uses an embedding model (currently NOT served
-  by luna's vLLM — see CLAUDE.md "Embeddings" ToDo at line 416),
+  by desk-nxst-001's vLLM — see CLAUDE.md "Embeddings" ToDo at line 416),
   so the OpenWebUI sink path goes through Open WebUI's RAG default
   embedder. The langgraph `enrich_page` node is the dominant LLM
   cost; the OpenWebUI embedding pass is the secondary one.

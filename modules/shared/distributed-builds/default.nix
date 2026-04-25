@@ -36,7 +36,7 @@ let
 
   sshKey = "/Users/casazza/.ssh/id_ed25519";
 
-  # SSH user per system - darwin uses casazza, NixOS (luna) also uses casazza
+  # SSH user per system — darwin and NixOS hosts both use casazza.
   sshUserForSystem = system: if system == "x86_64-linux" then "casazza" else "casazza";
 
   # Define cluster nodes. Each gets two builder entries: TB (preferred) + .local (fallback).
@@ -83,7 +83,7 @@ let
       ];
     }
     {
-      hostname = "luna";
+      hostname = "desk-nxst-001";
       system = "x86_64-linux";
       maxJobs = 4;
       supportedFeatures = [

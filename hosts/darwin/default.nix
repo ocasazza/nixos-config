@@ -30,24 +30,19 @@ in
   # /etc/ssh/ssh_host_ed25519_key is auto-used as the age identity via
   # sops.age.sshKeyPaths' default (services.openssh.enable = true below).
   #
-  # TODO(sops-darwin): none of the four Macs
-  # (CK2Q9LN7PM-MBA / GJHC5VVN49-MBP / GN9CFLM92K-MBP / L75T4YHXV7-MBA)
-  # have `&host_<hostname>` anchors in .sops.yaml yet, and the secret
-  # files below are only encrypted to admin_olive + host_luna. Until
-  # each Mac contributes its ssh-to-age pubkey:
-  #
-  #     ssh-to-age -i /etc/ssh/ssh_host_ed25519_key.pub
-  #
-  # and the secrets are re-encrypted with `sops updatekeys`, the
-  # launchd sops-install-secrets service will log "no key could decrypt
-  # the data" at activation. Eval still succeeds — the validation is
-  # runtime-only. Consumers are written to tolerate this:
+  # TODO(sops-darwin): L75T4YHXV7-MBA's host age key is not yet in
+  # .sops.yaml — until its ssh-to-age pubkey is added under
+  # `&host_l75t4yhxv7_mba` and every consumer secret is re-encrypted
+  # via `sops updatekeys`, sops-install-secrets will log "no key could
+  # decrypt the data" on that Mac at activation. Eval still succeeds
+  # — the validation is runtime-only. Consumers are written to
+  # tolerate this:
   #   * fleet.env → the system.activationScripts.fleetSecrets block
   #     below guards on `if [ -f "$FLEET_SECRETS_FILE" ]`.
   #   * litellm-key-{claude-code,opencode}-darwin → the consuming
-  #     wrappers (claude-code, opencode-luna) guard on `[ -r FILE ]`
-  #     and fall through to a clear error message if the file is
-  #     missing, rather than crashing the shell.
+  #     wrappers guard on `[ -r FILE ]` and fall through to a clear
+  #     error message if the file is missing, rather than crashing
+  #     the shell.
   sops = {
     defaultSopsFile = ../../secrets/fleet.env;
     defaultSopsFormat = "dotenv";
@@ -65,10 +60,11 @@ in
       # opencode). Each yaml secret holds a single `litellm_api_key`
       # scalar — sops-nix writes just the value to
       # /run/secrets/litellm-key-<client>. Mirrors the declarations on
-      # luna (systems/x86_64-linux/luna/default.nix).
+      # desk-nxst-001 (in the nixstation repo).
       #
-      # Both keys are minted by luna's `litellm-team-bootstrap.service`
-      # and the values committed back into the sops yaml here. The
+      # Both keys are minted by desk-nxst-001's
+      # `litellm-team-bootstrap.service` and the values committed back
+      # into the sops yaml here. The
       # claude-code wrapper reads the file at invocation time and
       # exports the value as ANTHROPIC_API_KEY; opencode picks it up
       # via the same env var, sourced into interactive shells by
@@ -92,7 +88,7 @@ in
         owner = "root";
         group = "staff";
       };
-      # Redis password for luna's JuiceFS metadata KV. Sops-nix writes
+      # Redis password for desk-nxst-001's JuiceFS metadata KV. Sops-nix writes
       # just the value to /run/secrets/redis-seaweedfs-password.
       # Re-encrypted to every host_*  age key in `.sops.yaml` so each
       # Mac surfaces it at activation. See `nixos-config/todo.md`
@@ -104,7 +100,7 @@ in
       };
       # SeaweedFS S3 admin secret. Same key group as redis above. The
       # juicefs mount script reads this as `--secret-key <value>` so
-      # the per-Mac S3 client auths against luna's S3 gateway. Without
+      # the per-Mac S3 client auths against desk-nxst-001's S3 gateway. Without
       # this, the operator had to manually `cp /var/lib/seaweedfs/...`
       # onto each Mac (recorded in earlier doc comments below).
       seaweedfs-admin-secret = {
@@ -122,9 +118,9 @@ in
   };
 
   # Mac-side OTel collector daemon. Pushes hostmetrics + opencode
-  # pipeline logs + reingest gauges to luna's OTLP intake at
-  # luna:4317. Replaces the old "Macs send nothing" gap that left the
-  # Grafana reingest tiles empty. See modules/darwin/observability.
+  # pipeline logs + reingest gauges to desk-nxst-001's OTLP intake at
+  # desk-nxst-001:4317. Replaces the old "Macs send nothing" gap that
+  # left the Grafana reingest tiles empty. See modules/darwin/observability.
   local.darwinObservability.enable = true;
 
   local.hermes = {
@@ -224,7 +220,7 @@ in
   # what's actually host-specific (hostname, exo peers, distributed-
   # builds toggle).
   #
-  # We tried routing through luna's LiteLLM (both /v1 router with
+  # We tried routing through desk-nxst-001's LiteLLM (both /v1 router with
   # virtual keys and /vertex/v1 passthrough) for Phoenix attribution.
   # Both paths are blocked:
   #   * Router /v1 + virtual key: the coder-cloud-claude deployment
@@ -239,7 +235,7 @@ in
   # So claude-code talks straight to vertex-proxy with a gcloud
   # id-token from apiKeyHelper. We lose Phoenix attribution for
   # cloud-claude calls (acceptable). Local model groups (coder-local,
-  # coder-remote, embedding) still route through luna's /v1 with
+  # coder-remote, embedding) still route through desk-nxst-001's /v1 with
   # per-host virtual keys and DO get per-key attribution, but
   # neither claude-code nor opencode calls those today \u2014
   # they're consumed by hermes / ingest / open-webui instead.
@@ -266,27 +262,25 @@ in
   # codepath shells out to `gcloud auth print-identity-token` per
   # request and forwards directly to vertex-proxy.
   #
-  # We tried building a router-routed opencode-luna sibling binary
-  # for Phoenix attribution \u2014 see commit history. Blocked on
-  # LiteLLM's free-tier route auth (would need Enterprise's
-  # public_routes flag to skip auth on /vertex/*). Reverted to
-  # vertex-direct for now; opencode-luna lives in the schrodinger
-  # opencode flake's `packages.<system>.opencode-luna` for future
-  # use if vertex-proxy's auth model changes.
+  # We tried building a router-routed sibling opencode binary for
+  # Phoenix attribution — see commit history. Blocked on LiteLLM's
+  # free-tier route auth (would need Enterprise's public_routes flag
+  # to skip auth on /vertex/*). Reverted to vertex-direct for now.
   programs.opencode = {
     enable = true;
     package = opencode.packages.${pkgs.system}.default;
-    # Ship Effect-runtime spans + AI SDK LLM spans to luna's otelcol,
-    # which forwards to Phoenix. opencode's Effect runtime uses
-    # `effect/unstable/observability.Otlp.layerJson` — OTLP/HTTP JSON —
-    # but Phoenix's `/v1/traces` only accepts protobuf and rejects JSON
-    # with 415. Route through luna's otelcol-contrib at :4318 instead:
-    # it speaks JSON on the receiver side and re-encodes as protobuf on
-    # the way out via `otlphttp/phoenix` exporter (see modules/nixos/
-    # observability/ traces pipeline).
+    # Ship Effect-runtime spans + AI SDK LLM spans to desk-nxst-001's
+    # otelcol, which forwards to Phoenix. opencode's Effect runtime
+    # uses `effect/unstable/observability.Otlp.layerJson` — OTLP/HTTP
+    # JSON — but Phoenix's `/v1/traces` only accepts protobuf and
+    # rejects JSON with 415. Route through desk-nxst-001's
+    # otelcol-contrib at :4318 instead: it speaks JSON on the receiver
+    # side and re-encodes as protobuf on the way out via
+    # `otlphttp/phoenix` exporter (see modules/nixos/observability/
+    # traces pipeline).
     telemetry = {
       enable = true;
-      endpoint = "http://luna:4318";
+      endpoint = "http://desk-nxst-001:4318";
     };
     managedConfig = {
       share = "disabled";
@@ -395,20 +389,20 @@ in
     fi
   '';
 
-  # ── shared JuiceFS client (talks to luna's Redis + S3) ───────────────
+  # ── shared JuiceFS client (talks to desk-nxst-001's Redis + S3) ──────
   # Every Mac in the fleet mounts the shared filesystem at /Volumes/juicefs
-  # so writes from any host land in luna's SeaweedFS object store.
+  # so writes from any host land in desk-nxst-001's SeaweedFS object store.
   #
-  # Off-LAN behavior: when luna.local is unreachable the launchd mount
-  # daemon retries (KeepAlive=true). The mount-point exists but is empty
-  # until the host is back on the home network or Tailscale (TBD).
+  # Off-LAN behavior: when desk-nxst-001 is unreachable the launchd
+  # mount daemon retries (KeepAlive=true). The mount-point exists but
+  # is empty until the host is back on the corp network.
   #
   # Secret seeding (one-time, per-Mac, out-of-band).
   # `install` on macOS rejects /dev/stdin as source; use tee + chmod:
   #   sudo install -d -m 0700 -o root -g wheel /var/lib/juicefs-secrets
   #   echo -n 'admin' | sudo tee /var/lib/juicefs-secrets/access-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/access-key
-  #   sudo tee /var/lib/juicefs-secrets/secret-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/secret-key  # paste luna's seaweedfs admin secret (/var/lib/seaweedfs/admin-secret on luna)
-  #   sudo tee /var/lib/juicefs-secrets/meta-password >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/meta-password  # paste luna's redis-seaweedfs password (sops decrypts to /run/secrets/redis-seaweedfs-password on luna)
+  #   sudo tee /var/lib/juicefs-secrets/secret-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/secret-key  # paste desk-nxst-001's seaweedfs admin secret (/var/lib/seaweedfs/admin-secret on the server)
+  #   sudo tee /var/lib/juicefs-secrets/meta-password >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/meta-password  # paste desk-nxst-001's redis-seaweedfs password (sops decrypts to /run/secrets/redis-seaweedfs-password on the server)
   #
   # macFUSE: nix-homebrew is currently disabled in this flake so the
   # cask install path is opted out via requireNixHomebrew=false. User
@@ -425,18 +419,19 @@ in
   services.juicefs = {
     enable = true;
     mounts.shared = {
-      # Migrated from `tikv://luna.local:2379/shared` when luna's
+      # Migrated from `tikv://desk-nxst-001:2379/shared` when the
       # JuiceFS metadata backend flipped to Redis (TiKV 8.5.0 didn't
-      # build under gcc 15 / cmake 4.1, see luna config). luna's redis
-      # is now LAN-bound on 6379 with mandatory auth — keep this URL
-      # credential-free; metaPasswordFile injects it as META_PASSWORD.
-      metaUrl = "redis://luna.local:6379/0";
+      # build under gcc 15 / cmake 4.1, see the nixstation config).
+      # desk-nxst-001's redis is now bound on 6379 with mandatory auth
+      # — keep this URL credential-free; metaPasswordFile injects it
+      # as META_PASSWORD.
+      metaUrl = "redis://desk-nxst-001:6379/0";
       # sops-nix surfaces the redis password at /run/secrets/...; the
       # /var/lib/juicefs-secrets/meta-password manual-seed path is no
       # longer needed.
       metaPasswordFile = config.sops.secrets.redis-seaweedfs-password.path;
       storageType = "s3";
-      bucket = "http://luna.local:8333/shared";
+      bucket = "http://desk-nxst-001:8333/shared";
       mountPoint = "/Volumes/juicefs";
       # accessKey is the literal string "admin" — bake it as a
       # /nix/store text file so the upstream mount script (which only
@@ -446,7 +441,7 @@ in
       # secretKey is the SeaweedFS S3 admin secret, decrypted by sops-nix
       # at activation. See sops.secrets.seaweedfs-admin-secret above.
       secretKeyFile = config.sops.secrets.seaweedfs-admin-secret.path;
-      formatOnFirstBoot = false; # luna formats; clients only mount
+      formatOnFirstBoot = false; # desk-nxst-001 formats; clients only mount
       cacheDir = "/var/cache/juicefs/shared";
       cacheSize = 5120; # 5 GiB local read cache per Mac
     };
@@ -811,17 +806,12 @@ in
   # `modules/darwin/system-packages` (snowfall auto-discovery). Only
   # host-level additions go here.
   #
-  # opencode-luna (router-routed sibling) was removed when we
+  # The router-routed sibling opencode binary was removed when we
   # discovered LiteLLM's free tier doesn't support `public_routes`,
   # so the /vertex/v1 passthrough requires a virtual key, but
-  # virtual keys can't carry the gcloud id-token vertex-proxy
-  # needs. The regular `opencode` binary (vertex-direct) is the
-  # supported path for cloud claude. The opencode-luna derivation
-  # still exists in the schrodinger opencode flake's
-  # `packages.<system>.opencode-luna` for future use if/when
-  # vertex-proxy auth model changes (e.g. accepts service account
-  # JSON, then we can configure LiteLLM's native vertex_ai
-  # deployment with `vertex_credentials`).
+  # virtual keys can't carry the gcloud id-token vertex-proxy needs.
+  # The regular `opencode` binary (vertex-direct) is the supported
+  # path for cloud claude.
   environment.systemPackages = [
     consortium.packages.${pkgs.system}.consortium-cli
   ];

@@ -9,14 +9,14 @@
 #   * packages.<system>.default → smallest possible derivation
 #
 # Usage:
-#   nix build .#nixosConfigurations.luna.config.system.build.toplevel \
+#   nix build .#nixosConfigurations.desk-nxst-001.config.system.build.toplevel \
 #     --override-input opencode  path:./modules/_stubs/empty \
 #     --override-input hermes    path:./modules/_stubs/empty \
 #     --override-input git-fleet path:./modules/_stubs/empty \
 #     --override-input git-fleet-runner path:./modules/_stubs/empty
 #
-# The `cast-on` deploy package and `nixos-rebuild`-on-luna scripts add
-# these overrides automatically.
+# The `cast-on` deploy package and the nixos-rebuild scripts on
+# desk-nxst-001 add these overrides automatically.
 {
   description = "Empty stub flake for darwin-only inputs that should not be fetched on linux";
 

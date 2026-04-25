@@ -1,7 +1,6 @@
 {
   pkgs,
   lib,
-  config,
   osConfig ? null,
   ...
 }:
@@ -28,7 +27,7 @@ in
       # ── zellij auto-attach (local only) ───────────────────────
       # Attach to an existing zellij session (or create one) ONLY when
       # we're in a LOCAL interactive shell — never on SSH. Otherwise
-      # every `ssh luna` lands in the same existing pane as the prior
+      # every `ssh <host>` lands in the same existing pane as the prior
       # SSH connection, mirroring input/output. $SSH_CONNECTION is set
       # by sshd; absence means this is a local login.
       if [[ -z "''${SSH_CONNECTION:-}" && -z "''${SSH_CLIENT:-}" ]]; then
@@ -150,7 +149,7 @@ in
       CLICOLOR = "1";
       # Zellij auto-attach is gated in initExtra (below) on NOT being
       # in an SSH session — setting these unconditionally here would
-      # make `ssh luna` land every new shell in the same existing
+      # make `ssh <host>` land every new shell in the same existing
       # zellij pane, mirroring input/output across terminals.
     };
   };

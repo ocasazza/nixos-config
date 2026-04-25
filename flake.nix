@@ -2,7 +2,13 @@
   description = "salt";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/68d8aa3d661f0e6bd5862291b5bb263b2a6595c9"; # nixos-unstable with fixed exo 1.0.69 npmDepsHash
+    nixpkgs.url = "github:nixos/nixpkgs/68d8aa3d661f0e6bd5862291b5bb263b2a6595c9"; # nixos-unstable Feb 2026, has cached darwin closure for zed/librosa/etc.
+
+    # Surgical pin: only used to source `dolt` ≥ 1.86.1 (gc init requires
+    # it). The main `nixpkgs` above is held back so we keep cached darwin
+    # builds for zed-editor / librosa / mlx / exo. Hydra has dolt 1.86.2
+    # cached on aarch64-darwin at this rev.
+    nixpkgs-dolt.url = "github:nixos/nixpkgs/01fbdeef22b76df85ea168fbfe1bfd9e63681b30";
 
     snowfall-lib = {
       url = "github:snowfallorg/lib";
@@ -20,7 +26,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Secrets management (sops-nix). Used by luna to decrypt
+    # Secrets management (sops-nix). Used by desk-nxst-001 to decrypt
     # secrets/*.yaml at activation via its SSH host key (derived to
     # an age identity automatically). Already a transitive input via
     # git-fleet* but snowfall needs a direct handle to import
@@ -62,6 +68,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Gas City (`gc`) + Beads (`bd`) — packages, overlays, and
+    # Home Manager modules live in their own flake. Replaces the
+    # previous inline `packages/gascity`, `packages/beads`, and
+    # `modules/home/gascity` from the 2026-04-24 split.
+    gascity-flake = {
+      url = "github:ocasazza/gascity-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Welcome to your life
     git-fleet = {
       url = "git+ssh://git@github.com/schrodinger/git-fleet";
@@ -71,30 +86,18 @@
       url = "git+ssh://git@github.com/schrodinger/git-fleet-runner";
     };
 
-    # Flake inputs served from luna's local git-daemon (see
-    # modules/nixos/git-daemon/ + luna's local.gitDaemon block).
-    # Read transport is anonymous `git://luna/<name>` over the
-    # daemon (port 9418), so:
-    #   * Macs fetch via DNS-resolved `luna` (their ssh-config alias
-    #     covers `luna luna.local 192.168.1.57` so this resolves
-    #     even when mDNS is flaky — confirmed empirically on
-    #     2026-04-23 that `luna.local` resolution fails from this
-    #     fleet, hence the move off `luna.local`).
-    #   * luna fetches its own inputs the same way during
-    #     nixos-rebuild without needing root SSH credentials. This
-    #     dodges the bootstrapping-circle where root would otherwise
-    #     need to ssh as casazza to itself just to fetch a flake
-    #     input that the very same nixos-rebuild is going to make
-    #     possible (git-daemon is enabled by this same config).
-    # Pushes still go via ssh
-    # (`casazza@luna.local:/srv/git/<name>.git`); see CLAUDE.md
-    # `Cross-repo push targets` for the rationale.
+    # Flake inputs served from desk-nxst-001's bare git mirrors at
+    # `/srv/git/<name>.git`. We use `git+ssh://casazza@desk-nxst-001/...`
+    # for both fetch and push — anonymous git:// over port 9418 is
+    # firewalled at the corp boundary, and unifying read/write on one
+    # URL avoids the lockfile drift the old git-daemon split caused.
+    # See CLAUDE.md `Cross-repo push targets` for the rationale.
     opencode = {
-      url = "git://luna/opencode?ref=dev";
+      url = "git+ssh://casazza@desk-nxst-001/srv/git/opencode.git?ref=dev";
     };
 
     hermes = {
-      url = "git://luna/hermes-agent?ref=schrodinger";
+      url = "git+ssh://casazza@desk-nxst-001/srv/git/hermes-agent.git?ref=schrodinger";
     };
 
     hippo = {
@@ -107,17 +110,18 @@
     };
 
     # Obsidian vault flake: provides vault-snapshot + vault-snapshot-watch
-    # for the auto-snapshot launchd agent on darwin. Same git-daemon
+    # for the auto-snapshot launchd agent on darwin. Same git+ssh
     # transport as opencode/hermes above.
     obsidian-vault = {
-      url = "git://luna/obsidian";
+      url = "git+ssh://casazza@desk-nxst-001/srv/git/obsidian.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     # Shared SeaweedFS + JuiceFS + TiKV + macFUSE modules. Same flake is
     # consumed by ~/Repositories/schrodinger/git-fleet-runner so the
-    # corp cluster (gfr-osx26-02/03/04) and the personal cluster (luna +
-    # Macs) share one source of truth for the storage stack.
+    # corp cluster (gfr-osx26-02/03/04) and the personal cluster
+    # (desk-nxst-001 + Macs) share one source of truth for the
+    # storage stack.
     seaweedfs = {
       url = "git+ssh://git@github.com/schrodinger/seaweedfs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -164,10 +168,22 @@
         (_final: prev: {
           claude-code = prev.callPackage ./packages/claude-code { };
         })
+        # gascity (`gc`) + beads (`bd`) — sourced from the standalone
+        # gascity-flake (overlays.default exposes both packages on pkgs).
+        inputs.gascity-flake.overlays.default
         # NOTE: seaweedfs's overlay (which exposed pkgs.seaweedfs.{tikv,
-        # tikv-pd}) is intentionally dropped — luna pivoted from TiKV to
-        # Redis for JuiceFS metadata, so no consumer remains. Re-add if
-        # some future host brings TiKV back.
+        # tikv-pd}) is intentionally dropped — desk-nxst-001 pivoted from
+        # TiKV to Redis for JuiceFS metadata, so no consumer remains.
+        # Re-add if some future host brings TiKV back.
+
+        # Surgical dolt bump: gc init requires dolt ≥ 1.86.1, the main
+        # nixpkgs pin still ships 1.84.1. Sourcing only `dolt` from a
+        # newer nixpkgs avoids the closure-wide darwin rebuild that a
+        # full nixpkgs bump would trigger (zed 0.233.5, librosa 0.11.0,
+        # mlx, exo deps — none cached on hydra for darwin yet).
+        (final: _prev: {
+          dolt = inputs.nixpkgs-dolt.legacyPackages.${final.stdenv.hostPlatform.system}.dolt;
+        })
       ];
 
       # ── Darwin systems ──────────────────────────────────────────────────
@@ -246,48 +262,11 @@
       ]
       ++ inputs.nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.darwinModules.default;
 
-      # ── NixOS systems ──────────────────────────────────────────────────
-      systems.modules.nixos = [
-        inputs.disko.nixosModules.disko
-        inputs.sops-nix.nixosModules.sops
-        inputs.home-manager.nixosModules.home-manager
-        # Shared storage stack — luna runs seaweedfs + juicefs (with a
-        # loopback Redis from nixpkgs for JuiceFS metadata). The
-        # seaweedfs flake's TiKV module is intentionally not imported;
-        # see systems/x86_64-linux/luna/default.nix for the rationale.
-        inputs.seaweedfs.nixosModules.seaweedfs
-        inputs.seaweedfs.nixosModules.juicefs
-        {
-          home-manager = {
-            extraSpecialArgs = {
-              inherit inputs;
-              user = {
-                name = "casazza";
-                fullName = "Olive Casazza";
-                email = "olive.casazza@schrodinger.com";
-              };
-            };
-            useGlobalPkgs = true;
-            useUserPackages = true;
-            # sharedModules is no longer needed — snowfall auto-applies
-            # everything in modules/home/ via its home system-modules.
-          };
-        }
-        (
-          { ... }:
-          {
-            _module.args = {
-              user = {
-                name = "casazza";
-                fullName = "Olive Casazza";
-                email = "olive.casazza@schrodinger.com";
-              };
-              isDeterminate = false;
-            };
-          }
-        )
-      ]
-      ++ inputs.nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.nixosModules.default;
+      # No NixOS systems live here anymore — they moved to
+      # ~/Repositories/schrodinger/nixstation as part of the 2026-04-24
+      # split. If a NixOS host ever lands back in this repo, restore
+      # `systems.modules.nixos = [...]` with disko + sops-nix +
+      # home-manager + seaweedfs imports per git history.
 
       # No aliases needed — snowfall auto-discovers shells/default
     };
