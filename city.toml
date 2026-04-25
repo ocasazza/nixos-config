@@ -1,0 +1,10 @@
+[workspace]
+provider = "opencode"
+install_agent_hooks = ["opencode"]
+global_fragments = ["command-glossary", "operational-awareness"]
+
+[daemon]
+patrol_interval = "30s"
+max_restarts = 5
+restart_window = "1h"
+shutdown_timeout = "5s"

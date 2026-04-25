@@ -1,0 +1,13 @@
+[pack]
+name = "nixos-config"
+schema = 2
+
+[imports]
+[imports.gastown]
+source = ".gc/system/packs/gastown"
+
+[defaults]
+[defaults.rig]
+[defaults.rig.imports]
+[defaults.rig.imports.gastown]
+source = ".gc/system/packs/gastown"

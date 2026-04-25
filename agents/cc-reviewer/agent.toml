@@ -1,0 +1,7 @@
+scope = "city"
+wake_mode = "fresh"
+work_dir = ".gc/agents/cc-reviewer"
+provider = "claude-code"
+nudge = "Pick up the next review-ready bead or PR and produce a structured assessment."
+idle_timeout = "2h"
+max_active_sessions = 1

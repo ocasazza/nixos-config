@@ -1,0 +1,7 @@
+scope = "city"
+wake_mode = "fresh"
+work_dir = ".gc/agents/oc-implementer"
+provider = "opencode"
+nudge = "Claim the next ready bead and implement it. Run rig DoD before closing."
+idle_timeout = "2h"
+max_active_sessions = 1

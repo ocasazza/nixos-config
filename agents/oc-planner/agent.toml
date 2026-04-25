@@ -1,0 +1,7 @@
+scope = "city"
+wake_mode = "fresh"
+work_dir = ".gc/agents/oc-planner"
+provider = "opencode"
+nudge = "Read the next ready bead, decompose it into an implementation plan."
+idle_timeout = "2h"
+max_active_sessions = 1
