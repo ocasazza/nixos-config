@@ -7,72 +7,59 @@
 
 let
   cfg = config.programs.claude-code;
+  user = lib.salt.user;
 
-  # Vertex and LiteLLM paths are mutually exclusive. When litellm.enable
-  # is set, the legacy direct vertex env vars and activation-script
-  # settings.json content are suppressed in favor of the LiteLLM-routed
-  # block. Same pattern as the nixos module.
   useLegacyVertex = cfg.vertex.enable && !cfg.litellm.enable;
 
-  vertexEnvVars = lib.optionalAttrs useLegacyVertex {
-    CLAUDE_CODE_USE_VERTEX = "1";
-    CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
-    ANTHROPIC_VERTEX_PROJECT_ID = cfg.vertex.projectId;
-    ANTHROPIC_VERTEX_BASE_URL = cfg.vertex.baseURL;
-    CLOUD_ML_REGION = cfg.vertex.region;
-  };
-
-  # LiteLLM env vars — same shape as the nixos module. See
-  # modules/nixos/claude-code/default.nix for the `cloudPassthrough`
-  # rationale.
-  #
-  # cloudPassthrough = true: ALSO emit the vertex-mode env vars
-  # (CLAUDE_CODE_USE_VERTEX, ANTHROPIC_VERTEX_PROJECT_ID,
-  # CLOUD_ML_REGION) — without them Claude Code posts to
-  # `${ANTHROPIC_BASE_URL}/messages`, which the LiteLLM /vertex
-  # passthrough forwards to vertex-proxy as `/v1/messages`,
-  # which vertex-proxy 404s because it expects the full Vertex AI
-  # URL shape (`/v1/projects/.../streamRawPredict`). Setting
-  # CLAUDE_CODE_USE_VERTEX=1 makes Claude Code construct the
-  # correct Vertex AI URL itself, then the passthrough just
-  # forwards bytes verbatim.
-  #
-  # Project / region come from the legacy `vertex` block on the
-  # claude-code option since both paths talk to the same Vertex
-  # backend; pull defaults from there if they're set, otherwise
-  # use the fleet defaults baked into this module.
   vertexProjectIdResolved =
     if cfg.vertex.projectId != "" then cfg.vertex.projectId else "vertex-code-454718";
   vertexRegionResolved = if cfg.vertex.region != "" then cfg.vertex.region else "us-east5";
 
-  litellmEnvVars = lib.optionalAttrs cfg.litellm.enable (
-    if cfg.litellm.cloudPassthrough then
+  # All env vars land in settings.json#env — Claude Code exports them
+  # before forking subprocesses, so wrapper-level injection is not needed.
+  settingsEnv =
+    if cfg.litellm.enable then
+      (
+        if cfg.litellm.cloudPassthrough then
+          {
+            ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/vertex/v1";
+            CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
+            CLAUDE_CODE_USE_VERTEX = "1";
+            CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
+            ANTHROPIC_VERTEX_PROJECT_ID = vertexProjectIdResolved;
+            CLOUD_ML_REGION = vertexRegionResolved;
+          }
+        else
+          {
+            ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/v1";
+          }
+      )
+    else if cfg.vertex.enable then
       {
-        ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/vertex/v1";
-        CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
-        # Make Claude Code emit Vertex-shape URLs (the passthrough
-        # forwards verbatim to vertex-proxy which only speaks Vertex AI).
         CLAUDE_CODE_USE_VERTEX = "1";
         CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
-        ANTHROPIC_VERTEX_PROJECT_ID = vertexProjectIdResolved;
-        CLOUD_ML_REGION = vertexRegionResolved;
+        CLOUD_ML_REGION = cfg.vertex.region;
+        ANTHROPIC_VERTEX_PROJECT_ID = cfg.vertex.projectId;
+        ANTHROPIC_VERTEX_BASE_URL = cfg.vertex.baseURL;
+        CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
       }
     else
-      {
-        ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/v1";
-      }
-  );
+      { };
 
-  apiKeyEnvVars = lib.optionalAttrs cfg.apiKeyHelper {
-    CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
-  };
+  helperActive =
+    cfg.apiKeyHelper || (cfg.litellm.enable && cfg.litellm.cloudPassthrough) || useLegacyVertex;
 
-  # OTel pipeline → desk-nxst-001's collector. Same env-var contract as
-  # the NixOS module so a Mac wired to desk-nxst-001 shows up in the
-  # same Grafana dashboards alongside server-local Claude Code sessions.
-  # host.name comes from nix-darwin's networking.hostName (set per-host
-  # under systems/).
-  telemetryEnvVars = lib.optionalAttrs cfg.telemetry.enable {
+  settingsWithModel =
+    cfg.settings
+    // {
+      model = cfg.model;
+      env = (cfg.settings.env or { }) // settingsEnv // cfg.environment;
+    }
+    // lib.optionalAttrs helperActive {
+      apiKeyHelper = "~/.claude/get-iam-token.sh";
+    };
+
+  telemetryEnv = lib.optionalAttrs cfg.telemetry.enable {
     CLAUDE_CODE_ENABLE_TELEMETRY = "1";
     OTEL_METRICS_EXPORTER = "otlp";
     OTEL_LOGS_EXPORTER = "otlp";
@@ -84,36 +71,29 @@ let
     }";
   };
 
-  allEnvVars =
-    vertexEnvVars // litellmEnvVars // apiKeyEnvVars // telemetryEnvVars // cfg.environment;
+  # OTel env vars must be present in the process environment before the
+  # OTel SDK initialises, which happens before Claude reads settings.json.
+  # We keep these on a thin shell wrapper rather than in settings.json#env.
+  needsTelemetryWrapper = cfg.telemetry.enable;
 
-  wrappedClaude = pkgs.symlinkJoin {
-    name = "claude-code-wrapped-${cfg.package.version}";
-    paths = [ cfg.package ];
-    # makeShellWrapper (not makeBinaryWrapper) — the latter dispatches
-    # to makeCWrapper on darwin which rejects `--run` (newer nixpkgs
-    # behavior, was silent fallthrough before). The shell wrapper is
-    # marginally slower at exec but supports the full --run/--prefix
-    # flag set we use to splice the virtual-key load.
-    nativeBuildInputs = [ pkgs.makeShellWrapper ];
-    postBuild =
-      let
-        setFlags = lib.concatStringsSep " " (
-          lib.mapAttrsToList (k: v: "--set ${k} ${lib.escapeShellArg v}") (
-            lib.filterAttrs (_: v: v != "") allEnvVars
-          )
-        );
-        runHook =
-          lib.optionalString
-            (cfg.litellm.enable && !cfg.litellm.cloudPassthrough && cfg.litellm.virtualKeyFile != null)
-            ''
-              --run 'if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then export ANTHROPIC_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"; fi'
-            '';
-      in
-      ''
-        wrapProgram $out/bin/claude ${setFlags} ${runHook}
-      '';
-  };
+  claudePackage =
+    if needsTelemetryWrapper then
+      pkgs.symlinkJoin {
+        name = "claude-code-otel-${cfg.package.version}";
+        paths = [ cfg.package ];
+        nativeBuildInputs = [ pkgs.makeShellWrapper ];
+        postBuild =
+          let
+            setFlags = lib.concatStringsSep " " (
+              lib.mapAttrsToList (k: v: "--set ${k} ${lib.escapeShellArg v}") telemetryEnv
+            );
+          in
+          ''
+            wrapProgram $out/bin/claude ${setFlags}
+          '';
+      }
+    else
+      cfg.package;
 in
 {
   options.programs.claude-code = {
@@ -153,46 +133,25 @@ in
       };
     };
 
-    # ── LiteLLM-routed path ───────────────────────────────────────────
-    # See modules/nixos/claude-code/default.nix for full rationale. Same
-    # option surface across nixos + darwin so host configs can flip the
-    # enable flag on either platform with identical semantics.
     litellm = {
       enable = lib.mkEnableOption "Route Claude Code through LiteLLM";
 
       endpoint = lib.mkOption {
         type = lib.types.str;
         default = "http://desk-nxst-001:4000";
-        description = ''
-          LiteLLM base URL (serves `/v1/messages` and `/vertex/*`).
-          Default resolves the bare `desk-nxst-001` short hostname via
-          the corp DNS canonicalisation pushed by AppGate (`schrodinger.com`
-          search domain). desk-nxst-001 itself should override this to
-          `http://localhost:4000` in its own host config.
-        '';
+        description = "LiteLLM base URL.";
       };
 
       virtualKeyFile = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
-        description = ''
-          Sops-decrypted path to this client's LiteLLM virtual key.
-          Content: `KEY=VALUE`; the value is read at wrapper runtime
-          and exported as `ANTHROPIC_API_KEY` when `cloudPassthrough
-          = false`. On darwin the decrypted file is written by the
-          sops-nix activation script to a path under /run/secrets.
-        '';
+        description = "Sops-decrypted path to this client's LiteLLM virtual key (KEY=VALUE).";
       };
 
       cloudPassthrough = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = ''
-          Route cloud calls through LiteLLM's `/vertex/*` passthrough
-          (apiKeyHelper keeps the gcloud id-token path alive). Flip
-          to false to authenticate purely via the virtual key against
-          LiteLLM's `/v1/messages` router.
-        '';
+        description = "Route cloud calls through LiteLLM's /vertex/* passthrough.";
       };
 
       defaultGroup = lib.mkOption {
@@ -219,24 +178,13 @@ in
       enable = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = ''
-          Push OTel metrics + logs to a collector. Default-on because the
-          SDK silently drops OTLP when the endpoint is unreachable, so a
-          laptop off the home LAN behaves identically to one on it. Set
-          to false to suppress emission entirely.
-        '';
+        description = "Push OTel metrics + logs to a collector.";
       };
 
       endpoint = lib.mkOption {
         type = lib.types.str;
         default = "http://desk-nxst-001:4317";
-        description = ''
-          OTLP endpoint URL. Defaults to desk-nxst-001's collector;
-          override per-host if name resolution is flaky off-corp.
-          nix-darwin hosts never run the collector locally (no
-          `local.observability` module on darwin), so unlike the NixOS
-          module this default isn't loopback-aware.
-        '';
+        description = "OTLP endpoint URL.";
       };
 
       protocol = lib.mkOption {
@@ -258,13 +206,13 @@ in
     settings = lib.mkOption {
       type = lib.types.attrs;
       default = { };
-      description = "Settings to write to ~/.claude/settings.json";
+      description = "Settings to merge into ~/.claude/settings.json.";
     };
 
     environment = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = { };
-      description = "Extra environment variables to set on the claude wrapper.";
+      description = "Extra environment variables added to settings.json#env.";
     };
   };
 
@@ -272,106 +220,41 @@ in
     assertions = [
       {
         assertion = !(cfg.vertex.enable && cfg.litellm.enable);
-        message = ''
-          programs.claude-code: vertex.enable and litellm.enable are
-          mutually exclusive. Pick one — either the legacy direct
-          vertex-proxy path (vertex.enable) or the new LiteLLM-routed
-          path (litellm.enable).
-        '';
+        message = "programs.claude-code: vertex.enable and litellm.enable are mutually exclusive.";
       }
     ];
 
     environment.systemPackages = [
-      wrappedClaude
+      claudePackage
     ]
     ++ lib.optionals (cfg.vertex.enable || (cfg.litellm.enable && cfg.litellm.cloudPassthrough)) [
       pkgs.google-cloud-sdk
     ];
 
-    # Generate settings.json and API key helper via activation script.
-    # The emitted env block depends on which path is active:
-    #   - legacy vertex   -> CLAUDE_CODE_USE_VERTEX + vertex URLs
-    #   - litellm + pass  -> ANTHROPIC_BASE_URL = <endpoint>/vertex/v1
-    #   - litellm + route -> ANTHROPIC_BASE_URL = <endpoint>/v1 (no apiKey,
-    #                        supplied at wrapper run time from sops)
-    #
-    # nix-darwin only invokes a fixed list of activation-script slots
-    # (preActivation / extraActivation / postActivation) — custom names
-    # like `claudeCode` build successfully but are never called. Use
-    # extraActivation so this actually fires on `darwin-rebuild switch`.
-    system.activationScripts.extraActivation.text = lib.mkAfter (
-      let
-        user = lib.salt.user;
+    # Manage ~/.claude/ declaratively via home-manager.
+    home-manager.users.${user.name} = {
+      home.file.".claude/settings.json".text = builtins.toJSON settingsWithModel;
 
-        settingsEnv =
-          if cfg.litellm.enable then
-            (
-              if cfg.litellm.cloudPassthrough then
-                {
-                  ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/vertex/v1";
-                  CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
-                }
-              else
-                {
-                  ANTHROPIC_BASE_URL = "${cfg.litellm.endpoint}/v1";
-                }
-            )
-          else if cfg.vertex.enable then
-            {
-              CLAUDE_CODE_USE_VERTEX = "1";
-              CLAUDE_CODE_SKIP_VERTEX_AUTH = "1";
-              CLOUD_ML_REGION = cfg.vertex.region;
-              ANTHROPIC_VERTEX_PROJECT_ID = cfg.vertex.projectId;
-              ANTHROPIC_VERTEX_BASE_URL = cfg.vertex.baseURL;
-              CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "1800000";
-            }
-          else
-            { };
+      home.file.".claude/get-iam-token.sh" = lib.mkIf helperActive {
+        executable = true;
+        text = ''
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo $(gcloud auth print-identity-token 2>/dev/null)
+        '';
+      };
 
-        # apiKeyHelper is active for both legacy-vertex and
-        # litellm+cloudPassthrough paths (the gcloud id-token is what
-        # LiteLLM forwards to vertex-proxy). For litellm-router-only
-        # mode, no helper is needed — the wrapper reads the virtual
-        # key from sops at invocation time.
-        helperActive =
-          cfg.apiKeyHelper || (cfg.litellm.enable && cfg.litellm.cloudPassthrough) || useLegacyVertex;
-
-        settingsWithModel =
-          cfg.settings
-          // {
-            model = cfg.model;
-            env = (cfg.settings.env or { }) // settingsEnv;
-          }
-          // lib.optionalAttrs helperActive {
-            apiKeyHelper = "~/.claude/get-iam-token.sh";
-          };
-        settingsJson = builtins.toJSON settingsWithModel;
-      in
-      ''
-        echo "setting up Claude Code..." >&2
-        mkdir -p /Users/${user.name}/.claude
-        cat > /Users/${user.name}/.claude/settings.json << 'SETTINGS'
-        ${settingsJson}
-        SETTINGS
-        chown -R ${user.name} /Users/${user.name}/.claude
-      ''
-      + lib.optionalString helperActive ''
-        cat > /Users/${user.name}/.claude/get-iam-token.sh << 'TOKENHELPER'
-        #!/usr/bin/env bash
-        set -euo pipefail
-        echo $(gcloud auth print-identity-token 2>/dev/null)
-        TOKENHELPER
-        chmod +x /Users/${user.name}/.claude/get-iam-token.sh
-      ''
-    );
-
-    # Load gcloud credentials for Vertex AI (legacy path only; LiteLLM
-    # passthrough doesn't need an exported access token at shell init —
-    # the apiKeyHelper mints a fresh id-token per-call).
-    programs.zsh.shellInit = lib.mkIf useLegacyVertex ''
-      if command -v gcloud >/dev/null 2>&1; then
-        export GOOGLE_APPLICATION_CREDENTIALS_JSON="$(gcloud auth print-access-token 2>/dev/null || echo "")"
-      fi
-    '';
+      # When litellm + virtual key (not cloudPassthrough), read the sops
+      # key at shell init and export it. The apiKeyHelper path doesn't
+      # apply here — the key is static for the session.
+      home.sessionVariablesExtra =
+        lib.optionalString
+          (cfg.litellm.enable && !cfg.litellm.cloudPassthrough && cfg.litellm.virtualKeyFile != null)
+          ''
+            if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then
+              export ANTHROPIC_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
+            fi
+          '';
+    };
   };
 }
