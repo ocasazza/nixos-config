@@ -607,11 +607,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777071191,
-        "narHash": "sha256-eFtNs/wwajB1tRej1TwOEMdYV0RVK4onlhbP2abGQPo=",
+        "lastModified": 1777259138,
+        "narHash": "sha256-JK72OMvyMpewvN9Lb/QqIH8VnISHbNp+0xql/RbYfzk=",
         "owner": "ocasazza",
         "repo": "gascity-flake",
-        "rev": "a86b165fd91c01d481f94c0aa916fd202d2e885d",
+        "rev": "fd368796ec7f53f0d68e6096aa2370c709abc2b7",
         "type": "github"
       },
       "original": {
