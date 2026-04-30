@@ -1,0 +1,202 @@
+description = """
+Coalesce schrodan dreams into memories — bounded refinement loop.
+
+Dreams (`.dreams/<horizon>.md`) are forward plans with a `critical_path`
+of intended work. Memories (`.memories/<topic>.md`) are after-the-fact
+decisions, observations, and resolved state. As code lands, dream items
+become true; this loop surveys that drift, promotes completed items into
+focused memory files, and prunes content that the codebase now expresses
+better than any state file could.
+
+The loop is intended to run against a `dreamer` agent in a schrodan-shaped
+rig (anything with `.dreams/` and `.memories/` directories — schrodan
+itself, or a downstream project that adopted the pattern).
+
+## Variables
+
+| Variable     | Source | Description                                                |
+|--------------|--------|------------------------------------------------------------|
+| issue        | caller | Root work bead the converge controller pins iterations to  |
+| dreams_dir   | caller | Path to the dreams directory (default `.dreams/`)          |
+| memories_dir | caller | Path to the memories directory (default `.memories/`)      |
+| horizon      | caller | Optional: focus a single horizon (e.g. `v0_mvp`); empty = all |
+
+## Termination
+
+Each iteration ends with a JSON drift report appended to bead notes via
+`gc bd update --notes`. The companion gate condition script
+(`gates/coalesce-dreams-gate.sh`) reads the most recent report; the loop
+terminates when an iteration moves zero critical-path items and prunes
+zero memory candidates. Use `--gate manual` for the first run so you can
+eyeball each pass.
+"""
+formula = "mol-coalesce-dreams"
+version = 1
+
+[vars]
+[vars.issue]
+description = "Root work bead ID (the converge loop pins iterations to this)"
+required = true
+
+[vars.dreams_dir]
+description = "Path to the dreams directory"
+default = ".dreams"
+
+[vars.memories_dir]
+description = "Path to the memories directory"
+default = ".memories"
+
+[vars.horizon]
+description = "Optional: focus a single horizon (e.g. v0_mvp); empty surveys all"
+default = ""
+
+[[steps]]
+id = "survey"
+title = "Survey drift between dreams, memories, and the codebase"
+description = """
+You are the dreamer. Your job is to detect drift between what
+`{{dreams_dir}}/` claims is unfinished and what the codebase has
+actually realized, then capture the next iteration's findings.
+
+**1. Anchor the run:**
+```bash
+gc prime
+gc bd prime
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+ITER_DIR=".plan-reviews/coalesce-{{issue}}"
+mkdir -p "$ITER_DIR"
+ITER=$(ls -1 "$ITER_DIR"/iter-*.json 2>/dev/null | wc -l | tr -d ' ')
+ITER=$((ITER + 1))
+ITER_FILE="$ITER_DIR/iter-$(printf '%03d' $ITER).json"
+```
+
+**2. Read the assignment and bound the work:**
+```bash
+bd show {{issue}}
+ls -la {{dreams_dir}}/ {{memories_dir}}/
+```
+If `{{horizon}}` is non-empty, restrict the survey to dreams matching
+that horizon; otherwise survey every dream in `{{dreams_dir}}/`.
+
+**3. Pull codebase truth signals** (the dreamer doesn't write code,
+but it does read everything):
+```bash
+git log --oneline -50
+git diff --stat HEAD~10..HEAD 2>/dev/null || git diff --stat
+# Plus whatever build/test signal applies — cargo check, pytest -q, etc.
+```
+
+**4. Build a per-dream drift table.** For each dream file:
+- list its current `critical_path` items
+- for each item, classify as one of:
+  - `done` — the codebase shows this is implemented (cite a commit or file)
+  - `partial` — some signal of progress but not complete (note what's missing)
+  - `pending` — no codebase signal yet (leave on the path)
+  - `obsolete` — the work was abandoned or superseded (cite the replacement)
+
+Save the working table at `$ITER_DIR/iter-$ITER-survey.md` for the next
+step. The next step writes the structured JSON report.
+
+**Exit criteria:** survey table written, no files in `{{dreams_dir}}` or
+`{{memories_dir}}` modified yet — that happens in `coalesce`."""
+
+[[steps]]
+id = "coalesce"
+title = "Promote completed dream items into focused memories"
+needs = ["survey"]
+description = """
+Apply the survey findings: for every `done` or `obsolete` item identified
+in the previous step, perform the dream-to-memory promotion.
+
+**For each `done` item:**
+1. Write or update a memory file under `{{memories_dir}}/` capturing the
+   resolved fact. Follow `.memories/memory-schema.md` exactly. Each memory
+   covers exactly one concern. Keep it small. Cite the commit or file that
+   made the dream item true.
+2. In the source dream, **move** the item from `critical_path` to a new
+   `completed` list with a one-line annotation of how it landed.
+3. Update any `risks` entries that the completed work mitigated.
+
+**For each `obsolete` item:**
+1. Remove it from `critical_path` and append to a `deferred` or
+   `superseded` list (per the dream schema's existing convention).
+2. If it was driving a dream-level horizon, update `feelings.priority`
+   accordingly.
+
+**Do NOT:**
+- Write source code, configs, or infrastructure. Ever.
+- Touch dream files outside `{{dreams_dir}}/` or memories outside
+  `{{memories_dir}}/`.
+- Delete memories in this step — that's the next step's job, with a
+  candidate list rather than autonomous deletion.
+
+Stage your edits but do not commit yet — the report step records the
+diff before the controller moves on."""
+
+[[steps]]
+id = "prune"
+title = "Identify memory candidates whose content is now better captured by code"
+needs = ["coalesce"]
+description = """
+Walk `{{memories_dir}}/`. For each memory file, ask: is the fact this
+memory captures now expressed more authoritatively by the codebase
+itself (a typed schema, a config, a comment with the same WHY, an ADR,
+a passing test)?
+
+If yes, **add it to the prune candidate list** rather than deleting it
+outright:
+```bash
+echo "<path>: <one-line reason it's redundant>" >> "$ITER_DIR/iter-$ITER-prune-candidates.md"
+```
+
+The human-in-the-loop reviews candidates between iterations and decides
+whether to actually `git rm` them. The dreamer never deletes memories
+unilaterally — that's a non-recoverable judgment that needs a human."""
+
+[[steps]]
+id = "report"
+title = "Emit the iteration's drift report and update the bead"
+needs = ["prune"]
+description = """
+Write `$ITER_FILE` with this exact JSON shape so the gate condition
+script can parse it without ambiguity:
+
+```json
+{
+  "iteration": <int>,
+  "ts": "<YYYY-MM-DDTHH:MM:SSZ>",
+  "horizon": "{{horizon}}",
+  "dreams_surveyed": <int>,
+  "items_promoted": <int>,
+  "items_marked_obsolete": <int>,
+  "memories_written": <int>,
+  "memories_updated": <int>,
+  "prune_candidates": <int>,
+  "files_changed": ["<relative path>", ...]
+}
+```
+
+`items_promoted + items_marked_obsolete + prune_candidates == 0` means
+the codebase and the state files are aligned — the gate will pass and
+the loop will terminate. Anything > 0 means another pass is justified.
+
+**Update the bead:**
+```bash
+SUMMARY=$(jq -c . "$ITER_FILE")
+gc bd update {{issue}} --notes "iter-$ITER: $SUMMARY"
+```
+
+**Stage the file changes** so the next iteration sees them, but let the
+human commit. The dreamer does not push:
+```bash
+git add "{{dreams_dir}}/" "{{memories_dir}}/" "$ITER_DIR/"
+git status --short
+```
+
+**Drain:**
+```bash
+gc runtime drain-ack
+```
+
+Run that and nothing else."""

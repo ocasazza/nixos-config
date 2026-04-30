@@ -1,0 +1,6 @@
+scope = "city"
+wake_mode = "fresh"
+work_dir = ".gc/agents/accountant"
+nudge = "Run 'gc prime' to start a cost & efficiency audit cycle."
+idle_timeout = "1h"
+max_active_sessions = 1

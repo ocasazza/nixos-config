@@ -83,5 +83,12 @@
       copy_on_select = true;
       mouse_mode = true;
     };
+    # Free Alt+Arrow so macOS Option+Arrow word-navigation reaches zsh
+    # instead of triggering Zellij's MoveFocusOrTab.
+    extraConfig = ''
+      keybinds {
+          unbind "Alt Left" "Alt Right" "Alt Up" "Alt Down"
+      }
+    '';
   };
 }

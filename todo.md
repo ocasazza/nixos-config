@@ -686,23 +686,3 @@ exist.
       in its env.
 
 ---
-
-## Cross-cutting notes (continued from above)
-
-- **Atlassian backfill capacity.** Vault todo Stage 8g now carries
-  the canonical capacity model (langgraph-orchestrated, node-level
-  `max_concurrency=2`, ~10h wall clock for ~2,500 pages). The
-  binding constraint is desk-nxst-001's vLLM, not Atlassian's API. Open
-  WebUI's file ingest uses an embedding model (currently NOT served
-  by desk-nxst-001's vLLM — see CLAUDE.md "Embeddings" ToDo at line 416),
-  so the OpenWebUI sink path goes through Open WebUI's RAG default
-  embedder. The langgraph `enrich_page` node is the dominant LLM
-  cost; the OpenWebUI embedding pass is the secondary one.
-- **Sops secret naming convention** for the new entries:
-  - `secrets/atlassian-email.yaml` ✅ (exists; user states real value)
-  - `secrets/atlassian-api-token.yaml` ✅ (exists; user states real value)
-  - `secrets/obsidian-vault-writer-token.yaml` (new, Stage 8c)
-  - `secrets/litellm-virtual-key-ingest.yaml` (new, Stage 8d)
-  - `secrets/litellm-virtual-key-langflow.yaml` (new, Stage 9a)
-    All follow the existing pattern (one secret per file, key matches
-    filename basename without `-` underscores per `.sops.yaml`).

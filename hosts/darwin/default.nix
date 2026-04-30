@@ -334,6 +334,14 @@ in
     (pkgs.formats.json { }).generate "opencode-user.json"
       {
         "$schema" = "https://opencode.ai/config.json";
+        # Default model: keep gastown / interactive sessions on the
+        # local LiteLLM-routed vLLM unless explicitly overridden.
+        # Cloud Anthropic stays available via enabled_providers but is
+        # not picked by default — see project memory `gastown_local_only`.
+        model = "luna-litellm/coder-local";
+        # Disable the in-TUI auto-update prompt — supervisor-spawned
+        # sessions can't dismiss it and end up wedged on the modal.
+        autoupdate = false;
         # Tell opencode to flip `experimental_telemetry.isEnabled = true`
         # on every AI SDK call (session/llm.ts reads this flag when
         # constructing the `streamText` / `generateText` options). With

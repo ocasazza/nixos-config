@@ -1,0 +1,216 @@
+description = """
+Accountant audit loop. Patrol cycle modeled on `mol-deacon-patrol` and
+`mol-witness-patrol`: each wisp is ONE audit iteration. Pour the next
+wisp before burning this one.
+
+The accountant measures other agents' allocation efficiency. Its rubric
+(distilled from schrodan's `.memories/subagent-cost-heuristics.md`):
+
+| Signal                                                 | Verdict            |
+|--------------------------------------------------------|--------------------|
+| opus on read-only / format / lookup / git-status work  | OVER-allocated     |
+| sonnet on architecture / security / multi-file refactor| right-sized        |
+| haiku on architecture / from-scratch design            | UNDER-allocated    |
+| repeated retries on same bead, escalating model        | UNDER then panic   |
+| 4×haiku fan-out for <500 tok work                      | OVER (overhead waste) |
+
+Per-model overhead (tokens spent just spawning a subagent):
+  haiku  25k–30k    sonnet 30k–40k    opus 40k–50k
+
+Both directions of mismatch are waste. Under-allocation costs more in
+wall-clock, retries, and downstream debugging than the model savings
+recover.
+
+## What the accountant does each iteration
+
+1. Snapshot live sessions and their providers.
+2. For claude-code sessions, run cost-attribution.sh (joins gc session
+   WorkDir → ~/.claude/projects/<slug>/<sid>.jsonl).
+3. For opencode sessions, query LiteLLM's /spend endpoint per virtual
+   key. (TODO: wire up once nc-69d lands the role aliases.)
+4. For each agent that has finished work since the last audit, classify
+   the work-vs-model fit (over / right-sized / under).
+5. Record findings in bead notes (per-agent) AND a rolling
+   `.gc/agents/accountant/ledger.jsonl` so trends are queryable.
+6. Mail the mayor only when an agent crosses a sustained threshold
+   (e.g., 3 consecutive over-allocated dispatches) — single anomalies
+   are noise, patterns are signal.
+
+## What the accountant does NOT do
+
+- Reassign work or change agent provider/model. It observes; the human
+  (or future routing layer) acts on its findings.
+- Block work in flight. Audits read state; they don't gate dispatch.
+- Delete or rewrite session JSONLs. Strictly read-only.
+"""
+formula = "mol-accountant-audit"
+version = 1
+
+[vars]
+[vars.event_timeout]
+description = "Seconds to wait between audit cycles when idle"
+default = "300"
+
+[vars.over_threshold]
+description = "Sustained over-allocation count that triggers a mayor escalation"
+default = "3"
+
+[[steps]]
+id = "snapshot-sessions"
+title = "Snapshot live sessions and route by provider"
+description = """
+**1. Anchor:**
+```bash
+gc prime
+LEDGER=".gc/agents/accountant/ledger.jsonl"
+mkdir -p "$(dirname "$LEDGER")"
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+**2. Snapshot every live gc session and its provider:**
+```bash
+gc session list --json > "$(dirname "$LEDGER")/sessions-$TS.json"
+```
+
+The next steps split on `Provider`:
+- `claude-code` → cost lives in `~/.claude/projects/<slug>/<sid>.jsonl`
+  (use `assets/scripts/cost-attribution.sh`)
+- `opencode` → cost lives in LiteLLM spend tracking on
+  `desk-nxst-001:4000` (per virtual key)
+- anything else → flag as `unmeasurable`, note in ledger, move on
+"""
+
+[[steps]]
+id = "tally-claude-code"
+title = "Tally claude-code sessions from project JSONLs"
+needs = ["snapshot-sessions"]
+description = """
+Run the bundled script:
+```bash
+SCRIPT="$GC_PACK_DIR/accounting/assets/scripts/cost-attribution.sh"
+test -x "$SCRIPT" || SCRIPT="packs/accounting/assets/scripts/cost-attribution.sh"
+"$SCRIPT" > "$(dirname "$LEDGER")/cc-tally-$TS.json"
+```
+
+The output is a JSON array sorted by `est_usd_opus` desc. Each record
+is one gc session that mapped to a claude-code project dir. Append
+each record to the ledger with the audit timestamp:
+```bash
+jq --arg ts "$TS" '.[] | . + {audited_at: $ts}' \
+  "$(dirname "$LEDGER")/cc-tally-$TS.json" >> "$LEDGER"
+```
+
+**Sanity check:** the script flags missing project dirs and absent JSONLs
+as structured errors rather than silently dropping sessions. Treat any
+record with an `error` field as a join gap to investigate next iteration —
+do not escalate as cost waste.
+"""
+
+[[steps]]
+id = "tally-opencode"
+title = "Tally opencode sessions from LiteLLM spend"
+needs = ["snapshot-sessions"]
+description = """
+**Status:** unimplemented MVP — depends on nc-69d (LiteLLM role aliases).
+
+When that lands, query LiteLLM's spend endpoint per virtual key. The
+sketch:
+
+```bash
+LITELLM_BASE="${LITELLM_BASE_URL:-http://desk-nxst-001:4000}"
+LITELLM_KEY=$(cat /run/secrets/litellm-key-claude-code-darwin)
+curl -sS "$LITELLM_BASE/spend/keys" \
+  -H "Authorization: Bearer $LITELLM_KEY" \
+  | jq '...'
+```
+
+Until then, emit a placeholder per opencode session into the ledger so
+downstream consumers know the gap is intentional, not a data loss:
+```bash
+jq -c '.[] | select(.Provider=="opencode")
+  | { agent: .Template, gc_session_id: .ID,
+      provider: "opencode", est_usd_opus: null,
+      error: "litellm-spend-not-yet-wired (nc-69d)",
+      audited_at: "'"$TS"'" }' \
+  "$(dirname "$LEDGER")/sessions-$TS.json" >> "$LEDGER"
+```
+"""
+
+[[steps]]
+id = "classify-fit"
+title = "Classify each agent's allocation fit"
+needs = ["tally-claude-code", "tally-opencode"]
+description = """
+For each agent with new ledger entries this cycle, decide whether the
+model used was right-sized for the work it did. Use bead history (the
+bead the agent worked on, its acceptance criteria, time-to-close) as the
+"task complexity" signal; use the JSONL `model` field as the "model
+allocated" signal.
+
+Verdicts (per-agent, this audit cycle):
+- `over`   — heavy model on light work (opus/sonnet on lookup/format)
+- `under`  — light model on heavy work (haiku on architecture/refactor)
+             OR retries climbing the model ladder (haiku→sonnet→opus on
+             the same bead)
+- `fit`    — model class matches task class
+- `unknown` — task signal too thin to judge (no bead, no closed work)
+
+Write each verdict back to the ledger:
+```bash
+echo '{"agent":"<name>","cycle_ts":"'"$TS"'","verdict":"<over|under|fit|unknown>","reason":"<one-liner>"}' >> "$LEDGER"
+```
+
+**Important — under-allocation is just as bad as over-allocation.** Do
+not bias verdicts toward "save money"; if the agent paid retry cost on
+a too-small model, that's still waste, just at a different layer.
+"""
+
+[[steps]]
+id = "escalate"
+title = "Escalate sustained patterns to the mayor"
+needs = ["classify-fit"]
+description = """
+**Config: over_threshold = {{over_threshold}}**
+
+Single misallocations are noise. Look for *patterns*:
+```bash
+jq -s 'group_by(.agent) | map({
+  agent: .[0].agent,
+  over_streak: (map(select(.verdict=="over")) | length),
+  under_streak: (map(select(.verdict=="under")) | length),
+  recent: (sort_by(.cycle_ts) | last)
+}) | map(select(.over_streak >= {{over_threshold}} or .under_streak >= {{over_threshold}}))' \
+  "$LEDGER" > /tmp/accountant-escalations.json
+```
+
+For each entry in `/tmp/accountant-escalations.json`:
+```bash
+gc mail send mayor/ -s "ALLOCATION_DRIFT: <agent> [<over|under>]" \
+  -m "Streak: <count> consecutive <verdict> verdicts.
+Recent reason: <one-liner>
+Recommendation: <suggest model class change OR investigate task class drift>"
+```
+
+Do NOT mail for one-off blips. Do NOT escalate `unknown` verdicts —
+those mean the accountant lacks data, not that the agent is wrong.
+"""
+
+[[steps]]
+id = "next-iteration"
+title = "Pour next wisp and idle"
+needs = ["escalate"]
+description = """
+**Config: event_timeout = {{event_timeout}}**
+
+```bash
+NEXT=$(gc bd mol wisp mol-accountant-audit --root-only --json | jq -r '.new_epic_id')
+gc bd update "$NEXT" --assignee=$GC_AGENT
+SEQ=$(gc events --seq)
+gc events --watch --type=session.closed --after=$SEQ --timeout {{event_timeout}}s || true
+gc bd mol burn <this-wisp-id> --force
+```
+
+The `session.closed` filter is intentional — that's the event that
+means new cost data is available to audit. On timeout, just iterate
+anyway (the cycle keeps the ledger ticking even on quiet days).
+"""

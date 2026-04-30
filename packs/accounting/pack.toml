@@ -1,0 +1,16 @@
+# Accounting pack — observers for cost & efficiency across the city.
+#
+# The accountant agent sits in gas town (city scope, like deacon/boot)
+# and audits other agents' allocation efficiency. Its core principle:
+# under-allocation is just as bad as over-allocation — using opus for
+# `git status` wastes money; using haiku for an architecture decision
+# wastes wall-clock time on retries and produces worse outcomes.
+#
+# Cost data sources the audit joins:
+#   - claude-code JSONLs at ~/.claude/projects/<slug>/<sid>.jsonl
+#     (per-message .message.usage + .message.model)
+#   - LiteLLM spend tracking at desk-nxst-001:4000 (per virtual key)
+#   - gc session list --json (gc session → WorkDir → claude project slug)
+[pack]
+name = "accounting"
+schema = 2

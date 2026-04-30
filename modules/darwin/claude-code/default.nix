@@ -107,7 +107,7 @@ in
 
     model = lib.mkOption {
       type = lib.types.str;
-      default = "claude-opus-4-7";
+      default = "claude-sonnet-4-6";
       description = "Default model to use.";
     };
 

@@ -23,3 +23,16 @@ projects/*/.env
 # that didn't expand $HOME. If you see one, ignore the dir, don't
 # track it.
 ~
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+# Gas City
+.gc/
+.beads/*
+!.beads/config.yaml
+!.beads/metadata.json
+hooks/
+.runtime/

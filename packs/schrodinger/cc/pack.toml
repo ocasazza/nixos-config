@@ -1,0 +1,7 @@
+# cc — claude-code direct provider variant of the schrodinger
+# four-agent setup. Each agent uses the host's `claude` CLI
+# (cloud Anthropic via OAuth or Vertex), so the LiteLLM proxy is
+# bypassed entirely.
+[pack]
+name = "cc"
+schema = 2

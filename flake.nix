@@ -93,7 +93,7 @@
     # URL avoids the lockfile drift the old git-daemon split caused.
     # See CLAUDE.md `Cross-repo push targets` for the rationale.
     opencode = {
-      url = "git+ssh://casazza@desk-nxst-001/srv/git/opencode.git?ref=dev";
+      url = "path:/Users/casazza/Repositories/schrodinger/opencode";
     };
 
     hermes = {
