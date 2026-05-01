@@ -177,11 +177,10 @@ in
             npm = "@ai-sdk/openai-compatible";
             name = "Schrodinger LiteLLM";
             options = {
-              # localhost — AppGate doesn't forward :4000 from off-LAN, so
-              # we tunnel via launchd.user.agents.litellm-fetch-tunnel
-              # (defined in hosts/darwin/default.nix) and point opencode at
-              # the local end of the tunnel.
-              baseURL = "${lib.salt.ai.providers.litellm.localEndpoint}/v1";
+              # Point at desk-nxst-001's Caddy proxy (:8080/litellm); the
+              # corporate VPN allows :8080 but not :4000, so Hermes and
+              # opencode both route through this shared endpoint.
+              baseURL = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
               apiKey = "{env:LITELLM_API_KEY_OPENCODE_DARWIN}";
             };
             # Real model_groups exposed by desk-nxst-001's LiteLLM proxy

@@ -306,45 +306,7 @@ in
   #     so it uses ~/.ssh/id_ed25519 and ~/.ssh/known_hosts directly.
   #   - Local bind 127.0.0.1:4000 is per-user state anyway.
   #
-  # If a manual `ssh -fN -L 4000:...` tunnel is already running, this
-  # agent will fail to bind 4000 — kill the manual proc first.
-  launchd.user.agents.litellm-fetch-tunnel = {
-    serviceConfig = {
-      Label = "local.litellm-fetch-tunnel";
-      RunAtLoad = true;
-      KeepAlive = true;
-      EnvironmentVariables = {
-        # autossh's "first connection must succeed within N seconds"
-        # would mark the tunnel dead during AppGate bring-up. 0 disables
-        # the gate; ServerAlive* handles liveness.
-        AUTOSSH_GATETIME = "0";
-        # ssh reads ~/.ssh/{config,known_hosts,id_*} via $HOME.
-        HOME = "/Users/${user.name}";
-      };
-      ProgramArguments = [
-        "${pkgs.autossh}/bin/autossh"
-        "-M"
-        "0"
-        "-N"
-        "-T"
-        "-o"
-        "ExitOnForwardFailure=yes"
-        "-o"
-        "ServerAliveInterval=30"
-        "-o"
-        "ServerAliveCountMax=3"
-        "-o"
-        "BatchMode=yes"
-        "-L"
-        "127.0.0.1:4000:127.0.0.1:4000"
-        "casazza@${lib.salt.ai.providers.litellm.host}"
-      ];
-      StandardOutPath = "/tmp/litellm-fetch-tunnel.log";
-      StandardErrorPath = "/tmp/litellm-fetch-tunnel.err";
-    };
-  };
 
-  # Enable autopkgserver for Fleet GitOps package building
   services.autopkgserver = {
     enable = true;
     # Point to git-fleet repo for recipe overrides (development machine only)
