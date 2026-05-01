@@ -52,7 +52,7 @@ let
   # the corp DNS canonicalisation pushed by AppGate (`schrodinger.com`
   # search domain). Override per-host via cfg.endpoint if name resolution
   # is flaky off-corp.
-  defaultEndpoint = "desk-nxst-001:4317";
+  defaultEndpoint = "${lib.salt.ai.providers.telemetry.host}:${toString lib.salt.ai.providers.telemetry.otlpGrpcPort}";
 
   # Conditionally-included pipeline fragments. We can't use lib.mkIf
   # inside the attrset that gets toJSON'd — mkIf becomes a literal

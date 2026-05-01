@@ -14,20 +14,6 @@
   ".config/ghostty/extra".text = "";
 
   # ── Claude Code ─────────────────────────────────────────────────────────
-  # apiKeyHelper script: fetches a fresh GCP identity token for the
-  # internal vertex-proxy (or for LiteLLM's /vertex passthrough, which
-  # forwards it unchanged). `exec` (instead of `echo $(...)`) makes
-  # failures surface to Claude Code with the real underlying error
-  # message instead of the misleading "did not return a value".
-  ".claude/get-iam-token.sh" = {
-    executable = true;
-    text = ''
-      #!/usr/bin/env bash
-      set -euo pipefail
-      exec gcloud auth print-identity-token
-    '';
-  };
-
   # .claude/settings.json intentionally NOT managed here. It used to be,
   # but home-manager evaluates `config.programs.claude-code` in its own
   # option namespace where that option isn't declared — so every Mac
@@ -40,4 +26,9 @@
   # nixos module's equivalent) is now the single source of truth; it
   # writes a real file to ~/.claude/settings.json with env +
   # apiKeyHelper when LiteLLM or legacy Vertex is enabled.
+  #
+  # NOTE: `~/.claude/get-iam-token.sh` is managed by the
+  # `modules/darwin/claude-code` module and references
+  # `lib.salt.ai.scripts.getIamToken` so the script content is
+  # centralized. Do NOT add a second definition here.
 }

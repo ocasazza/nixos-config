@@ -9,16 +9,6 @@ global_fragments = ["command-glossary", "operational-awareness"]
 [imports.accounting]
 source = "packs/accounting"
 
-# schrodinger.cc — four-agent crew (dreamer/planner/implementer/reviewer)
-# that drives bd work using the host `claude` CLI directly (bypassing
-# LiteLLM). Sits at city scope so any rig can route work to cc.<role>
-# via metadata gc.routed_to=cc.implementer (etc).
-#
-# Disabled: holding off on routing cloud Claude / Vertex into gastown
-# until the local opencode → LiteLLM path is fully proven.
-# [imports.cc]
-# source = "packs/schrodinger/cc"
-
 # schrodinger.oc — four-agent crew (dreamer/planner/implementer/reviewer)
 # routed via opencode → LiteLLM → local vLLM. The agents are city-scope
 # (see scope = "city" in each agent.toml), so they go through `[imports]`

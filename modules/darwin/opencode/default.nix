@@ -46,7 +46,7 @@ in
     # Static (non-secret) provider env. AI-SDK's @ai-sdk/azure provider
     # reads AZURE_RESOURCE_NAME to build endpoint URLs.
     home.sessionVariables = {
-      AZURE_RESOURCE_NAME = "schrodinger-code";
+      AZURE_RESOURCE_NAME = lib.salt.ai.providers.azure.resourceName;
     };
 
     # Source the per-provider sops secrets at shell init so the user-level
@@ -159,7 +159,7 @@ in
               resourceName = "{env:AZURE_RESOURCE_NAME}";
             };
             models = {
-              "Kimi-K2.6" = {
+              "${lib.salt.ai.providers.azure.deployment}" = {
                 name = "Kimi K2.6";
                 tool_call = true;
                 # Kimi K2.6 only supports Azure's Chat Completions endpoint,
@@ -181,7 +181,7 @@ in
               # we tunnel via launchd.user.agents.litellm-fetch-tunnel
               # (defined in hosts/darwin/default.nix) and point opencode at
               # the local end of the tunnel.
-              baseURL = "http://localhost:4000/v1";
+              baseURL = "${lib.salt.ai.providers.litellm.localEndpoint}/v1";
               apiKey = "{env:LITELLM_API_KEY_OPENCODE_DARWIN}";
             };
             # Real model_groups exposed by desk-nxst-001's LiteLLM proxy
@@ -229,7 +229,7 @@ in
             npm = "@ai-sdk/openai-compatible";
             name = "oMLX Local";
             options = {
-              baseURL = "http://localhost:8000/v1";
+              baseURL = lib.salt.ai.providers.omlx.baseURL;
               # oMLX localhost does not require auth by default; the API key
               # field is ignored but ai-sdk requires a non-empty string.
               apiKey = "ollama-not-needed";

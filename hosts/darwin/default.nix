@@ -1,5 +1,6 @@
 {
   pkgs,
+  lib,
   user,
   config,
   consortium,
@@ -163,6 +164,9 @@ in
     # groups) authenticates against desk-nxst-001:4000/v1 and unlocks
     # the rest of the GPU pool fronted by LiteLLM. Without it, only
     # /vertex/v1 (gcloud id-token, no virtual key) is reachable.
+    # Use the Caddy proxy endpoint (:8080/litellm) so no local SSH tunnel
+    # is required.
+    litellm.endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
     litellm.virtualKeyFile = config.sops.secrets.litellm-key-hermes.path;
 
     soulMd = ''
@@ -275,12 +279,12 @@ in
   # they're consumed by hermes / ingest / open-webui instead.
   programs.claude-code = {
     enable = true;
-    model = "claude-opus-4-7";
+    model = lib.salt.ai.models.claudeOpus;
     vertex = {
       enable = true;
-      projectId = "vertex-code-454718";
-      region = "us-east5";
-      baseURL = "https://vertex-proxy.sdgr.app/v1";
+      projectId = lib.salt.ai.providers.vertex.projectId;
+      region = lib.salt.ai.providers.vertex.region;
+      baseURL = lib.salt.ai.providers.vertex.proxyEndpoint;
     };
     apiKeyHelper = true;
     telemetry.enable = false;
@@ -333,7 +337,7 @@ in
         "BatchMode=yes"
         "-L"
         "127.0.0.1:4000:127.0.0.1:4000"
-        "casazza@desk-nxst-001"
+        "casazza@${lib.salt.ai.providers.litellm.host}"
       ];
       StandardOutPath = "/tmp/litellm-fetch-tunnel.log";
       StandardErrorPath = "/tmp/litellm-fetch-tunnel.err";

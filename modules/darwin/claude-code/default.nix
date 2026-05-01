@@ -12,8 +12,9 @@ let
   useLegacyVertex = cfg.vertex.enable && !cfg.litellm.enable;
 
   vertexProjectIdResolved =
-    if cfg.vertex.projectId != "" then cfg.vertex.projectId else "vertex-code-454718";
-  vertexRegionResolved = if cfg.vertex.region != "" then cfg.vertex.region else "us-east5";
+    if cfg.vertex.projectId != "" then cfg.vertex.projectId else lib.salt.ai.providers.vertex.projectId;
+  vertexRegionResolved =
+    if cfg.vertex.region != "" then cfg.vertex.region else lib.salt.ai.providers.vertex.region;
 
   # All env vars land in settings.json#env — Claude Code exports them
   # before forking subprocesses, so wrapper-level injection is not needed.
@@ -107,7 +108,7 @@ in
 
     model = lib.mkOption {
       type = lib.types.str;
-      default = "claude-sonnet-4-7";
+      default = lib.salt.ai.models.claudeSonnet;
       description = "Default model to use.";
     };
 
@@ -122,7 +123,7 @@ in
 
       region = lib.mkOption {
         type = lib.types.str;
-        default = "us-east5";
+        default = lib.salt.ai.providers.vertex.region;
         description = "Google Cloud region for Vertex AI.";
       };
 
@@ -138,7 +139,7 @@ in
 
       endpoint = lib.mkOption {
         type = lib.types.str;
-        default = "http://desk-nxst-001:4000";
+        default = lib.salt.ai.providers.litellm.endpoint;
         description = "LiteLLM base URL.";
       };
 
@@ -156,18 +157,13 @@ in
 
       defaultGroup = lib.mkOption {
         type = lib.types.str;
-        default = "coder-cloud-claude";
+        default = lib.salt.ai.providers.litellm.defaultCloudGroup;
         description = "Default LiteLLM model-group for this client.";
       };
 
       allowedGroups = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [
-          "coder-local"
-          "coder-remote"
-          "coder-cloud-claude"
-          "embedding"
-        ];
+        default = lib.attrValues lib.salt.ai.providers.litellm.modelGroups;
         description = "Informational: model-groups this client may reference.";
       };
     };
@@ -183,7 +179,7 @@ in
 
       endpoint = lib.mkOption {
         type = lib.types.str;
-        default = "http://desk-nxst-001:4317";
+        default = lib.salt.ai.providers.telemetry.otlpEndpoint;
         description = "OTLP endpoint URL.";
       };
 
@@ -237,11 +233,7 @@ in
 
       home.file.".claude/get-iam-token.sh" = lib.mkIf helperActive {
         executable = true;
-        text = ''
-          #!/usr/bin/env bash
-          set -euo pipefail
-          echo $(gcloud auth print-identity-token 2>/dev/null)
-        '';
+        text = lib.salt.ai.scripts.getIamToken;
       };
 
       # When litellm + virtual key (not cloudPassthrough), read the sops

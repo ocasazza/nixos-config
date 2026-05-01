@@ -575,7 +575,7 @@ in
     vertexProxy = {
       baseURL = mkOption {
         type = types.str;
-        default = "https://vertex-proxy.sdgr.app";
+        default = lib.salt.ai.providers.vertex.proxyBaseURL;
         description = ''
           Vertex AI proxy base URL (Anthropic SDK appends /v1/messages).
           When `local.hermes.litellm.enable = true` this value is
@@ -616,7 +616,7 @@ in
 
       endpoint = mkOption {
         type = types.str;
-        default = "http://desk-nxst-001:4000";
+        default = lib.salt.ai.providers.litellm.endpoint;
         description = ''
           LiteLLM base URL. Serves `/vertex/v1` (passthrough for cloud
           Claude) and `/v1` (OpenAI-compat router for local groups).
@@ -643,7 +643,7 @@ in
 
       defaultLocalGroup = mkOption {
         type = types.str;
-        default = "coder-local";
+        default = lib.salt.ai.providers.litellm.defaultLocalGroup;
         description = ''
           LiteLLM model-group name hermes refers to when picking a
           "local" model (delegation in non-vertex mode, auxiliary
@@ -1447,8 +1447,8 @@ in
       programs.zsh.shellInit = mkAfter (
         ''
           # Hermes Agent: Vertex proxy env vars and auth
-          export ANTHROPIC_VERTEX_PROJECT_ID="vertex-code-454718"
-          export CLOUD_ML_REGION="us-east5"
+          export ANTHROPIC_VERTEX_PROJECT_ID="${lib.salt.ai.providers.vertex.projectId}"
+          export CLOUD_ML_REGION="${lib.salt.ai.providers.vertex.region}"
 
           # faster-whisper model is already cached locally; suppress the
           # huggingface_hub unauthenticated-request warning at transcription time.
