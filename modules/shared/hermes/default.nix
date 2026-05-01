@@ -1185,7 +1185,7 @@ in
               "  default: \"qwen\""
               "  provider: \"litellm\""
               "  base_url: \"${cfg.litellm.endpoint}/v1\""
-              "  api_key: \"env:LITELLM_HERMES_API_KEY\""
+              "  api_key: \"$LITELLM_HERMES_API_KEY\""
               ""
             ]
           else
@@ -1213,7 +1213,7 @@ in
           "  # across desk-nxst-001 + desk-nxst-004 vLLMs)."
           "  - name: \"litellm\""
           "    base_url: \"${cfg.litellm.endpoint}/v1\""
-          "    api_key: \"env:LITELLM_HERMES_API_KEY\""
+          "    api_key: \"$LITELLM_HERMES_API_KEY\""
           "    models:"
           "      - \"qwen\""
           "      - \"qwen-coder\""
@@ -1480,11 +1480,20 @@ in
         + optionalString (cfg.litellm.enable && cfg.litellm.virtualKeyFile != null) ''
           # LiteLLM virtual key for hermes' local/delegation router path.
           # The sops-decrypted file is a single KEY=VALUE line; export the
-          # VALUE so hermes' config.yaml `api_key: env:LITELLM_HERMES_API_KEY`
-          # resolves to the live bearer. Re-read on every shell start so
-          # sops rotation takes effect without a rebuild.
+          # VALUE and also inject it into the mutable config.yaml copy so
+          # hermes (which does not resolve env: or $ prefixes) gets the
+          # real key. Re-read on every shell start so sops rotation takes
+          # effect without a rebuild.
           if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then
             export LITELLM_HERMES_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
+            # If config.yaml is still a symlink to the nix store, make a
+            # mutable copy and replace the api_key placeholders.
+            if [ -L "$HOME/.hermes/config.yaml" ]; then
+              cp --remove-destination "$(readlink "$HOME/.hermes/config.yaml")" "$HOME/.hermes/config.yaml"
+            fi
+            if [ -f "$HOME/.hermes/config.yaml" ]; then
+              sed -i "s|\\$LITELLM_HERMES_API_KEY|"'"$LITELLM_HERMES_API_KEY"'"|g" "$HOME/.hermes/config.yaml"
+            fi
           fi
         ''
       );
