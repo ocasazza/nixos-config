@@ -91,7 +91,7 @@
 
       # Nix
       nil
-      nixfmt-rfc-style
+      nixfmt
       nix-tree
       nh
       cachix

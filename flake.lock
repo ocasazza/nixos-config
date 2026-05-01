@@ -1178,6 +1178,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-opencode": {
+      "locked": {
+        "lastModified": 1777225139,
+        "narHash": "sha256-ICsnsT8BZ6l6iBJH0AgzKdEpElCAz9i9WnQt9l2SJdc=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "937bc9b4c03e25545fd8057a1570063a52f3db1b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "937bc9b4c03e25545fd8057a1570063a52f3db1b",
+        "type": "github"
+      }
+    },
     "nixpkgs_10": {
       "locked": {
         "lastModified": 1772956932,
@@ -1223,22 +1239,6 @@
         "owner": "nixos",
         "repo": "nixpkgs",
         "rev": "68d8aa3d661f0e6bd5862291b5bb263b2a6595c9",
-        "type": "github"
-      }
-    },
-    "nixpkgs_13": {
-      "locked": {
-        "lastModified": 1773909469,
-        "narHash": "sha256-vglVrLfHjFIzIdV9A27Ugul6rh3I1qHbbitGW7dk420=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "7149c06513f335be57f26fcbbbe34afda923882b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
-        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -1408,25 +1408,6 @@
         "url": "ssh://casazza@desk-nxst-001/srv/git/obsidian.git"
       }
     },
-    "opencode": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_13"
-      },
-      "locked": {
-        "lastModified": 1777098826,
-        "narHash": "sha256-haLE+Y0K6FGHhyjUssOHlbHS9CLrecJM+J4EpncD24M=",
-        "ref": "dev",
-        "rev": "a62c7967774c393bb378f65b90ec8f342d96a3b6",
-        "revCount": 11107,
-        "type": "git",
-        "url": "ssh://casazza@desk-nxst-001/srv/git/opencode.git"
-      },
-      "original": {
-        "ref": "dev",
-        "type": "git",
-        "url": "ssh://casazza@desk-nxst-001/srv/git/opencode.git"
-      }
-    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -1534,8 +1515,8 @@
         "nix4nvchad": "nix4nvchad",
         "nixpkgs": "nixpkgs_12",
         "nixpkgs-dolt": "nixpkgs-dolt",
+        "nixpkgs-opencode": "nixpkgs-opencode",
         "obsidian-vault": "obsidian-vault",
-        "opencode": "opencode",
         "seaweedfs": "seaweedfs",
         "snowfall-lib": "snowfall-lib_3",
         "sops-nix": "sops-nix_3"

@@ -13,7 +13,7 @@
               export PATH="${
                 pkgs.lib.makeBinPath [
                   pkgs.treefmt
-                  pkgs.nixfmt-rfc-style
+                  pkgs.nixfmt
                   pkgs.shfmt
                   pkgs.prettier
                 ]

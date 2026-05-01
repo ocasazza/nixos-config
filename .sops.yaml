@@ -85,6 +85,16 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
+  # Schrodinger Azure OpenAI API key for opencode's `azure` provider
+  # (resource: schrodinger-code). Same KEY=value scalar convention as
+  # the litellm keys so the existing cut-based source pattern works.
+  - path_regex: secrets/azure-api-key-opencode-darwin\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
   - path_regex: secrets/litellm-key-(opencode|hermes)\.yaml$
     key_groups:
       - age:

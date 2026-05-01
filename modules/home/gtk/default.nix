@@ -1,4 +1,4 @@
-{ ... }:
+{ config, ... }:
 
 # Snowfall auto-discovers this as a homeModule and applies it to all
 # home-manager users via `home-manager.sharedModules`. We only set the
@@ -11,5 +11,8 @@
     enable = true;
     theme.name = "Adwaita-dark";
     iconTheme.name = "Adwaita-dark";
+    # Pin gtk4.theme to gtk.theme — preserves home-manager pre-26.05
+    # default; silences the deprecation warning without changing behavior.
+    gtk4.theme = config.gtk.theme;
   };
 }

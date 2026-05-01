@@ -4,7 +4,6 @@
   pkgs,
   user,
   obsidianVault,
-  opencode,
   system,
   ...
 }:
@@ -34,7 +33,7 @@ let
   # splice nixpkgs paths in via EnvironmentVariables.PATH. The script
   # uses an mkdir-based lock instead of flock so we don't need util-linux.
   reingestPath = lib.makeBinPath [
-    opencode.packages.${system}.default
+    pkgs.opencode
     pkgs.ripgrep
     pkgs.bash
     pkgs.coreutils

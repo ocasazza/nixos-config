@@ -2,7 +2,6 @@
   pkgs,
   user,
   config,
-  opencode,
   consortium,
   ...
 }:
@@ -56,19 +55,15 @@ in
         sopsFile = ../../secrets/fleet.env;
         format = "dotenv";
       };
-      # LiteLLM virtual keys for the two darwin clients (claude-code,
-      # opencode). Each yaml secret holds a single `litellm_api_key`
-      # scalar — sops-nix writes just the value to
-      # /run/secrets/litellm-key-<client>. Mirrors the declarations on
-      # desk-nxst-001 (in the nixstation repo).
-      #
-      # Both keys are minted by desk-nxst-001's
-      # `litellm-team-bootstrap.service` and the values committed back
-      # into the sops yaml here. The
-      # claude-code wrapper reads the file at invocation time and
-      # exports the value as ANTHROPIC_API_KEY; opencode picks it up
-      # via the same env var, sourced into interactive shells by
-      # programs.opencode.secrets.file.
+      # LiteLLM virtual key for claude-code. Single `litellm_api_key`
+      # scalar holding a `KEY=value` line; sops-nix writes the value to
+      # /run/secrets/litellm-key-claude-code-darwin. Minted by
+      # desk-nxst-001's `litellm-team-bootstrap.service` (in the
+      # nixstation repo) and committed back into the sops yaml here.
+      # The claude-code wrapper (modules/darwin/claude-code) reads the
+      # file at invocation time and exports the value as
+      # ANTHROPIC_API_KEY. opencode's keys live in
+      # modules/darwin/opencode/default.nix — see the NOTE just below.
       litellm-key-claude-code-darwin = {
         sopsFile = ../../secrets/litellm-key-claude-code-darwin.yaml;
         format = "yaml";
@@ -80,14 +75,11 @@ in
         owner = "root";
         group = "staff";
       };
-      litellm-key-opencode-darwin = {
-        sopsFile = ../../secrets/litellm-key-opencode-darwin.yaml;
-        format = "yaml";
-        key = "litellm_api_key";
-        mode = "0440";
-        owner = "root";
-        group = "staff";
-      };
+      # NOTE: opencode's two virtual keys (litellm-key-opencode-darwin
+      # and azure-api-key-opencode-darwin) are declared in
+      # modules/darwin/opencode/default.nix alongside the rest of the
+      # opencode wiring. Snowfall auto-applies that module on every
+      # darwin host.
       # Redis password for desk-nxst-001's JuiceFS metadata KV. Sops-nix writes
       # just the value to /run/secrets/redis-seaweedfs-password.
       # Re-encrypted to every host_*  age key in `.sops.yaml` so each
@@ -158,9 +150,10 @@ in
         `modules/shared/`, `modules/darwin/`, and `hosts/darwin/default.nix`.
       - Cluster: 3-node Thunderbolt mesh (GN9CFLM92K-MBP, GJHC5VVN49-MBP, CK2Q9LN7PM-MBA).
         Deploy with `nix run .#deploy-cluster` from `~/.config/nixos-config`.
-      - AI stack: hermes-agent (Schrodinger fork), opencode (Schrodinger fork), claude-code —
-        all routed through Vertex AI proxy at https://vertex-proxy.sdgr.app.
-        Auth via `gcloud auth print-identity-token` written to `~/.hermes/.env`.
+      - AI stack: hermes-agent (Schrodinger fork), opencode (stock pkgs.opencode from
+        nixpkgs; user-level config in modules/darwin/opencode), claude-code — all routed
+        through Vertex AI proxy at https://vertex-proxy.sdgr.app or desk-nxst-001's LiteLLM
+        proxy at :4000. Auth via `gcloud auth print-identity-token` written to `~/.hermes/.env`.
       - Distributed inference: exo cluster (gfr-osx26-02/03), OpenAI-compatible API at
         http://localhost:52415/v1. Subagent/coding model: mlx-community/Qwen3-Coder-Next-8bit.
         Access via `just tunnel` from git-fleet-runner to forward the exo API locally.
@@ -189,9 +182,9 @@ in
       - Pre-commit hooks run automatically on `git commit`: treefmt (nixfmt, shfmt, prettier),
         deadnix, yamllint, check-json. Fix formatter issues before committing.
       - SOPS secrets are age-encrypted. Key is at `~/.config/sops/age/keys.txt`.
-        Edit secrets with `sops secrets/fleet.env` or `sops secrets/opencode.env`.
-      - Private flake inputs (git-fleet, git-fleet-runner, opencode, hermes) require SSH
-        agent with `~/.ssh/id_ed25519` loaded.
+        Edit secrets with `sops secrets/fleet.env` or any `secrets/*.yaml` file.
+      - Private flake inputs (git-fleet, git-fleet-runner, hermes) require SSH agent
+        with `~/.ssh/id_ed25519` loaded.
 
        ## File System
 
@@ -212,6 +205,17 @@ in
          subagent-driven-development, plan, research-paper-writing.
        - Save reusable workflows as skills via `skill_manage` rather than repeating them.
     '';
+  };
+
+  # oMLX local inference server with continuous batching & tiered KV cache.
+  # Models download to ~/.omlx/models; the SSD cache lives at ~/.omlx/cache.
+  # Serves an OpenAI-compatible API on localhost:8000/v1 used by opencode's
+  # omlx provider and the oc-voice pipeline.
+  local.omlx = {
+    enable = true;
+    port = 8000;
+    ssdCacheDir = "/Users/${user.name}/.omlx/cache";
+    maxConcurrentRequests = 8;
   };
 
   # Claude Code direct to vertex-proxy. Identical across every darwin
@@ -252,182 +256,16 @@ in
     telemetry.enable = false;
   };
 
-  # Opencode + Claude Code Vertex AI proxy.
-  #
-  # Vertex-direct: gcloud id-token via apiKeyHelper. The schrodinger
-  # fork's bundled managed config pins
-  # provider.anthropic.options.baseURL = https://vertex-proxy.sdgr.app,
-  # which trips the hardcoded vertex codepath in
-  # `packages/opencode/src/provider/provider.ts:170-264`. That
-  # codepath shells out to `gcloud auth print-identity-token` per
-  # request and forwards directly to vertex-proxy.
-  #
-  # We tried building a router-routed sibling opencode binary for
-  # Phoenix attribution — see commit history. Blocked on LiteLLM's
-  # free-tier route auth (would need Enterprise's public_routes flag
-  # to skip auth on /vertex/*). Reverted to vertex-direct for now.
-  programs.opencode = {
-    enable = true;
-    package = opencode.packages.${pkgs.system}.default;
-    # Ship Effect-runtime spans + AI SDK LLM spans to desk-nxst-001's
-    # otelcol, which forwards to Phoenix. opencode's Effect runtime
-    # uses `effect/unstable/observability.Otlp.layerJson` — OTLP/HTTP
-    # JSON — but Phoenix's `/v1/traces` only accepts protobuf and
-    # rejects JSON with 415. Route through desk-nxst-001's
-    # otelcol-contrib at :4318 instead: it speaks JSON on the receiver
-    # side and re-encodes as protobuf on the way out via
-    # `otlphttp/phoenix` exporter (see modules/nixos/observability/
-    # traces pipeline).
-    telemetry = {
-      enable = true;
-      endpoint = "http://desk-nxst-001:4318";
-    };
-    managedConfig = {
-      share = "disabled";
-      enabled_providers = [
-        "anthropic"
-        "exo"
-      ];
-      provider.anthropic.options.baseURL = "https://vertex-proxy.sdgr.app/v1";
-      # Exo cluster: OpenAI-compatible local endpoint for Qwen3 Coder Next.
-      # Reuses the same apiPort declared in local.hermes.exo.apiPort above.
-      provider.exo = {
-        npm = "@ai-sdk/openai-compatible";
-        name = "exo";
-        options = {
-          baseURL = "http://127.0.0.1:${toString config.local.hermes.exo.apiPort}/v1";
-          apiKey = "x";
-        };
-        models = {
-          ${config.local.hermes.localModel} = {
-            name = "Qwen3-Coder-Next-8bit";
-          };
-        };
-      };
-      # NOTE: `luna-litellm` provider is declared in the user-level
-      # ~/.config/opencode/opencode.json block below, NOT here. The
-      # Schrodinger fork's wrapper hardcodes OPENCODE_MANAGED_CONFIG_DIR
-      # to its bundled etc/opencode dir, shadowing anything we add to
-      # this attrset. See the user-config block (~80 lines below) for
-      # the actual provider definition.
-    };
-    vertex = {
-      enable = true;
-      projectId = "vertex-code-454718";
-      region = "us-east5";
-      baseURL = "https://vertex-proxy.sdgr.app/v1";
-    };
-    apiKeyHelper = true;
-    secrets.file = config.sops.secrets.litellm-key-opencode-darwin.path;
-  };
-
-  # opencode user-level config: MCP servers for cross-conversation memory (hippo)
-  # and read/write access to the Obsidian PKM vault (mcp-server-filesystem).
-  #
-  # NOTE: this lives in ~/.config/opencode/opencode.json rather than
-  # programs.opencode.managedConfig because the Schrodinger opencode package
-  # hard-codes OPENCODE_MANAGED_CONFIG_DIR in its own wrapper to its bundled
-  # etc/opencode dir (nix/opencode.nix). That makes the system managed config
-  # at /Library/Application Support/opencode unreachable. The user-level config
-  # is loaded normally by both wrapped and unwrapped opencode binaries.
-  home-manager.users.${user.name}.home.file.".config/opencode/opencode.json".source =
-    (pkgs.formats.json { }).generate "opencode-user.json"
-      {
-        "$schema" = "https://opencode.ai/config.json";
-        # Default model: keep gastown / interactive sessions on the
-        # local LiteLLM-routed vLLM unless explicitly overridden.
-        # Cloud Anthropic stays available via enabled_providers but is
-        # not picked by default — see project memory `gastown_local_only`.
-        model = "luna-litellm/coder-local";
-        # Disable the in-TUI auto-update prompt — supervisor-spawned
-        # sessions can't dismiss it and end up wedged on the modal.
-        autoupdate = false;
-        # Tell opencode to flip `experimental_telemetry.isEnabled = true`
-        # on every AI SDK call (session/llm.ts reads this flag when
-        # constructing the `streamText` / `generateText` options). With
-        # the @opentelemetry/api global tracer registered in the
-        # opencode forks effect/oltp.ts, each AI SDK span (ai.streamText,
-        # ai.doStream, anthropic.messages.create, etc.) routes to the
-        # same OTLP pipeline as Effects own spans. Needed here because
-        # the system-wide managedConfig path (programs.opencode.managedConfig)
-        # is unreachable — see NOTE above.
-        experimental.openTelemetry = true;
-        # luna-litellm provider lives here (not managedConfig) for the
-        # same reason as the rest of this user-level config: the
-        # Schrodinger fork's wrapper hardcodes OPENCODE_MANAGED_CONFIG_DIR
-        # to its bundled etc/opencode dir, so anything we put in
-        # programs.opencode.managedConfig is shadowed. The user-level
-        # ~/.config/opencode/opencode.json IS read and merges with
-        # whatever the bundled etc/opencode declares.
-        enabled_providers = [
-          "anthropic"
-          "exo"
-          "luna-litellm"
-        ];
-        provider.luna-litellm = {
-          npm = "@ai-sdk/openai-compatible";
-          name = "Luna LiteLLM";
-          options = {
-            # localhost — AppGate doesn't forward :4000 from off-LAN, so
-            # we tunnel via the launchd.user.agents.litellm-fetch-tunnel
-            # autossh daemon (defined below) and point opencode at the
-            # local end of the tunnel.
-            baseURL = "http://localhost:4000/v1";
-            apiKey = "{env:LITELLM_API_KEY_OPENCODE_DARWIN}";
-          };
-          models = {
-            coder-local = {
-              name = "Luna coder (local vLLM, Qwen3-Coder-30B AWQ)";
-              limit = {
-                context = 32768;
-                output = 8192;
-              };
-            };
-            coder-remote = {
-              name = "Coder remote (exo + GFR federation)";
-              limit = {
-                context = 262144;
-                output = 8192;
-              };
-            };
-            embedding = {
-              name = "Qwen3-Embedding-0.6B";
-              limit = {
-                context = 2048;
-                output = 0;
-              };
-            };
-          };
-        };
-        mcp = {
-          hippo = {
-            type = "local";
-            command = [
-              "${config.local.hermes.hippo.package}/bin/hippo-server"
-              "--memory-dir"
-              "/Users/${user.name}/.hippo"
-            ];
-            environment.HIPPO_LOG = config.local.hermes.hippo.logLevel;
-            enabled = true;
-          };
-          obsidian-vault = {
-            type = "local";
-            command = [
-              "${pkgs.mcp-server-filesystem}/bin/mcp-server-filesystem"
-              "/Users/${user.name}/Repositories/ocasazza/obsidian/vault"
-            ];
-            enabled = true;
-          };
-        };
-      };
+  # opencode wiring (binary, sops keys, user-level config, MCP servers)
+  # lives in modules/darwin/opencode/default.nix. Snowfall auto-applies
+  # it on every darwin host.
 
   # Forward SSH tunnel from this Mac → desk-nxst-001:4000 (LiteLLM).
   # AppGate SDP only forwards :22, so opencode (and anything else
   # talking to the LiteLLM federator) needs an SSH-tunneled path to
   # reach :4000 from off-LAN. autossh + launchd.user.agents keeps the
   # tunnel up across AppGate flaps and reboots; opencode's baseURL
-  # points at http://localhost:4000/v1 (see programs.opencode user
-  # config above).
+  # points at http://localhost:4000/v1 (see modules/darwin/opencode).
   #
   # Per-user agent (not a system daemon) because:
   #   - The remote end is `casazza@desk-nxst-001` (regular login user),
@@ -926,7 +764,7 @@ in
   # The regular `opencode` binary (vertex-direct) is the supported
   # path for cloud claude.
   environment.systemPackages = [
-    consortium.packages.${pkgs.system}.consortium-cli
+    consortium.packages.${pkgs.stdenv.hostPlatform.system}.consortium-cli
   ];
 
   # Set system-wide environment variables

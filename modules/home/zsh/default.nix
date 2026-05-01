@@ -23,7 +23,7 @@ in
       fpath=(~/.zsh/completions $fpath)
       autoload -Uz compinit && compinit
     '';
-    initExtra = ''
+    initContent = ''
       # ── zellij auto-attach (local only) ───────────────────────
       # Attach to an existing zellij session (or create one) ONLY when
       # we're in a LOCAL interactive shell — never on SSH. Otherwise
@@ -102,6 +102,24 @@ in
       if [[ "$OSTYPE" == "darwin"* ]] && command -v sketchybar >/dev/null 2>&1; then
         cheat() { sketchybar --set cheatsheet popup.drawing=toggle; }
       fi
+    ''
+    + lib.optionalString (hostName != null && pkgs.stdenv.isDarwin) ''
+
+      # ── nds: rebuild + refresh HM session vars in-place ───────
+      # Defined as a function (not an alias) so it can mutate the
+      # current shell's environment after `nh darwin switch`. The
+      # hm-session-vars.sh guard (__HM_SESS_VARS_SOURCED) latches
+      # at first source and is INHERITED by any child shell, so a
+      # plain `exec zsh` after `nds` keeps the stale guard and
+      # silently skips the new exports. Unsetting both guards before
+      # re-sourcing ~/.zshenv picks up freshly-added vars (e.g.
+      # AZURE_API_KEY) without needing a brand-new terminal window.
+      nds() {
+        nh darwin switch --elevation-strategy /usr/bin/sudo "$HOME/.config/nixos-config#${hostName}" "''$@" || return ''$?
+        unset __HM_SESS_VARS_SOURCED __HM_ZSH_SESS_VARS_SOURCED
+        [ -r "$HOME/.zshenv" ] && . "$HOME/.zshenv"
+        print -P "%F{green}nds: HM session vars refreshed%f"
+      }
     '';
     autosuggestion = {
       enable = true;
@@ -138,16 +156,18 @@ in
     shellAliases = {
       cat = "bat";
       ls = "ls --color=auto";
-    }
-    # `nds` (nh darwin switch) is darwin-only and depends on hostName,
-    # so only emit it when we have a hostName AND we're on darwin.
-    // lib.optionalAttrs (hostName != null && pkgs.stdenv.isDarwin) {
-      nds = "nh darwin switch --elevation-strategy /usr/bin/sudo ~/.config/nixos-config#${hostName}";
     };
+    # NOTE: `nds` is defined as a *function* in initContent (below) on
+    # darwin hosts, NOT as a shell alias. Aliases run in the calling
+    # shell but can't modify its environment after `nh darwin switch`,
+    # so the home-manager session vars don't refresh — leaving fresh
+    # secrets (e.g. AZURE_API_KEY just added to home.sessionVariablesExtra)
+    # invisible until the next `exec zsh`. The function form re-sources
+    # hm-session-vars.sh in-place after a successful activation.
     sessionVariables = {
       EDITOR = "nvim";
       CLICOLOR = "1";
-      # Zellij auto-attach is gated in initExtra (below) on NOT being
+      # Zellij auto-attach is gated in initContent (below) on NOT being
       # in an SSH session — setting these unconditionally here would
       # make `ssh <host>` land every new shell in the same existing
       # zellij pane, mirroring input/output across terminals.

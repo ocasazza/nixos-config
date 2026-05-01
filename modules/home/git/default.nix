@@ -21,6 +21,9 @@ in
     lfs = {
       enable = true;
     };
+    signing = {
+      format = "openpgp";
+    };
     settings = {
       user.name = user.fullName;
       user.email = user.email;

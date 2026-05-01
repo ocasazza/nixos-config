@@ -10,12 +10,6 @@
     # cached on aarch64-darwin at this rev.
     nixpkgs-dolt.url = "github:nixos/nixpkgs/01fbdeef22b76df85ea168fbfe1bfd9e63681b30";
 
-    # Surgical pin for opencode 1.14.x. The main nixpkgs above ships
-    # 1.3.13 (Feb 2026) which predates the Azure provider and the
-    # current `/connect` flow. This rev is the most recent nixpkgs commit
-    # that bumps `pkgs.opencode` (1.14.24 → 1.14.25 on 2026-04-26).
-    nixpkgs-opencode.url = "github:nixos/nixpkgs/937bc9b4c03e25545fd8057a1570063a52f3db1b";
-
     snowfall-lib = {
       url = "github:snowfallorg/lib";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -98,6 +92,10 @@
     # firewalled at the corp boundary, and unifying read/write on one
     # URL avoids the lockfile drift the old git-daemon split caused.
     # See CLAUDE.md `Cross-repo push targets` for the rationale.
+    opencode = {
+      url = "path:/Users/casazza/Repositories/schrodinger/opencode";
+    };
+
     hermes = {
       url = "git+ssh://casazza@desk-nxst-001/srv/git/hermes-agent.git?ref=schrodinger";
     };
@@ -170,16 +168,6 @@
         (_final: prev: {
           claude-code = prev.callPackage ./packages/claude-code { };
         })
-        # omlx — LLM inference server with continuous batching & SSD KV caching
-        # for Apple Silicon. see packages/omlx/default.nix for why we use a
-        # user-local venv rather than a full from-source build.
-        (_final: prev: {
-          omlx = prev.callPackage ./packages/omlx { };
-        })
-        # opencode-voice — local STT voice control for opencode (whisper.cpp)
-        (_final: prev: {
-          opencode-voice = prev.callPackage ./packages/opencode-voice { };
-        })
         # gascity (`gc`) + beads (`bd`) — sourced from the standalone
         # gascity-flake (overlays.default exposes both packages on pkgs).
         inputs.gascity-flake.overlays.default
@@ -195,24 +183,6 @@
         # mlx, exo deps — none cached on hydra for darwin yet).
         (final: _prev: {
           dolt = inputs.nixpkgs-dolt.legacyPackages.${final.stdenv.hostPlatform.system}.dolt;
-        })
-        # Surgical opencode bump: stock nixpkgs (Feb 2026) ships 1.3.13
-        # which predates the Azure provider and the current `/connect`
-        # flow. Sourced from a newer nixpkgs rev (1.14.25) without
-        # disturbing the rest of the closure.
-        (final: _prev: {
-          opencode = inputs.nixpkgs-opencode.legacyPackages.${final.stdenv.hostPlatform.system}.opencode;
-        })
-        # Silence nixpkgs's `pkgs.system` deprecation warning. The upstream
-        # alias in pkgs/top-level/aliases.nix defines `system = warnAlias
-        # "..." stdenv.hostPlatform.system` — the warning fires on any
-        # attribute READ, even if no consumer in our local repo uses
-        # `pkgs.system`. Some transitive flake input still does. Replacing
-        # the alias with the same underlying value (no warnAlias wrapper)
-        # is behavior-identical and shuts the noise up. Drop this overlay
-        # the day all transitive consumers move to stdenv.hostPlatform.system.
-        (final: _prev: {
-          system = final.stdenv.hostPlatform.system;
         })
       ];
 
@@ -238,52 +208,6 @@
             backupFileExtension = "bak";
             # sharedModules is no longer needed — snowfall auto-applies
             # everything in modules/home/ via its home system-modules.
-            sharedModules = [
-              {
-                # Disable home-manager's deprecated zsh module that emits warnings.
-                disabledModules = [ "programs/zsh/deprecated.nix" ];
-              }
-              # Replacement module: provides deprecated options without warnings.
-              (
-                { config, lib, ... }:
-                let
-                  inherit (lib)
-                    mkOption
-                    types
-                    mkIf
-                    mkMerge
-                    ;
-                  cfg = config.programs.zsh;
-                in
-                {
-                  options.programs.zsh = {
-                    initExtraBeforeCompInit = mkOption {
-                      default = "";
-                      type = types.lines;
-                      visible = false;
-                      description = "Extra commands before compinit (Deprecated)";
-                    };
-                    initExtra = mkOption {
-                      default = "";
-                      type = types.lines;
-                      visible = false;
-                      description = "Extra commands (Deprecated)";
-                    };
-                    initExtraFirst = mkOption {
-                      default = "";
-                      type = types.lines;
-                      visible = false;
-                      description = "Commands at top of .zshrc (Deprecated)";
-                    };
-                  };
-                  config.programs.zsh.initContent = mkMerge [
-                    (mkIf (cfg.initExtraFirst != "") (lib.mkBefore cfg.initExtraFirst))
-                    (mkIf (cfg.initExtraBeforeCompInit != "") (lib.mkOrder 550 cfg.initExtraBeforeCompInit))
-                    (mkIf (cfg.initExtra != "") cfg.initExtra)
-                  ];
-                }
-              )
-            ];
           };
         }
         inputs.nix-homebrew.darwinModules.nix-homebrew
@@ -328,13 +252,15 @@
               isDeterminate = true;
               hermes = inputs.hermes;
               hippo = inputs.hippo;
+              opencode = inputs.opencode;
               consortium = inputs.consortium;
               obsidianVault = inputs.obsidian-vault;
               system = "aarch64-darwin";
             };
           }
         )
-      ];
+      ]
+      ++ inputs.nixpkgs.lib.optional (inputs ? opencode) inputs.opencode.darwinModules.default;
 
       # No NixOS systems live here anymore — they moved to
       # ~/Repositories/schrodinger/nixstation as part of the 2026-04-24
