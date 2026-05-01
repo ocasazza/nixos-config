@@ -80,6 +80,29 @@ in
       # modules/darwin/opencode/default.nix alongside the rest of the
       # opencode wiring. Snowfall auto-applies that module on every
       # darwin host.
+      # LiteLLM virtual key for hermes. Same shape as the claude-code
+      # secret above (single `litellm_api_key` scalar with KEY=VALUE).
+      # Hermes' shellInit reads the file at every shell start and
+      # exports `LITELLM_HERMES_API_KEY`, which hermes' config.yaml
+      # references via `api_key: env:LITELLM_HERMES_API_KEY`. Without
+      # this, hermes' /v1 path against LiteLLM 401s and the only working
+      # route is the /vertex/v1 cloud passthrough (gcloud id-token).
+      #
+      # Mode 0440 + group=staff so the user shell that sources the
+      # file (zsh interactive) can read it; default 0400 root would
+      # block it. Re-encrypted for each darwin host_* age key listed in
+      # `.sops.yaml`'s litellm-key-hermes rule (currently
+      # gn9cflm92k_mbp + ck2q9ln7pm_mba; gjhc5vvn49_mbp and l75t4yhxv7_mba
+      # need a `sops updatekeys` to join the keygroup before this option
+      # decrypts cleanly on those hosts).
+      litellm-key-hermes = {
+        sopsFile = ../../secrets/litellm-key-hermes.yaml;
+        format = "yaml";
+        key = "litellm_api_key";
+        mode = "0440";
+        owner = "root";
+        group = "staff";
+      };
       # Redis password for desk-nxst-001's JuiceFS metadata KV. Sops-nix writes
       # just the value to /run/secrets/redis-seaweedfs-password.
       # Re-encrypted to every host_*  age key in `.sops.yaml` so each
@@ -134,6 +157,13 @@ in
     exo.apiPort = 52415;
     delegation.useVertexProxy = false; # coding subagent → exo
     auxiliary.useVertexProxy = true; # vision/web/approval stay on Vertex Haiku
+
+    # Wire the per-host LiteLLM virtual key. With this set, hermes'
+    # local-routing path (`coder-local`/`coder-remote`/`embedding` model
+    # groups) authenticates against desk-nxst-001:4000/v1 and unlocks
+    # the rest of the GPU pool fronted by LiteLLM. Without it, only
+    # /vertex/v1 (gcloud id-token, no virtual key) is reachable.
+    litellm.virtualKeyFile = config.sops.secrets.litellm-key-hermes.path;
 
     soulMd = ''
       You are Hermes Agent running on a Schrodinger engineering workstation (Apple Silicon Mac,
