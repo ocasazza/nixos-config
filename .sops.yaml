@@ -38,10 +38,7 @@ keys:
   - &host_gn9cflm92k_mbp age1uh7yfce4f6xj0s62ne5tz8r5uj5qk9hr3fy2kz8nptgag9cg4efq00vg7e
   - &host_ck2q9ln7pm_mba age144p4lzmv6r3kphxv3ldmu8rmr2a889zlveck5cnyce9pm8jmdc4qqylgfh
   - &host_gjhc5vvn49_mbp age1u2ks8pg77vmk64tcgv68qrm078s3sd8kze832u8xagmdfant7fksf7zd5r
-  # L75T4YHXV7-MBA pending — pubkey not reachable when last attempted.
-  # When that Mac is reachable (LAN or Thunderbolt), collect and add:
-  #   claw -w L75T4YHXV7-MBA 'cat /etc/ssh/ssh_host_ed25519_key.pub' | ssh-to-age
-  # then re-run `sops updatekeys` on the files below.
+  - &host_l75t4yhxv7_mba age1qm94uh5hz2ll6d7u4d3lmrtkgkr6k46w7072u4lf2jlfngf3evjsn6q2zm
 creation_rules:
   - path_regex: secrets/opencode\.env$
     age: *admin_olive
@@ -52,6 +49,7 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
   # JuiceFS-related secrets (Redis password for metadata KV +
   # SeaweedFS S3 admin secret). The backend runs on
   # desk-nxst-001 (managed in nixstation); every Mac
@@ -66,7 +64,7 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
-          # L75T4YHXV7-MBA host key not yet provisioned; add when available.
+          - *host_l75t4yhxv7_mba
   # Per-client LiteLLM virtual keys. Each darwin client (claude-code,
   # opencode, hermes) reads its own decrypted EnvironmentFile and
   # presents the key to the LiteLLM proxy on desk-nxst-001:4000. File
@@ -78,6 +76,7 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
   - path_regex: secrets/litellm-key-opencode-darwin\.yaml$
     key_groups:
       - age:
@@ -85,6 +84,7 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
   # Schrodinger Azure OpenAI API key for opencode's `azure` provider
   # (resource: schrodinger-code). Same KEY=value scalar convention as
   # the litellm keys so the existing cut-based source pattern works.
@@ -95,6 +95,7 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
   - path_regex: secrets/litellm-key-(opencode|hermes)\.yaml$
     key_groups:
       - age:
@@ -102,3 +103,4 @@ creation_rules:
           - *host_gn9cflm92k_mbp
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
