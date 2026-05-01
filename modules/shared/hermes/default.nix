@@ -603,7 +603,16 @@ in
     # block overrides everything that would otherwise hit vertex-proxy
     # or localhost:52416 directly.
     litellm = {
-      enable = mkEnableOption "Route Hermes through LiteLLM instead of direct providers";
+      # Default-on: hermes routes through LiteLLM rather than hitting Vertex /
+      # exo directly. The legacy direct path is still reachable by setting
+      # `local.hermes.litellm.enable = false;`. When enabled but no
+      # `virtualKeyFile` is wired, only the cloud passthrough (/vertex/v1)
+      # works — local routing (/v1) needs the per-host sops-decrypted key.
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Route Hermes through LiteLLM instead of direct providers";
+      };
 
       endpoint = mkOption {
         type = types.str;
@@ -1174,16 +1183,39 @@ in
           "  base_url: \"${vertexProxyBaseUrl}\""
           ""
         ]
-        ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
-          "# Custom providers: exo distributed inference cluster"
-          "# (omitted when LiteLLM is in the path — hermes reaches exo"
-          "# via the coder-remote model group instead)"
+        ++ [
+          "# Custom OpenAI-compatible providers — mirrors opencode's"
+          "# enabled_providers (anthropic is the default model.provider above;"
+          "# litellm is the routing layer when local.hermes.litellm.enable is"
+          "# set, not a custom provider entry)."
           "custom_providers:"
+        ]
+        ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
+          "  # exo distributed inference cluster (omitted when LiteLLM is in"
+          "  # the path — hermes reaches exo via the coder-remote model group)."
           "  - name: \"exo\""
           "    base_url: \"${exoBaseUrl}\""
           "    api_key: \"ollama\""
           "    models:"
           "      - \"${cfg.localModel}\""
+        ]
+        ++ [
+          "  # oMLX local inference server (Apple Silicon MLX). Same endpoint"
+          "  # as opencode's provider.omlx — see modules/darwin/opencode/."
+          "  - name: \"omlx\""
+          "    base_url: \"http://localhost:8000/v1\""
+          "    api_key: \"ollama-not-needed\""
+          "    models:"
+          "      - \"qwen3-coder-next\""
+          "  # Schrodinger Azure OpenAI — same resource (schrodinger-code) and"
+          "  # deployment (Kimi-K2.6) as opencode's provider.azure. The"
+          "  # AZURE_API_KEY env var is sops-decrypted and exported by"
+          "  # modules/darwin/opencode/default.nix's home.sessionVariablesExtra."
+          "  - name: \"azure\""
+          "    base_url: \"https://schrodinger-code.openai.azure.com/openai/deployments/Kimi-K2.6\""
+          "    api_key: \"env:AZURE_API_KEY\""
+          "    models:"
+          "      - \"Kimi-K2.6\""
           ""
         ]
         ++ optionals cfg.delegation.enable (
@@ -1326,12 +1358,21 @@ in
           "  timeout: 180"
           ""
           "memory:"
+          "  provider: \"holographic\""
           "  memory_enabled: true"
           "  user_profile_enabled: true"
           "  memory_char_limit: 2200"
           "  user_char_limit: 1375"
           "  nudge_interval: 10"
           "  flush_min_turns: 6"
+          ""
+          "# Holographic memory plugin: HRR-backed compositional recall over a"
+          "# local SQLite store. auto_extract pulls facts from the conversation"
+          "# without requiring explicit `mcp_hippo_record_insight` calls."
+          "plugins:"
+          "  hermes-memory-store:"
+          "    db_path: \"/Users/${user.name}/.hermes/memory_store.db\""
+          "    auto_extract: true"
           ""
           "skills:"
           "  creation_nudge_interval: 15"
