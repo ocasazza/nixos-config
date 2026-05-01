@@ -266,7 +266,12 @@ writeShellApplication {
         attr="$(bare_attr "$h")"
         out="$(cat "/tmp/cast-on.''${attr}.out")"
         echo "==> Copying $attr closure to $h"
-        nix copy --to "ssh-ng://''${SSH_USER}@$h" "$out"
+        # --no-check-sigs: closures built locally don't carry signatures
+        # from cache.nixos.org's signing key, so the receiving Mac would
+        # reject them by default. We trust intra-fleet copies (auth is
+        # already gated by the SSH key the local user just used to
+        # connect), so skip the sig check on the receive side.
+        nix copy --no-check-sigs --to "ssh-ng://''${SSH_USER}@$h" "$out"
       done
 
       echo "==> Activating remote hosts in parallel via claw"
