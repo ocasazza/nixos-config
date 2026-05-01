@@ -250,7 +250,13 @@ writeShellApplication {
       out="$(cat "/tmp/cast-on.''${attr}.out")"
       if is_darwin_attr "$attr"; then
         echo "==> Activating local darwin ($attr)"
-        sudo "$out/sw/bin/darwin-rebuild" activate
+        # `<closure>/activate` is the script the closure ships; it
+        # handles secrets, launchd, etc. Calling
+        # `<closure>/sw/bin/darwin-rebuild activate` instead breaks on
+        # newer darwin-rebuild because the inner script self-locates a
+        # sibling `activate` that doesn't exist. The bare closure
+        # script has no such ambiguity.
+        sudo "$out/activate"
       else
         echo "==> Activating local nixos ($attr)"
         sudo nixos-rebuild switch --flake ".#''${attr}"
@@ -282,7 +288,9 @@ writeShellApplication {
         attr="$(bare_attr "$h")"
         out="$(cat "/tmp/cast-on.''${attr}.out")"
         if is_darwin_attr "$attr"; then
-          cmd="sudo $out/sw/bin/darwin-rebuild activate"
+          # See activate_local() above for why we call $out/activate
+          # directly instead of $out/sw/bin/darwin-rebuild activate.
+          cmd="sudo $out/activate"
         else
           # NixOS: switch-to-configuration is the right entry point
           # when we already have the system closure on-disk (we just
