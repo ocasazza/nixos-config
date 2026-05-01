@@ -1173,22 +1173,55 @@ in
       environment.systemPackages = [ cfg.package ] ++ optional cfg.hippo.enable cfg.hippo.package;
 
       home-manager.users.${user.name}.home.file.".hermes/config.yaml".text = concatStringsSep "\n" (
-        [
-          "# Main model: cloud Claude via LiteLLM /vertex/v1 passthrough"
-          "# (or direct vertex-proxy in legacy mode — controlled by"
-          "# local.hermes.litellm.enable)"
-          "model:"
-          "  default: \"${cfg.vertexProxy.model}\""
-          "  provider: \"anthropic\""
-          "  base_url: \"${vertexProxyBaseUrl}\""
-          ""
-        ]
+        (
+          if cfg.litellm.enable then
+            [
+              "# Main model: Qwen3-Coder via LiteLLM smart-routed across the"
+              "# desk-nxst-001 + desk-nxst-004 GPU pool. Bare `qwen` is an"
+              "# alias on the LiteLLM side that rewrites to coder-local."
+              "# To use cloud Claude instead, pick the `vertex` custom_provider"
+              "# below or `litellm/coder-cloud-claude` (when re-enabled)."
+              "model:"
+              "  default: \"qwen\""
+              "  provider: \"litellm\""
+              "  base_url: \"${cfg.litellm.endpoint}/v1\""
+              "  api_key: \"env:LITELLM_HERMES_API_KEY\""
+              ""
+            ]
+          else
+            [
+              "# Main model: cloud Claude direct to vertex-proxy (legacy path,"
+              "# active because local.hermes.litellm.enable = false)"
+              "model:"
+              "  default: \"${cfg.vertexProxy.model}\""
+              "  provider: \"anthropic\""
+              "  base_url: \"${vertexProxyBaseUrl}\""
+              ""
+            ]
+        )
         ++ [
-          "# Custom OpenAI-compatible providers — mirrors opencode's"
-          "# enabled_providers (anthropic is the default model.provider above;"
-          "# litellm is the routing layer when local.hermes.litellm.enable is"
-          "# set, not a custom provider entry)."
+          "# Custom OpenAI-compatible providers — pick any of these via"
+          "# `/model <provider>/<model>` in the hermes TUI. The main `model:`"
+          "# block above selects the default."
           "custom_providers:"
+        ]
+        ++ optionals cfg.litellm.enable [
+          "  # LiteLLM router on desk-nxst-001:4000. The model names below"
+          "  # are the real router groups + the alias names registered via"
+          "  # `routerSettings.modelGroupAlias` on the proxy side. All four"
+          "  # qwen* aliases route to coder-local (Qwen3-Coder smart-routed"
+          "  # across desk-nxst-001 + desk-nxst-004 vLLMs)."
+          "  - name: \"litellm\""
+          "    base_url: \"${cfg.litellm.endpoint}/v1\""
+          "    api_key: \"env:LITELLM_HERMES_API_KEY\""
+          "    models:"
+          "      - \"qwen\""
+          "      - \"qwen-coder\""
+          "      - \"qwen3-coder\""
+          "      - \"Qwen3-Coder-30B\""
+          "      - \"coder-local\""
+          "      - \"coder-remote\""
+          "      - \"embedding\""
         ]
         ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
           "  # exo distributed inference cluster (omitted when LiteLLM is in"
@@ -1217,13 +1250,11 @@ in
           "    models:"
           "      - \"Kimi-K2.6\""
           "  # Direct Vertex AI proxy — same backend claude-code uses. Kept as"
-          "  # a separately addressable provider (alongside the LiteLLM-passthrough"
-          "  # main `model:` block above) so a hermes session can target Vertex"
-          "  # directly when the LiteLLM proxy is unreachable or you specifically"
-          "  # want to bypass the routing layer (e.g. apples-to-apples comparison"
+          "  # a separately addressable provider so a hermes session can target"
+          "  # Vertex directly when the LiteLLM proxy is unreachable or you"
+          "  # specifically want to bypass the routing layer (apples-to-apples"
           "  # against claude-code's pathing). Auth is the same gcloud id-token"
-          "  # that `apiKeyHelper` mints for claude-code; hermes' shellInit"
-          "  # already exports it via the refresh-token shim into ~/.hermes/.env."
+          "  # that `apiKeyHelper` mints for claude-code."
           "  - name: \"vertex\""
           "    base_url: \"${cfg.vertexProxy.baseURL}\""
           "    api_key: \"env:GCLOUD_ID_TOKEN\""
