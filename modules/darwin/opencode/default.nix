@@ -80,23 +80,31 @@ in
           dependencies = {
             "@opencode-ai/plugin" = "1.3.13";
             "oh-my-opencode" = "3.17.12";
+            "@tarquinen/opencode-dcp" = "3.1.9";
           };
         };
 
-    # Minimal oh-my-openagent plugin config: route agents to the local
-    # oMLX provider by default so everything runs on Apple Silicon with
-    # tiered KV-cache benefits. Users can override per-project in
-    # .opencode/oh-my-openagent.jsonc.
+    # Minimal oh-my-openagent plugin config: route agents to the LiteLLM
+    # smart-routed Qwen3-Coder pool on desk-nxst-001. The proxy fans
+    # requests across the full GPU fleet (desk-nxst-001 vLLM + desk-nxst-004
+    # vLLM + the gfr/laptop exo MLX backends) and picks the freshest
+    # backend per request — substantially better throughput than pinning
+    # to one local oMLX instance. Users can override per-project in
+    # .opencode/oh-my-openagent.jsonc; see provider.litellm.models below
+    # for the full list of pinnable backends.
     home.file.".config/opencode/oh-my-openagent.jsonc".text = ''
       {
-        // oMLX local-first routing: all agents default to the local MLX
-        // model served by omlx (localhost:8000/v1). Override per-project
-        // or per-agent as needed.
+        // LiteLLM-routed Qwen3-Coder for every agent. `litellm/coder-local`
+        // hits desk-nxst-001's vLLM directly (loopback on the proxy host);
+        // `litellm/coder-remote` fans out to the gfr exo cluster. The full
+        // list of real model_groups on the proxy is in provider.litellm.models
+        // below — anything else opencode shows is an alias that needs a
+        // matching modelGroupAlias on the LiteLLM side to actually route.
         "agents": {
-          "sisyphus": { "model": "omlx/qwen3-coder-next" },
-          "prometheus": { "model": "omlx/qwen3-coder-next" },
-          "atlas": { "model": "omlx/qwen3-coder-next" },
-          "explore": { "model": "omlx/qwen3-coder-next" }
+          "sisyphus": { "model": "litellm/coder-local" },
+          "prometheus": { "model": "litellm/coder-local" },
+          "atlas": { "model": "litellm/coder-local" },
+          "explore": { "model": "litellm/coder-local" }
         },
         "disabled_hooks": [],
         "mcp": {
@@ -111,9 +119,11 @@ in
       (pkgs.formats.json { }).generate "opencode-user.json"
         {
           "$schema" = "https://opencode.ai/config.json";
-          # Default model: smart-routed Qwen3-Coder group on desk-nxst-001's
-          # LiteLLM proxy. Override per-session with `/model`.
-          model = "litellm/local-coder";
+          # Default model: Qwen3-Coder via LiteLLM hitting the desk-nxst-001
+          # vLLM directly (loopback on the proxy host). Override per-session
+          # with `/model`. Real groups: coder-local, coder-remote,
+          # coder-cloud-claude, embedding.
+          model = "litellm/coder-local";
           # Disable the in-TUI auto-update prompt — supervisor-spawned
           # sessions can't dismiss it and end up wedged on the modal.
           autoupdate = false;
@@ -122,8 +132,9 @@ in
           # routes through the OTLP pipeline alongside Effect's own spans.
           experimental.openTelemetry = true;
           # oh-my-openagent (legacy name: oh-my-opencode) multi-agent harness.
-          plugins = [
+          plugin = [
             "oh-my-openagent"
+            "@tarquinen/opencode-dcp"
           ];
           enabled_providers = [
             "anthropic"
@@ -173,87 +184,32 @@ in
               baseURL = "http://localhost:4000/v1";
               apiKey = "{env:LITELLM_API_KEY_OPENCODE_DARWIN}";
             };
-            # Full Qwen3-Coder lineup exposed by desk-nxst-001's LiteLLM proxy.
-            # Three flavors of model entry:
-            #   * `local-coder`              — smart-routed group, picks the
-            #                                  best backend per request
-            #                                  (latency + load). Default.
-            #   * `qwen3-coder-<node>`       — pinned to one specific backend;
-            #                                  use when you want predictable
-            #                                  latency or are debugging a node.
-            #   * `coder-{local,remote,laptop}` — backward-compat group aliases
-            #                                  for hermes/swarm/ingest callers.
-            # Plus `vision-local` (Qwen3-VL-8B-AWQ on desk-nxst-004 GPU 2 for
-            # OCR) and `embedding` (Qwen3-Embedding-0.6B for RAG).
+            # Real model_groups exposed by desk-nxst-001's LiteLLM proxy
+            # (verified via `curl localhost:4000/v1/models`). Adding entries
+            # here that don't exist on the proxy makes them appear in /model
+            # but fail at request time. To add new groups, register them on
+            # the LiteLLM side first (nixstation modules/nixos/litellm) and
+            # mirror here.
             models = {
-              local-coder = {
-                name = "Qwen3-Coder (auto-route)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              qwen3-coder-desk-nxst-001 = {
-                name = "Qwen3-Coder @ desk-nxst-001 (3090 Ti + Blackwell, AWQ tp=2)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              qwen3-coder-desk-nxst-004 = {
-                name = "Qwen3-Coder @ desk-nxst-004 (3x RTX 4000 Ada, AWQ tp=2)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              qwen3-coder-exo-gfr-02 = {
-                name = "Qwen3-Coder @ gfr-osx26-02 (Mac MLX-8bit)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              qwen3-coder-exo-gfr-03 = {
-                name = "Qwen3-Coder @ gfr-osx26-03 (Mac MLX-8bit)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              qwen3-coder-exo-laptop = {
-                name = "Qwen3-Coder-480B @ laptop mesh (TB MLX-4bit, slowest, biggest)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
               coder-local = {
-                name = "coder-local (desk-nxst-001 only, loopback)";
+                name = "Qwen3-Coder @ desk-nxst-001 vLLM (loopback)";
                 limit = {
-                  context = 32768;
+                  context = 262144;
                   output = 8192;
                 };
               };
               coder-remote = {
-                name = "coder-remote (gfr cluster only)";
+                name = "Qwen3-Coder @ gfr exo cluster (MLX-8bit)";
                 limit = {
                   context = 262144;
                   output = 8192;
                 };
               };
-              coder-laptop = {
-                name = "coder-laptop (laptop mesh only)";
+              coder-cloud-claude = {
+                name = "Claude (Vertex passthrough via LiteLLM)";
                 limit = {
-                  context = 262144;
+                  context = 200000;
                   output = 8192;
-                };
-              };
-              vision-local = {
-                name = "Qwen3-VL-8B-AWQ (vision OCR, desk-nxst-004 GPU 2)";
-                limit = {
-                  context = 32768;
-                  output = 4096;
                 };
               };
               embedding = {
