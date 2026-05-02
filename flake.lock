@@ -899,22 +899,6 @@
         "url": "ssh://casazza@desk-nxst-001/srv/git/hermes-agent.git"
       }
     },
-    "hippo": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1754271429,
-        "narHash": "sha256-UfBZB/Bob4ZTANQaOoTTuw7Fo2rB4A4t7tE2fllh1MA=",
-        "owner": "symposium-dev",
-        "repo": "hippo",
-        "rev": "b9ce78381d97787855166d646d72b97a54315690",
-        "type": "github"
-      },
-      "original": {
-        "owner": "symposium-dev",
-        "repo": "hippo",
-        "type": "github"
-      }
-    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -1506,7 +1490,6 @@
         "git-fleet": "git-fleet",
         "git-fleet-runner": "git-fleet-runner",
         "hermes": "hermes",
-        "hippo": "hippo",
         "home-manager": "home-manager_3",
         "homebrew-bundle": "homebrew-bundle",
         "homebrew-cask": "homebrew-cask",

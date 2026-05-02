@@ -102,11 +102,6 @@
       url = "git+ssh://casazza@desk-nxst-001/srv/git/hermes-agent.git?ref=schrodinger";
     };
 
-    hippo = {
-      url = "github:symposium-dev/hippo";
-      flake = false;
-    };
-
     consortium = {
       url = "github:olivecasazza/consortium";
     };
@@ -327,7 +322,6 @@
               };
               isDeterminate = true;
               hermes = inputs.hermes;
-              hippo = inputs.hippo;
               consortium = inputs.consortium;
               obsidianVault = inputs.obsidian-vault;
               system = "aarch64-darwin";

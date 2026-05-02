@@ -4,7 +4,6 @@
   pkgs,
   user,
   hermes,
-  hippo,
   system,
   ...
 }:
@@ -450,70 +449,6 @@ let
       homepage = "https://github.com/iamlukethedev/Claw3D";
       license = licenses.mit;
       mainProgram = "claw3d";
-    };
-  };
-
-  # Pre-fetched ONNX Runtime for hippo (ort-sys 2.0.0-rc.10 expects 1.22.0)
-  # pkgs.onnxruntime is broken on nixpkgs-unstable (removed darwin.apple_sdk_11_0)
-  onnxruntimeVersion = "1.22.0";
-  onnxruntimePrebuilt =
-    let
-      srcs = {
-        "aarch64-darwin" = pkgs.fetchzip {
-          url = "https://github.com/microsoft/onnxruntime/releases/download/v${onnxruntimeVersion}/onnxruntime-osx-arm64-${onnxruntimeVersion}.tgz";
-          hash = "sha256-RQITtO4v6S5nB5B+sOkQignjHM/l7ja+hVDLvKQ1oAw=";
-        };
-        "x86_64-linux" = pkgs.fetchzip {
-          url = "https://github.com/microsoft/onnxruntime/releases/download/v${onnxruntimeVersion}/onnxruntime-linux-x64-${onnxruntimeVersion}.tgz";
-          hash = lib.fakeHash;
-        };
-      };
-    in
-    srcs.${system} or (throw "unsupported system for onnxruntime: ${system}");
-  onnxruntimeDylibName = if isDarwin then "libonnxruntime.dylib" else "libonnxruntime.so";
-
-  # Hippo: AI-generated insights memory system (MCP server)
-  hippoPackage = pkgs.rustPlatform.buildRustPackage {
-    pname = "hippo-server";
-    version = "0.1.0";
-    src = hippo;
-
-    cargoLock.lockFile = "${hippo}/Cargo.lock";
-
-    # Only build the hippo crate (produces hippo-server binary)
-    cargoBuildFlags = [
-      "-p"
-      "hippo"
-    ];
-
-    nativeBuildInputs = with pkgs; [
-      pkg-config
-      makeWrapper
-    ];
-
-    # Frameworks (Security, SystemConfiguration, CoreFoundation) are provided
-    # by apple-sdk through stdenv automatically on modern nixpkgs.
-
-    # Point ort-sys to pre-fetched ONNX Runtime (prevents download in Nix sandbox)
-    env.ORT_LIB_LOCATION = "${onnxruntimePrebuilt}/lib";
-
-    # Tests require the fastembed model (downloaded lazily) — skip in sandbox
-    doCheck = false;
-
-    postInstall = ''
-      wrapProgram $out/bin/hippo-server \
-        --set ORT_DYLIB_PATH "${onnxruntimePrebuilt}/lib/${onnxruntimeDylibName}" \
-        --prefix DYLD_LIBRARY_PATH : "${onnxruntimePrebuilt}/lib"
-    '';
-
-    meta = with lib; {
-      description = "AI-generated insights memory system via MCP";
-      homepage = "https://github.com/symposium-dev/hippo";
-      license = with licenses; [
-        mit
-        asl20
-      ];
-      mainProgram = "hippo-server";
     };
   };
 
@@ -1127,332 +1062,281 @@ in
       };
     };
 
-    hippo = {
-      enable = mkEnableOption "Hippo AI-generated insights memory system (MCP server for Hermes)";
-
-      package = mkOption {
-        type = types.package;
-        default = hippoPackage;
-        description = "The hippo-server package";
-      };
-
-      memoryDir = mkOption {
-        type = types.str;
-        default = "~/.hippo";
-        description = "Directory for storing hippo memory/insight files";
-      };
-
-      logLevel = mkOption {
-        type = types.enum [
-          "error"
-          "warning"
-          "info"
-          "debug"
-        ];
-        default = "info";
-        description = "Hippo server log level";
-      };
-
-      obsidianSync = {
-        enable = mkEnableOption "Mirror hippo insights into an Obsidian vault as markdown notes";
-
-        vaultPath = mkOption {
-          type = types.str;
-          default = "";
-          description = "Absolute path to the Obsidian vault root.";
-        };
-
-        notesSubdir = mkOption {
-          type = types.str;
-          default = "30-Knowledge-Base/_hippo";
-          description = "Path under vaultPath where mirrored insight notes are written.";
-        };
-
-        watchInterval = mkOption {
-          type = types.int;
-          default = 300;
-          description = "Polling interval (seconds) as a backstop for in-place mutations of insight files.";
-        };
-      };
-    };
   };
 
   config = mkIf cfg.enable (mkMerge [
     # Common config: package, config file, shell init
     {
-      environment.systemPackages = [ cfg.package ] ++ optional cfg.hippo.enable cfg.hippo.package;
+      environment.systemPackages = [ cfg.package ];
 
-      home-manager.users.${user.name}.home.file.".hermes/config.yaml".text = concatStringsSep "\n" (
-        (
-          if cfg.litellm.enable then
-            [
-              "# Main model: Qwen3-Coder via LiteLLM smart-routed across the"
-              "# desk-nxst-001 + desk-nxst-004 GPU pool. Bare `qwen` is an"
-              "# alias on the LiteLLM side that rewrites to coder-local."
-              "# To use cloud Claude instead, pick the `vertex` custom_provider"
-              "# below or `litellm/coder-cloud-claude` (when re-enabled)."
-              "model:"
-              "  default: \"qwen\""
-              "  provider: \"litellm\""
-              "  base_url: \"${cfg.litellm.endpoint}/v1\""
-              "  api_key: \"$LITELLM_HERMES_API_KEY\""
-              ""
-            ]
-          else
-            [
-              "# Main model: cloud Claude direct to vertex-proxy (legacy path,"
-              "# active because local.hermes.litellm.enable = false)"
-              "model:"
-              "  default: \"${cfg.vertexProxy.model}\""
-              "  provider: \"anthropic\""
-              "  base_url: \"${vertexProxyBaseUrl}\""
-              ""
-            ]
-        )
-        ++ [
-          "# Custom OpenAI-compatible providers — pick any of these via"
-          "# `/model <provider>/<model>` in the hermes TUI. The main `model:`"
-          "# block above selects the default."
-          "custom_providers:"
-        ]
-        ++ optionals cfg.litellm.enable [
-          "  # LiteLLM router on desk-nxst-001:4000. The model names below"
-          "  # are the real router groups + the alias names registered via"
-          "  # `routerSettings.modelGroupAlias` on the proxy side. All four"
-          "  # qwen* aliases route to coder-local (Qwen3-Coder smart-routed"
-          "  # across desk-nxst-001 + desk-nxst-004 vLLMs)."
-          "  - name: \"litellm\""
-          "    base_url: \"${cfg.litellm.endpoint}/v1\""
-          "    api_key: \"$LITELLM_HERMES_API_KEY\""
-          "    models:"
-          "      - \"qwen\""
-          "      - \"qwen-coder\""
-          "      - \"qwen3-coder\""
-          "      - \"Qwen3-Coder-30B\""
-          "      - \"coder-local\""
-          "      - \"coder-remote\""
-          "      - \"embedding\""
-        ]
-        ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
-          "  # exo distributed inference cluster (omitted when LiteLLM is in"
-          "  # the path — hermes reaches exo via the coder-remote model group)."
-          "  - name: \"exo\""
-          "    base_url: \"${exoBaseUrl}\""
-          "    api_key: \"ollama\""
-          "    models:"
-          "      - \"${cfg.localModel}\""
-        ]
-        ++ [
-          "  # oMLX local inference server (Apple Silicon MLX). Same endpoint"
-          "  # as opencode's provider.omlx — see modules/darwin/opencode/."
-          "  - name: \"omlx\""
-          "    base_url: \"http://localhost:8000/v1\""
-          "    api_key: \"ollama-not-needed\""
-          "    models:"
-          "      - \"qwen3-coder-next\""
-          "  # Schrodinger Azure OpenAI — same resource (schrodinger-code) and"
-          "  # deployment (Kimi-K2.6) as opencode's provider.azure. The"
-          "  # AZURE_API_KEY env var is sops-decrypted and exported by"
-          "  # modules/darwin/opencode/default.nix's home.sessionVariablesExtra."
-          "  - name: \"azure\""
-          "    base_url: \"https://schrodinger-code.openai.azure.com/openai/deployments/Kimi-K2.6\""
-          "    api_key: \"env:AZURE_API_KEY\""
-          "    models:"
-          "      - \"Kimi-K2.6\""
-          "  # Direct Vertex AI proxy — same backend claude-code uses. Kept as"
-          "  # a separately addressable provider so a hermes session can target"
-          "  # Vertex directly when the LiteLLM proxy is unreachable or you"
-          "  # specifically want to bypass the routing layer (apples-to-apples"
-          "  # against claude-code's pathing). Auth is the same gcloud id-token"
-          "  # that `apiKeyHelper` mints for claude-code."
-          "  - name: \"vertex\""
-          "    base_url: \"${cfg.vertexProxy.baseURL}\""
-          "    api_key: \"env:GCLOUD_ID_TOKEN\""
-          "    models:"
-          "      - \"${cfg.vertexProxy.model}\""
-          ""
-        ]
-        ++ optionals cfg.delegation.enable (
-          if cfg.delegation.useVertexProxy then
-            [
-              "# Subagent delegation: Haiku via Vertex proxy (fast + cheap)"
-              "delegation:"
-              "  model: \"${cfg.delegation.model}\""
-              "  provider: \"${cfg.delegation.provider}\""
-              "  base_url: \"${vertexProxyBaseUrl}\""
-              "  max_iterations: ${toString cfg.delegation.maxIterations}"
-              "  default_toolsets: [${
-                  concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
-                }]"
-              ""
-            ]
-          else
-            [
-              "# Subagent delegation: local LLM (LiteLLM router when enabled)"
-              "delegation:"
-              "  base_url: \"${localBaseUrl}\""
-              "  model: \"${localModelName}\""
-              "  api_key: \"${localApiKey}\""
-              "  max_iterations: ${toString cfg.delegation.maxIterations}"
-              "  default_toolsets: [${
-                  concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
-                }]"
-              ""
-            ]
-        )
-        ++ optionals cfg.auxiliary.enable (
-          if cfg.auxiliary.useVertexProxy then
-            [
-              "# Auxiliary tasks: Haiku via Vertex proxy (vision, web, approval, memory)"
-              "auxiliary:"
-              "  vision:"
-              "    provider: \"${cfg.delegation.provider}\""
-              "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${vertexProxyBaseUrl}\""
-              "    timeout: 60"
-              "    download_timeout: 30"
-              "  web_extract:"
-              "    provider: \"${cfg.delegation.provider}\""
-              "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${vertexProxyBaseUrl}\""
-              "    timeout: 120"
-              "  approval:"
-              "    provider: \"${cfg.delegation.provider}\""
-              "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${vertexProxyBaseUrl}\""
-              "    timeout: 30"
-              "  session_search:"
-              "    provider: \"${cfg.delegation.provider}\""
-              "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${vertexProxyBaseUrl}\""
-              "    timeout: 30"
-              "  flush_memories:"
-              "    provider: \"${cfg.delegation.provider}\""
-              "    model: \"${cfg.auxiliary.model}\""
-              "    base_url: \"${vertexProxyBaseUrl}\""
-              "    timeout: 60"
-              "  compression:"
-              "    timeout: 120"
-              ""
-            ]
-          else
-            [
-              "# Auxiliary tasks: local LLM (LiteLLM router when enabled)"
-              "auxiliary:"
-              "  vision:"
-              "    base_url: \"${localBaseUrl}\""
-              "    model: \"${localModelName}\""
-              "    api_key: \"${localApiKey}\""
-              "  web_extract:"
-              "    base_url: \"${localBaseUrl}\""
-              "    model: \"${localModelName}\""
-              "    api_key: \"${localApiKey}\""
-              "  compression:"
-              "    timeout: 120"
-              ""
-            ]
-        )
-        ++ optionals cfg.compression.enable [
-          "# Context compression: Haiku for fast cheap summaries"
-          "compression:"
-          "  enabled: true"
-          "  threshold: ${cfg.compression.threshold}"
-          "  target_ratio: 0.25"
-          "  protect_last_n: ${toString cfg.compression.protectLastN}"
-          "  summary_model: \"${cfg.compression.summaryModel}\""
-          "  summary_provider: \"${cfg.delegation.provider}\""
-          "  summary_base_url: \"${vertexProxyBaseUrl}\""
-          ""
-        ]
-        ++ optionals cfg.voice.enable [
-          "# Voice mode: microphone input + TTS output"
-          "voice:"
-          "  record_key: \"${cfg.voice.recordKey}\""
-          "  auto_tts: ${if cfg.voice.autoTts then "true" else "false"}"
-          "  silence_threshold: ${toString cfg.voice.silenceThreshold}"
-          "  silence_duration: ${toString cfg.voice.silenceDuration}"
-          ""
-          "stt:"
-          "  provider: \"${cfg.voice.sttProvider}\""
-          "  local:"
-          "    model: \"${cfg.voice.sttModel}\""
-          ""
-          "tts:"
-          "  provider: \"${cfg.voice.ttsProvider}\""
-          "  edge:"
-          "    voice: \"${cfg.voice.ttsVoice}\""
-          ""
-        ]
-        ++ optionals cfg.hippo.enable [
-          "# MCP Servers"
-          "mcp_servers:"
-          "  hippo:"
-          "    command: \"${cfg.hippo.package}/bin/hippo-server\""
-          "    args:"
-          "      - \"--memory-dir\""
-          "      - \"${cfg.hippo.memoryDir}\""
-          "    env:"
-          "      HIPPO_LOG: \"${cfg.hippo.logLevel}\""
-          ""
-        ]
-        ++ [
-          "agent:"
-          "  tool_use_enforcement: \"auto\""
-          "  max_turns: ${toString cfg.agent.maxTurns}"
-          "  gateway_timeout: ${toString cfg.agent.gatewayTimeout}"
-        ]
-        ++ optionals (cfg.agent.reasoningEffort != "") [
-          "  reasoning_effort: \"${cfg.agent.reasoningEffort}\""
-        ]
-        ++ [
-          ""
-          "terminal:"
-          "  backend: local"
-          "  persistent_shell: true"
-          "  timeout: 180"
-          ""
-          "memory:"
-          "  provider: \"holographic\""
-          "  memory_enabled: true"
-          "  user_profile_enabled: true"
-          "  memory_char_limit: 2200"
-          "  user_char_limit: 1375"
-          "  nudge_interval: 10"
-          "  flush_min_turns: 6"
-          ""
-          "# Holographic memory plugin: HRR-backed compositional recall over a"
-          "# local SQLite store. auto_extract pulls facts from the conversation"
-          "# without requiring explicit `mcp_hippo_record_insight` calls."
-          "plugins:"
-          "  hermes-memory-store:"
-          "    db_path: \"/Users/${user.name}/.hermes/memory_store.db\""
-          "    auto_extract: true"
-          ""
-          "skills:"
-          "  creation_nudge_interval: 15"
-          ""
-          "checkpoints:"
-          "  enabled: true"
-          "  max_snapshots: 50"
-          ""
-          "approvals:"
-          "  mode: \"${cfg.approvals.mode}\""
-          ""
-          "display:"
-          "  streaming: ${if cfg.display.streaming then "true" else "false"}"
-          "  show_cost: ${if cfg.display.showCost then "true" else "false"}"
-          "  bell_on_complete: ${if cfg.display.bellOnComplete then "true" else "false"}"
-          "  show_reasoning: ${if cfg.display.showReasoning then "true" else "false"}"
-          "  tool_progress: \"${cfg.display.toolProgress}\""
-          "  inline_diffs: true"
-          ""
-          "security:"
-          "  redact_secrets: true"
-          "  tirith_enabled: false"
-          ""
-          "file_read_max_chars: ${toString cfg.fileReadMaxChars}"
-        ]
-      );
+      # `force = true`: at activation, the home.activation.hermesConfigInjectKey
+      # script (defined below) replaces this symlink with a real, key-injected
+      # file. On the next activation HM would normally try to back up the
+      # real file to `.bak` before placing a fresh symlink — and barf if the
+      # `.bak` from the prior activation is still around. Force-overwrite
+      # skips both the backup and the collision.
+      home-manager.users.${user.name}.home.file.".hermes/config.yaml" = {
+        force = true;
+        text = concatStringsSep "\n" (
+          (
+            if cfg.litellm.enable then
+              [
+                "# Main model: Qwen3-Coder via LiteLLM smart-routed across the"
+                "# desk-nxst-001 + desk-nxst-004 GPU pool. Bare `qwen` is an"
+                "# alias on the LiteLLM side that rewrites to coder-local."
+                "# To use cloud Claude instead, pick the `vertex` custom_provider"
+                "# below or `litellm/coder-cloud-claude` (when re-enabled)."
+                "model:"
+                "  default: \"qwen\""
+                "  provider: \"litellm\""
+                "  base_url: \"${cfg.litellm.endpoint}/v1\""
+                "  api_key: \"$LITELLM_HERMES_API_KEY\""
+                ""
+              ]
+            else
+              [
+                "# Main model: cloud Claude direct to vertex-proxy (legacy path,"
+                "# active because local.hermes.litellm.enable = false)"
+                "model:"
+                "  default: \"${cfg.vertexProxy.model}\""
+                "  provider: \"anthropic\""
+                "  base_url: \"${vertexProxyBaseUrl}\""
+                ""
+              ]
+          )
+          ++ [
+            "# Custom OpenAI-compatible providers — pick any of these via"
+            "# `/model <provider>/<model>` in the hermes TUI. The main `model:`"
+            "# block above selects the default."
+            "custom_providers:"
+          ]
+          ++ optionals cfg.litellm.enable [
+            "  # LiteLLM router on desk-nxst-001:4000. The model names below"
+            "  # are the real router groups + the alias names registered via"
+            "  # `routerSettings.modelGroupAlias` on the proxy side. All four"
+            "  # qwen* aliases route to coder-local (Qwen3-Coder smart-routed"
+            "  # across desk-nxst-001 + desk-nxst-004 vLLMs)."
+            "  - name: \"litellm\""
+            "    base_url: \"${cfg.litellm.endpoint}/v1\""
+            "    api_key: \"$LITELLM_HERMES_API_KEY\""
+            "    models:"
+            "      - \"qwen\""
+            "      - \"qwen-coder\""
+            "      - \"qwen3-coder\""
+            "      - \"Qwen3-Coder-30B\""
+            "      - \"coder-local\""
+            "      - \"coder-remote\""
+            "      - \"embedding\""
+          ]
+          ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
+            "  # exo distributed inference cluster (omitted when LiteLLM is in"
+            "  # the path — hermes reaches exo via the coder-remote model group)."
+            "  - name: \"exo\""
+            "    base_url: \"${exoBaseUrl}\""
+            "    api_key: \"ollama\""
+            "    models:"
+            "      - \"${cfg.localModel}\""
+          ]
+          ++ [
+            "  # oMLX local inference server (Apple Silicon MLX). Same endpoint"
+            "  # as opencode's provider.omlx — see modules/darwin/opencode/."
+            "  - name: \"omlx\""
+            "    base_url: \"http://localhost:8000/v1\""
+            "    api_key: \"ollama-not-needed\""
+            "    models:"
+            "      - \"qwen3-coder-next\""
+            "  # Schrodinger Azure OpenAI — same resource (schrodinger-code) and"
+            "  # deployment (Kimi-K2.6) as opencode's provider.azure. The"
+            "  # AZURE_API_KEY env var is sops-decrypted and exported by"
+            "  # modules/darwin/opencode/default.nix's home.sessionVariablesExtra."
+            "  - name: \"azure\""
+            "    base_url: \"https://schrodinger-code.openai.azure.com/openai/deployments/Kimi-K2.6\""
+            "    api_key: \"env:AZURE_API_KEY\""
+            "    models:"
+            "      - \"Kimi-K2.6\""
+            "  # Direct Vertex AI proxy — same backend claude-code uses. Kept as"
+            "  # a separately addressable provider so a hermes session can target"
+            "  # Vertex directly when the LiteLLM proxy is unreachable or you"
+            "  # specifically want to bypass the routing layer (apples-to-apples"
+            "  # against claude-code's pathing). Auth is the same gcloud id-token"
+            "  # that `apiKeyHelper` mints for claude-code."
+            "  - name: \"vertex\""
+            "    base_url: \"${cfg.vertexProxy.baseURL}\""
+            "    api_key: \"env:GCLOUD_ID_TOKEN\""
+            "    models:"
+            "      - \"${cfg.vertexProxy.model}\""
+            ""
+          ]
+          ++ optionals cfg.delegation.enable (
+            if cfg.delegation.useVertexProxy then
+              [
+                "# Subagent delegation: Haiku via Vertex proxy (fast + cheap)"
+                "delegation:"
+                "  model: \"${cfg.delegation.model}\""
+                "  provider: \"${cfg.delegation.provider}\""
+                "  base_url: \"${vertexProxyBaseUrl}\""
+                "  max_iterations: ${toString cfg.delegation.maxIterations}"
+                "  default_toolsets: [${
+                    concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
+                  }]"
+                ""
+              ]
+            else
+              [
+                "# Subagent delegation: local LLM (LiteLLM router when enabled)"
+                "delegation:"
+                "  base_url: \"${localBaseUrl}\""
+                "  model: \"${localModelName}\""
+                "  api_key: \"${localApiKey}\""
+                "  max_iterations: ${toString cfg.delegation.maxIterations}"
+                "  default_toolsets: [${
+                    concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
+                  }]"
+                ""
+              ]
+          )
+          ++ optionals cfg.auxiliary.enable (
+            if cfg.auxiliary.useVertexProxy then
+              [
+                "# Auxiliary tasks: Haiku via Vertex proxy (vision, web, approval, memory)"
+                "auxiliary:"
+                "  vision:"
+                "    provider: \"${cfg.delegation.provider}\""
+                "    model: \"${cfg.auxiliary.model}\""
+                "    base_url: \"${vertexProxyBaseUrl}\""
+                "    timeout: 60"
+                "    download_timeout: 30"
+                "  web_extract:"
+                "    provider: \"${cfg.delegation.provider}\""
+                "    model: \"${cfg.auxiliary.model}\""
+                "    base_url: \"${vertexProxyBaseUrl}\""
+                "    timeout: 120"
+                "  approval:"
+                "    provider: \"${cfg.delegation.provider}\""
+                "    model: \"${cfg.auxiliary.model}\""
+                "    base_url: \"${vertexProxyBaseUrl}\""
+                "    timeout: 30"
+                "  session_search:"
+                "    provider: \"${cfg.delegation.provider}\""
+                "    model: \"${cfg.auxiliary.model}\""
+                "    base_url: \"${vertexProxyBaseUrl}\""
+                "    timeout: 30"
+                "  flush_memories:"
+                "    provider: \"${cfg.delegation.provider}\""
+                "    model: \"${cfg.auxiliary.model}\""
+                "    base_url: \"${vertexProxyBaseUrl}\""
+                "    timeout: 60"
+                "  compression:"
+                "    timeout: 120"
+                ""
+              ]
+            else
+              [
+                "# Auxiliary tasks: local LLM (LiteLLM router when enabled)"
+                "auxiliary:"
+                "  vision:"
+                "    base_url: \"${localBaseUrl}\""
+                "    model: \"${localModelName}\""
+                "    api_key: \"${localApiKey}\""
+                "  web_extract:"
+                "    base_url: \"${localBaseUrl}\""
+                "    model: \"${localModelName}\""
+                "    api_key: \"${localApiKey}\""
+                "  compression:"
+                "    timeout: 120"
+                ""
+              ]
+          )
+          ++ optionals cfg.compression.enable [
+            "# Context compression: Haiku for fast cheap summaries"
+            "compression:"
+            "  enabled: true"
+            "  threshold: ${cfg.compression.threshold}"
+            "  target_ratio: 0.25"
+            "  protect_last_n: ${toString cfg.compression.protectLastN}"
+            "  summary_model: \"${cfg.compression.summaryModel}\""
+            "  summary_provider: \"${cfg.delegation.provider}\""
+            "  summary_base_url: \"${vertexProxyBaseUrl}\""
+            ""
+          ]
+          ++ optionals cfg.voice.enable [
+            "# Voice mode: microphone input + TTS output"
+            "voice:"
+            "  record_key: \"${cfg.voice.recordKey}\""
+            "  auto_tts: ${if cfg.voice.autoTts then "true" else "false"}"
+            "  silence_threshold: ${toString cfg.voice.silenceThreshold}"
+            "  silence_duration: ${toString cfg.voice.silenceDuration}"
+            ""
+            "stt:"
+            "  provider: \"${cfg.voice.sttProvider}\""
+            "  local:"
+            "    model: \"${cfg.voice.sttModel}\""
+            ""
+            "tts:"
+            "  provider: \"${cfg.voice.ttsProvider}\""
+            "  edge:"
+            "    voice: \"${cfg.voice.ttsVoice}\""
+            ""
+          ]
+          ++ [
+            "agent:"
+            "  tool_use_enforcement: \"auto\""
+            "  max_turns: ${toString cfg.agent.maxTurns}"
+            "  gateway_timeout: ${toString cfg.agent.gatewayTimeout}"
+          ]
+          ++ optionals (cfg.agent.reasoningEffort != "") [
+            "  reasoning_effort: \"${cfg.agent.reasoningEffort}\""
+          ]
+          ++ [
+            ""
+            "terminal:"
+            "  backend: local"
+            "  persistent_shell: true"
+            "  timeout: 180"
+            ""
+            "memory:"
+            "  provider: \"holographic\""
+            "  memory_enabled: true"
+            "  user_profile_enabled: true"
+            "  memory_char_limit: 2200"
+            "  user_char_limit: 1375"
+            "  nudge_interval: 10"
+            "  flush_min_turns: 6"
+            ""
+            "# Holographic memory plugin: HRR-backed compositional recall over a"
+            "# local SQLite store. auto_extract pulls facts from the conversation"
+            "# without requiring explicit `memory.record` calls."
+            "plugins:"
+            "  hermes-memory-store:"
+            "    db_path: \"/Users/${user.name}/.hermes/memory_store.db\""
+            "    auto_extract: true"
+            ""
+            "skills:"
+            "  creation_nudge_interval: 15"
+            ""
+            "checkpoints:"
+            "  enabled: true"
+            "  max_snapshots: 50"
+            ""
+            "approvals:"
+            "  mode: \"${cfg.approvals.mode}\""
+            ""
+            "display:"
+            "  streaming: ${if cfg.display.streaming then "true" else "false"}"
+            "  show_cost: ${if cfg.display.showCost then "true" else "false"}"
+            "  bell_on_complete: ${if cfg.display.bellOnComplete then "true" else "false"}"
+            "  show_reasoning: ${if cfg.display.showReasoning then "true" else "false"}"
+            "  tool_progress: \"${cfg.display.toolProgress}\""
+            "  inline_diffs: true"
+            ""
+            "security:"
+            "  redact_secrets: true"
+            "  tirith_enabled: false"
+            ""
+            "file_read_max_chars: ${toString cfg.fileReadMaxChars}"
+          ]
+        );
+      };
 
       programs.zsh.shellInit = mkAfter (
         ''
@@ -1863,115 +1747,6 @@ in
           };
         };
       })
-    ))
-
-    # Hippo → Obsidian one-way mirror (Darwin only)
-    #
-    # Watches $HIPPO_DIR for insight files and renders each one to a markdown
-    # note with YAML frontmatter under $VAULT_DIR/$notesSubdir. The script is
-    # idempotent (only rewrites when the rendered file would actually change)
-    # and garbage-collects markdown files whose source insight has been
-    # deleted from hippo, so the vault stays in sync with hippo's view of
-    # ground truth without producing spurious obsidian "modified" events.
-    (optionalAttrs isDarwin (
-      mkIf (cfg.hippo.enable && cfg.hippo.obsidianSync.enable) (
-        let
-          hippoDirRaw = cfg.hippo.memoryDir;
-          # Expand a leading "~" to the user's home at build time so launchd
-          # (which doesn't expand tildes) gets an absolute path.
-          hippoDir =
-            if lib.hasPrefix "~/" hippoDirRaw then
-              "/Users/${user.name}/" + lib.removePrefix "~/" hippoDirRaw
-            else
-              hippoDirRaw;
-          vaultDir = "${cfg.hippo.obsidianSync.vaultPath}/${cfg.hippo.obsidianSync.notesSubdir}";
-          syncScript = pkgs.writeShellApplication {
-            name = "hippo-obsidian-sync";
-            runtimeInputs = with pkgs; [
-              jq
-              coreutils
-            ];
-            text = ''
-              HIPPO_DIR="${hippoDir}"
-              VAULT_DIR="${vaultDir}"
-
-              mkdir -p "$VAULT_DIR"
-
-              # Track which uuids should exist after this run so we can GC
-              # markdown notes whose source insight has been deleted.
-              keep_file=$(mktemp)
-              trap 'rm -f "$keep_file"' EXIT
-
-              shopt -s nullglob
-              for src in "$HIPPO_DIR"/*.json; do
-                base=$(basename "$src" .json)
-                # Skip hippo's bookkeeping file
-                [ "$base" = "metadata" ] && continue
-
-                uuid=$(jq -r '.uuid // empty' "$src" 2>/dev/null || true)
-                [ -n "$uuid" ] || continue
-                printf '%s\n' "$uuid" >> "$keep_file"
-
-                out="$VAULT_DIR/$uuid.md"
-                tmp=$(mktemp)
-
-                # Render frontmatter + content. Situation tags are exposed
-                # both as a structured `situation:` list and as obsidian
-                # tags under the `hippo/` namespace (with non-tag-safe
-                # characters slugified).
-                jq -r '
-                  def slug: gsub("[^A-Za-z0-9_/-]"; "-");
-                  "---",
-                  "hippo_uuid: " + .uuid,
-                  "created: " + .created_at,
-                  "modified: " + (.importance_modified_at // .created_at),
-                  "importance: " + (.importance | tostring),
-                  "base_importance: " + (.base_importance | tostring),
-                  "situation:",
-                  ((.situation // []) | map("  - " + .) | .[]),
-                  "tags:",
-                  "  - hippo",
-                  ((.situation // []) | map("  - hippo/" + slug) | .[]),
-                  "---",
-                  "",
-                  .content
-                ' "$src" > "$tmp"
-
-                if ! cmp -s "$tmp" "$out" 2>/dev/null; then
-                  mv "$tmp" "$out"
-                else
-                  rm -f "$tmp"
-                fi
-              done
-
-              # GC: drop markdown files whose source insight is gone.
-              for md in "$VAULT_DIR"/*.md; do
-                [ -f "$md" ] || continue
-                base=$(basename "$md" .md)
-                if ! grep -Fxq "$base" "$keep_file" 2>/dev/null; then
-                  rm -f "$md"
-                fi
-              done
-            '';
-          };
-        in
-        {
-          launchd.user.agents.hippo-obsidian-sync = {
-            command = "${syncScript}/bin/hippo-obsidian-sync";
-            serviceConfig = {
-              Label = "local.hippo-obsidian-sync";
-              RunAtLoad = true;
-              # WatchPaths fires on directory-level changes (add/remove of
-              # insight files); StartInterval is the backstop that catches
-              # in-place edits like importance reinforcement.
-              WatchPaths = [ hippoDir ];
-              StartInterval = cfg.hippo.obsidianSync.watchInterval;
-              StandardOutPath = "${hippoDir}/obsidian-sync.log";
-              StandardErrorPath = "${hippoDir}/obsidian-sync.log";
-            };
-          };
-        }
-      )
     ))
 
     # Claw3D systemd services (Linux)

@@ -245,16 +245,6 @@ in
             };
           };
           mcp = {
-            hippo = {
-              type = "local";
-              command = [
-                "${config.local.hermes.hippo.package}/bin/hippo-server"
-                "--memory-dir"
-                "/Users/${user.name}/.hippo"
-              ];
-              environment.HIPPO_LOG = config.local.hermes.hippo.logLevel;
-              enabled = true;
-            };
             obsidian-vault = {
               type = "local";
               command = [
