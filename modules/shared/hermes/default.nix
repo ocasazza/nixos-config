@@ -616,10 +616,16 @@ in
 
       endpoint = mkOption {
         type = types.str;
-        default = lib.salt.ai.providers.litellm.endpoint;
+        default = lib.salt.ai.providers.litellm.caddyEndpoint;
         description = ''
           LiteLLM base URL. Serves `/vertex/v1` (passthrough for cloud
           Claude) and `/v1` (OpenAI-compat router for local groups).
+
+          Defaults to the Caddy-fronted FQDN path
+          (`http://desk-nxst-001.schrodinger.com:8080/litellm`) so every
+          fleet client routes through one auditable reverse proxy that
+          aggregates the various upstream providers. Bare `:4000` is
+          reachable inside the corp LAN but bypasses Caddy.
         '';
       };
 
