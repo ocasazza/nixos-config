@@ -1498,7 +1498,11 @@ in
               cp --remove-destination "$(readlink "$HOME/.hermes/config.yaml")" "$HOME/.hermes/config.yaml"
             fi
             if [ -f "$HOME/.hermes/config.yaml" ]; then
-              sed -i "s|\\$LITELLM_HERMES_API_KEY|"'"$LITELLM_HERMES_API_KEY"'"|g" "$HOME/.hermes/config.yaml"
+              # BSD sed (macOS) requires an explicit backup-suffix arg
+              # after `-i`; GNU sed treats it as optional. Use `-i.bak`
+              # + cleanup to keep the same script portable across both.
+              sed -i.bak "s|\\$LITELLM_HERMES_API_KEY|"'"$LITELLM_HERMES_API_KEY"'"|g" "$HOME/.hermes/config.yaml"
+              rm -f "$HOME/.hermes/config.yaml.bak"
             fi
           fi
         ''
