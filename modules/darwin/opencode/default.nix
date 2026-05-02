@@ -96,17 +96,15 @@ in
     # for the full list of pinnable backends.
     home.file.".config/opencode/oh-my-openagent.jsonc".text = ''
       {
-        // LiteLLM-routed Qwen3-Coder for every agent. `litellm/coder-local`
-        // hits desk-nxst-001's vLLM directly (loopback on the proxy host);
-        // `litellm/coder-remote` fans out to the gfr exo cluster. The full
-        // list of real model_groups on the proxy is in provider.litellm.models
-        // below — anything else opencode shows is an alias that needs a
-        // matching modelGroupAlias on the LiteLLM side to actually route.
+        // LiteLLM-routed Qwen3-Coder for every agent. `litellm/local-coder`
+        // resolves to all self-hosted Qwen models (desk-nxst-001 vLLM
+        // primary, gfr exo cluster fallback). The full list of real
+        // model_groups on the proxy is in provider.litellm.models below.
         "agents": {
-          "sisyphus": { "model": "litellm/coder-local" },
-          "prometheus": { "model": "litellm/coder-local" },
-          "atlas": { "model": "litellm/coder-local" },
-          "explore": { "model": "litellm/coder-local" }
+          "sisyphus": { "model": "litellm/local-coder" },
+          "prometheus": { "model": "litellm/local-coder" },
+          "atlas": { "model": "litellm/local-coder" },
+          "explore": { "model": "litellm/local-coder" }
         },
         "disabled_hooks": [],
         "mcp": {
@@ -123,9 +121,8 @@ in
           "$schema" = "https://opencode.ai/config.json";
           # Default model: Qwen3-Coder via LiteLLM hitting the desk-nxst-001
           # vLLM directly (loopback on the proxy host). Override per-session
-          # with `/model`. Real groups: coder-local, coder-remote,
-          # coder-cloud-claude, embedding.
-          model = "litellm/coder-local";
+          # with `/model`. Real groups: local-coder, coder-cloud-claude, embedding.
+          model = "litellm/local-coder";
           # Disable the in-TUI auto-update prompt — supervisor-spawned
           # sessions can't dismiss it and end up wedged on the modal.
           autoupdate = false;
@@ -193,20 +190,14 @@ in
             # the LiteLLM side first (nixstation modules/nixos/litellm) and
             # mirror here.
             models = {
-              coder-local = {
+              local-coder = {
                 name = "Qwen3-Coder @ desk-nxst-001 vLLM (loopback)";
                 limit = {
                   context = 262144;
                   output = 8192;
                 };
               };
-              coder-remote = {
-                name = "Qwen3-Coder @ gfr exo cluster (MLX-8bit)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
+
               coder-cloud-claude = {
                 name = "Claude (Vertex passthrough via LiteLLM)";
                 limit = {

@@ -173,10 +173,10 @@ in
     # context compression itself never hits cloud/vertex as an automatic
     # fallback — the user explicitly decides when to invoke cloud paths.
     compression.threshold = "0.60";
-    compression.summaryModel = "litellm/coder-local";
+    compression.summaryModel = "litellm/local-coder";
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'
-    # local-routing path (`coder-local`/`coder-remote`/`embedding` model
+    # local-routing path (`local-coder`/`embedding` model
     # groups) authenticates against desk-nxst-001:4000/v1 and unlocks
     # the rest of the GPU pool fronted by LiteLLM. Without it, only
     # /vertex/v1 (gcloud id-token, no virtual key) is reachable.
@@ -292,8 +292,8 @@ in
   #
   # So claude-code talks straight to vertex-proxy with a gcloud
   # id-token from apiKeyHelper. We lose Phoenix attribution for
-  # cloud-claude calls (acceptable). Local model groups (coder-local,
-  # coder-remote, embedding) still route through desk-nxst-001's /v1 with
+  # cloud-claude calls (acceptable). Local model groups (local-coder,
+  # embedding) still route through desk-nxst-001's /v1 with
   # per-host virtual keys and DO get per-key attribution, but
   # neither claude-code nor opencode calls those today \u2014
   # they're consumed by hermes / ingest / open-webui instead.

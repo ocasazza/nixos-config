@@ -40,7 +40,7 @@ let
   # Model name hermes uses for "local" completions. When LiteLLM is in
   # the path, hermes talks to LiteLLM's router by model-GROUP name, not
   # by the underlying model id — the group maps to the right backend in
-  # desk-nxst-001's host config. Defaults to `coder-local` (burst-safe)
+  # desk-nxst-001's host config. Defaults to `local-coder` (burst-safe)
   # but host configs can override via `local.hermes.litellm.defaultLocalGroup`.
   localModelName = if cfg.litellm.enable then cfg.litellm.defaultLocalGroup else cfg.localModel;
 
@@ -592,8 +592,9 @@ in
         description = ''
           LiteLLM model-group name hermes refers to when picking a
           "local" model (delegation in non-vertex mode, auxiliary
-          in non-vertex mode). Options: coder-local (always-on,
-          desk-nxst-001 vLLM) or coder-remote (burst pool: exo + GFR).
+          in non-vertex mode). Only option: local-coder (resolves to
+          all self-hosted Qwen models; desk-nxst-001 vLLM primary,
+          gfr exo cluster fallback).
         '';
       };
     };
@@ -704,7 +705,7 @@ in
         # Use the local LiteLLM-routed Qwen model for compression — never
         # cloud/vertex. Provider prefix matches the `litellm` custom_provider
         # declared in the generated config.yaml below.
-        default = "litellm/coder-local";
+        default = "litellm/local-coder";
         description = "Model used for compression summarisation (should be fast/cheap). Use a local model to avoid cloud egress.";
       };
     };
@@ -1086,7 +1087,7 @@ in
               [
                 "# Main model: Qwen3-Coder via LiteLLM smart-routed across the"
                 "# desk-nxst-001 + desk-nxst-004 GPU pool. Bare `qwen` is an"
-                "# alias on the LiteLLM side that rewrites to coder-local."
+                "# alias on the LiteLLM side that rewrites to local-coder."
                 "# To use cloud Claude instead, pick the `vertex` custom_provider"
                 "# below or `litellm/coder-cloud-claude` (when re-enabled)."
                 "model:"
@@ -1117,7 +1118,7 @@ in
             "  # LiteLLM router on desk-nxst-001:4000. The model names below"
             "  # are the real router groups + the alias names registered via"
             "  # `routerSettings.modelGroupAlias` on the proxy side. All four"
-            "  # qwen* aliases route to coder-local (Qwen3-Coder smart-routed"
+            "  # qwen* aliases route to local-coder (Qwen3-Coder smart-routed"
             "  # across desk-nxst-001 + desk-nxst-004 vLLMs)."
             "  - name: \"litellm\""
             "    base_url: \"${cfg.litellm.endpoint}/v1\""
@@ -1127,13 +1128,11 @@ in
             "      - \"qwen-coder\""
             "      - \"qwen3-coder\""
             "      - \"Qwen3-Coder-30B\""
-            "      - \"coder-local\""
-            "      - \"coder-remote\""
+            "      - \"local-coder\""
             "      - \"embedding\""
           ]
           ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
-            "  # exo distributed inference cluster (omitted when LiteLLM is in"
-            "  # the path — hermes reaches exo via the coder-remote model group)."
+            "  # exo distributed inference cluster (only when LiteLLM is disabled)"
             "  - name: \"exo\""
             "    base_url: \"${exoBaseUrl}\""
             "    api_key: \"ollama\""

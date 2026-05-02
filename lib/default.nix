@@ -101,11 +101,10 @@ in
         endpoint = "http://desk-nxst-001.schrodinger.com:4000";
         localEndpoint = "http://localhost:4000";
         caddyEndpoint = "http://desk-nxst-001.schrodinger.com:8080/litellm";
-        defaultLocalGroup = "coder-local";
+        defaultLocalGroup = "local-coder";
         defaultCloudGroup = "coder-cloud-claude";
         modelGroups = {
-          coder-local = "coder-local";
-          coder-remote = "coder-remote";
+          local-coder = "local-coder";
           coder-cloud-claude = "coder-cloud-claude";
           embedding = "embedding";
         };
