@@ -3,6 +3,7 @@
 # Each machine receives exoPeers, exoPackage, exoNetwork, TB cluster
 # membership, and thunderboltLinks via specialArgs from the flake.
 {
+  lib,
   exoPeers,
   exoPackage,
   exoNetwork ? "thunderbolt",
@@ -14,7 +15,9 @@
 }:
 {
   local.hermes.exo = {
-    enable = true;
+    # mkDefault so hosts/darwin/default.nix can flip this off per-host
+    # (e.g. via `isWorkstation` gate) without a definition conflict.
+    enable = lib.mkDefault true;
     package = exoPackage;
     peers = exoPeers;
     listenInterfaces = exoListenInterfaces;

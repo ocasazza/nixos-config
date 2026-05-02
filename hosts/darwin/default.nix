@@ -13,6 +13,11 @@ let
   # this same value so tiled windows start beneath the bar instead of
   # being clipped by it. Adjust here to keep both in sync.
   sketchybarHeight = 28;
+  # GN9 is the dev workstation (heavy local inference, full hippo
+  # obsidian sync, faster-whisper voice). The other 3 cluster Macs
+  # (CK2/GJH/L75T) are kept lean for compute headroom — they route
+  # local model calls through LiteLLM → desk-nxst-001 vLLM instead.
+  isWorkstation = config.networking.hostName == "GN9CFLM92K-MBP";
 in
 {
   imports = [
@@ -139,25 +144,33 @@ in
   # left the Grafana reingest tiles empty. See modules/darwin/observability.
   local.darwinObservability.enable = true;
 
+  # Heavy local inference (oMLX, exo cluster joiner, faster-whisper for
+  # voice) only runs on the dev workstation (GN9CFLM92K-MBP). The other
+  # cluster Macs (CK2/GJH/L75T) are kept lean — they're compute-attached
+  # nodes that need maximum free RAM for whatever the user runs against
+  # them, not for hosting always-on local model daemons.
+  #
+  # Per-host overrides: lift `isWorkstation` and re-enable individual
+  # bits if a different Mac becomes the dev box.
   local.hermes = {
     enable = true;
     claw3d.enable = true;
-    voice.enable = true;
+    voice.enable = isWorkstation; # faster-whisper model is large
     hippo.enable = true;
-    hippo.obsidianSync = {
+    hippo.obsidianSync = lib.mkIf isWorkstation {
       enable = true;
       vaultPath = "/Users/${user.name}/Repositories/ocasazza/obsidian/vault";
     };
 
-    # Hybrid: main agent on Claude Opus 4.6 via Vertex (unchanged)
-    # Subagent / MCP coding agent: Qwen3 Coder Next 8bit via exo cluster
-    # Both providers registered — delegation + coding auxiliary use exo,
-    # vision/web/compression stay on Vertex Haiku.
+    # Hybrid (workstation only): subagent / MCP coding agent uses exo
+    # cluster local Qwen; vision/web/compression stay on Vertex Haiku.
+    # Non-workstations skip exo entirely → saves ~16 GiB RAM and avoids
+    # contending with whatever else the user is running on those nodes.
     localModel = "mlx-community/Qwen3-Coder-Next-8bit";
-    exo.enable = true;
+    exo.enable = isWorkstation;
     exo.apiPort = 52415;
-    delegation.useVertexProxy = false; # coding subagent → exo
-    auxiliary.useVertexProxy = true; # vision/web/approval stay on Vertex Haiku
+    delegation.useVertexProxy = !isWorkstation; # workstation → exo, else cloud
+    auxiliary.useVertexProxy = true; # vision/web/approval always Vertex Haiku
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'
     # local-routing path (`coder-local`/`coder-remote`/`embedding` model
@@ -245,8 +258,12 @@ in
   # Models download to ~/.omlx/models; the SSD cache lives at ~/.omlx/cache.
   # Serves an OpenAI-compatible API on localhost:8000/v1 used by opencode's
   # omlx provider and the oc-voice pipeline.
+  #
+  # Workstation-only: oMLX loads a Qwen3-Coder MLX model (~16 GiB) into
+  # RAM at boot. Non-workstation cluster Macs route through LiteLLM →
+  # desk-nxst-001 vLLM instead; no local MLX server needed.
   local.omlx = {
-    enable = true;
+    enable = isWorkstation;
     port = 8000;
     ssdCacheDir = "/Users/${user.name}/.omlx/cache";
     maxConcurrentRequests = 8;
