@@ -144,8 +144,12 @@ in
 
     models = {
       claudeOpus = "claude-opus-4-7";
-      claudeSonnet = "claude-sonnet-4-7";
+      claudeSonnet = "claude-sonnet-4-6";
       claudeHaiku = "claude-haiku-4-5";
+      gemini3Pro = "gemini-3-pro";
+      gemini3Flash = "gemini-3-flash";
+      gemini25Pro = "gemini-2.5-pro";
+      gemini25Flash = "gemini-2.5-flash";
     };
 
     scripts = {

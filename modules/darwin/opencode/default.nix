@@ -47,6 +47,8 @@ in
     # reads AZURE_RESOURCE_NAME to build endpoint URLs.
     home.sessionVariables = {
       AZURE_RESOURCE_NAME = lib.salt.ai.providers.azure.resourceName;
+      GOOGLE_VERTEX_PROJECT = lib.salt.ai.providers.vertex.projectId;
+      GOOGLE_VERTEX_LOCATION = lib.salt.ai.providers.vertex.region;
     };
 
     # Source the per-provider sops secrets at shell init so the user-level
@@ -142,6 +144,7 @@ in
             "litellm"
             "azure"
             "omlx"
+            "google-vertex"
           ];
           # Schrodinger Azure OpenAI (resource: schrodinger-code). API key
           # comes from the sops-decrypted AZURE_API_KEY env var sourced

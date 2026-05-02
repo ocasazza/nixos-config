@@ -525,7 +525,7 @@ in
 
       model = mkOption {
         type = types.str;
-        default = "claude-opus-4-6";
+        default = lib.salt.ai.models.claudeSonnet;
         description = "Model to use via Vertex proxy";
       };
     };
@@ -701,8 +701,11 @@ in
 
       summaryModel = mkOption {
         type = types.str;
-        default = "claude-haiku-4-5";
-        description = "Model used for compression summarisation (should be fast/cheap)";
+        # Use the local LiteLLM-routed Qwen model for compression — never
+        # cloud/vertex. Provider prefix matches the `litellm` custom_provider
+        # declared in the generated config.yaml below.
+        default = "litellm/coder-local";
+        description = "Model used for compression summarisation (should be fast/cheap). Use a local model to avoid cloud egress.";
       };
     };
 
@@ -1165,6 +1168,17 @@ in
             "    api_key: \"env:GCLOUD_ID_TOKEN\""
             "    models:"
             "      - \"${cfg.vertexProxy.model}\""
+            "  # Gemini via the same Vertex AI proxy. Uses the Vertex REST API"
+            "  # format (publishers/google/models/...) — the proxy routes both"
+            "  # Anthropic and Google publishers. Same gcloud id-token auth."
+            "  - name: \"gemini\""
+            "    base_url: \"${cfg.vertexProxy.baseURL}\""
+            "    api_key: \"env:GCLOUD_ID_TOKEN\""
+            "    models:"
+            "      - \"${lib.salt.ai.models.gemini3Pro}\""
+            "      - \"${lib.salt.ai.models.gemini3Flash}\""
+            "      - \"${lib.salt.ai.models.gemini25Pro}\""
+            "      - \"${lib.salt.ai.models.gemini25Flash}\""
             ""
           ]
           ++ optionals cfg.delegation.enable (

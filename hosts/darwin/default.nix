@@ -166,7 +166,14 @@ in
     exo.enable = true; # cluster-wide — see comment block above
     exo.apiPort = 52415;
     delegation.useVertexProxy = false; # exo cluster handles local subagent
-    auxiliary.useVertexProxy = true; # vision/web/approval always Vertex Haiku
+    auxiliary.useVertexProxy = true; # vision/web/approval: vertex haiku
+
+    # Compression: trigger earlier (0.60 vs default 0.70) so the summary
+    # model has more room to work, and use local Qwen via LiteLLM so
+    # context compression itself never hits cloud/vertex as an automatic
+    # fallback — the user explicitly decides when to invoke cloud paths.
+    compression.threshold = "0.60";
+    compression.summaryModel = "litellm/coder-local";
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'
     # local-routing path (`coder-local`/`coder-remote`/`embedding` model
@@ -292,7 +299,7 @@ in
   # they're consumed by hermes / ingest / open-webui instead.
   programs.claude-code = {
     enable = true;
-    model = lib.salt.ai.models.claudeOpus;
+    model = lib.salt.ai.models.claudeSonnet;
     vertex = {
       enable = true;
       projectId = lib.salt.ai.providers.vertex.projectId;

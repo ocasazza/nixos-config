@@ -16,6 +16,9 @@
     ghostty-bin
     yubikey-manager
 
+    # AI coding assistants
+    gemini-cli-bin
+
     # Personal knowledge management
     obsidian
   ];
