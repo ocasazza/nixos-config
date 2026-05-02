@@ -48,7 +48,11 @@ let
   # api_key injected into hermes' generated config. LiteLLM's router
   # expects the virtual-key bearer; everything else keeps the legacy
   # "ollama" literal (vLLM ignores the value).
-  localApiKey = if cfg.litellm.enable then "env:LITELLM_HERMES_API_KEY" else "ollama";
+  # `$LITELLM_HERMES_API_KEY` (not `env:...`) is the literal placeholder
+  # the activation-time sed replaces with the real sops-decrypted key
+  # before hermes ever reads the file. Keeping a single placeholder form
+  # keeps the substitution unambiguous.
+  localApiKey = if cfg.litellm.enable then "$LITELLM_HERMES_API_KEY" else "ollama";
   # Helper: resolve interface names to libp2p listen multiaddrs at runtime
   exoListenAddrsScript = concatMapStringsSep "\n" (iface: ''
     _exo_addr=$(ipconfig getifaddr ${iface} 2>/dev/null || ip -4 addr show ${iface} 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1)
@@ -1484,30 +1488,51 @@ in
           hermes-acp() { _hermes_refresh_token; command hermes-acp "$@"; }
         ''
         + optionalString (cfg.litellm.enable && cfg.litellm.virtualKeyFile != null) ''
-          # LiteLLM virtual key for hermes' local/delegation router path.
-          # The sops-decrypted file is a single KEY=VALUE line; export the
-          # VALUE and also inject it into the mutable config.yaml copy so
-          # hermes (which does not resolve env: or $ prefixes) gets the
-          # real key. Re-read on every shell start so sops rotation takes
-          # effect without a rebuild.
+          # Export the LiteLLM virtual key for ad-hoc shell use (curl,
+          # debugging). The hermes config.yaml itself gets the key
+          # baked in at activation time — see `home.activation
+          # .hermesConfigInjectKey` below — so the daemon doesn't
+          # depend on this env var being set.
           if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then
             export LITELLM_HERMES_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
-            # If config.yaml is still a symlink to the nix store, make a
-            # mutable copy and replace the api_key placeholders.
-            if [ -L "$HOME/.hermes/config.yaml" ]; then
-              cp --remove-destination "$(readlink "$HOME/.hermes/config.yaml")" "$HOME/.hermes/config.yaml"
-            fi
-            if [ -f "$HOME/.hermes/config.yaml" ]; then
-              # BSD sed (macOS) requires an explicit backup-suffix arg
-              # after `-i`; GNU sed treats it as optional. Use `-i.bak`
-              # + cleanup to keep the same script portable across both.
-              sed -i.bak "s|\\$LITELLM_HERMES_API_KEY|"'"$LITELLM_HERMES_API_KEY"'"|g" "$HOME/.hermes/config.yaml"
-              rm -f "$HOME/.hermes/config.yaml.bak"
-            fi
           fi
         ''
       );
+
     }
+
+    # One-shot at activation: render ~/.hermes/config.yaml from the
+    # nix-store template with the sops-decrypted LITELLM virtual key
+    # spliced in. Replaces the previous per-shell sed approach, which
+    # had three problems: (1) BSD-vs-GNU sed-i incompatibility on macOS,
+    # (2) raced when hermes was launched outside an interactive shell
+    # (launchd, cron), (3) ran on every shell open for a one-shot op.
+    #
+    # Lives in its own mkMerge block so it doesn't collide with the
+    # `home-manager.users.<u>.home.file.".hermes/config.yaml".text`
+    # attribute defined above (Nix attribute paths can't repeat at
+    # the same nesting level within a single attrset literal).
+    (mkIf (cfg.litellm.enable && cfg.litellm.virtualKeyFile != null) {
+      # Use the function form so `lib.hm.dag` (home-manager's extension
+      # namespace) is in scope. The outer nix-darwin lib doesn't have it.
+      home-manager.users.${user.name} =
+        { lib, ... }:
+        {
+          home.activation.hermesConfigInjectKey = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+            if [ -r "${toString cfg.litellm.virtualKeyFile}" ] \
+                && [ -L "$HOME/.hermes/config.yaml" ]; then
+              KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
+              TEMPLATE="$(readlink "$HOME/.hermes/config.yaml")"
+              # Replace the symlink with a real, key-injected file.
+              # Writing to a tmp file + mv keeps the swap atomic.
+              run sed "s|\$LITELLM_HERMES_API_KEY|$KEY|g" "$TEMPLATE" \
+                > "$HOME/.hermes/config.yaml.new"
+              run mv -f "$HOME/.hermes/config.yaml.new" "$HOME/.hermes/config.yaml"
+              run chmod 0400 "$HOME/.hermes/config.yaml"
+            fi
+          '';
+        };
+    })
 
     # SOUL.md: global agent identity (only written when soulMd option is set)
     (mkIf (cfg.soulMd != "") {
