@@ -144,32 +144,28 @@ in
   # left the Grafana reingest tiles empty. See modules/darwin/observability.
   local.darwinObservability.enable = true;
 
-  # Heavy local inference (oMLX, exo cluster joiner, faster-whisper for
-  # voice) only runs on the dev workstation (GN9CFLM92K-MBP). The other
-  # cluster Macs (CK2/GJH/L75T) are kept lean — they're compute-attached
-  # nodes that need maximum free RAM for whatever the user runs against
-  # them, not for hosting always-on local model daemons.
+  # Workstation-only daemons (the dev-only stuff, NOT the cluster):
+  #   * oMLX        — single-node MLX server feeding opencode's omlx
+  #                   provider; redundant on cluster nodes that already
+  #                   federate through exo + LiteLLM.
+  #   * voice       — faster-whisper model; only the workstation has the
+  #                   mic+keyboard interactive loop.
   #
-  # Per-host overrides: lift `isWorkstation` and re-enable individual
-  # bits if a different Mac becomes the dev box.
+  # exo IS the cluster — it has to run on every TB-meshed node
+  # (CK2 ↔ GJH ↔ L75T) for distributed inference to work, and freeing
+  # RAM on those nodes (consumer apps, oMLX, etc.) is precisely what
+  # makes more of it available to the exo MLX shard. Don't gate exo
+  # on workstation. GN9 has no TB cables and is excluded from the mesh
+  # by topology, so its `exo.enable = true` is a no-op there.
   local.hermes = {
     enable = true;
     claw3d.enable = true;
     voice.enable = isWorkstation; # faster-whisper model is large
-    hippo.enable = true;
-    hippo.obsidianSync = lib.mkIf isWorkstation {
-      enable = true;
-      vaultPath = "/Users/${user.name}/Repositories/ocasazza/obsidian/vault";
-    };
 
-    # Hybrid (workstation only): subagent / MCP coding agent uses exo
-    # cluster local Qwen; vision/web/compression stay on Vertex Haiku.
-    # Non-workstations skip exo entirely → saves ~16 GiB RAM and avoids
-    # contending with whatever else the user is running on those nodes.
     localModel = "mlx-community/Qwen3-Coder-Next-8bit";
-    exo.enable = isWorkstation;
+    exo.enable = true; # cluster-wide — see comment block above
     exo.apiPort = 52415;
-    delegation.useVertexProxy = !isWorkstation; # workstation → exo, else cloud
+    delegation.useVertexProxy = false; # exo cluster handles local subagent
     auxiliary.useVertexProxy = true; # vision/web/approval always Vertex Haiku
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'
