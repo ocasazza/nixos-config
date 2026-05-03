@@ -195,8 +195,8 @@ in
               "desk-nxst-001-qwen3.6-35b-a3b" = {
                 name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
                 limit = {
-                  context = 65536;
-                  output = 65536;
+                  context = 131072;
+                  output = 131072;
                 };
               };
               "desk-nxst-004-qwen3-32b" = {
