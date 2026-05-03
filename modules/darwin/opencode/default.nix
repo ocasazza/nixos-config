@@ -100,10 +100,10 @@ in
         // Override per-session with `/model` to any backend in
         // provider.litellm.models below.
         "agents": {
-      "sisyphus": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
-      "prometheus": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
-      "atlas": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
-      "explore": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" }
+      "sisyphus": { "model": "litellm/desk-nxst-001-qwen3-coder-next" },
+      "prometheus": { "model": "litellm/desk-nxst-001-qwen3-coder-next" },
+      "atlas": { "model": "litellm/desk-nxst-001-qwen3-coder-next" },
+      "explore": { "model": "litellm/desk-nxst-001-qwen3-coder-next" }
         },
         "disabled_hooks": [],
         "mcp": {
@@ -120,7 +120,7 @@ in
           "$schema" = "https://opencode.ai/config.json";
           # Default model: desk-nxst-001 vLLM (Qwen3.6-35B-A3B-AWQ, 65k context).
           # No smart-routing — all backends are explicit aliases below.
-          model = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
+          model = "litellm/desk-nxst-001-qwen3-coder-next";
           # Disable the in-TUI auto-update prompt — supervisor-spawned
           # sessions can't dismiss it and end up wedged on the modal.
           autoupdate = false;
@@ -192,11 +192,11 @@ in
             # one backend. Omitted aliases return 403 "team not allowed to
             # access model" from the proxy.
             models = {
-              "desk-nxst-001-qwen3.6-35b-a3b" = {
-                name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
+              "desk-nxst-001-qwen3-coder-next" = {
+                name = "Qwen3-Coder-Next @ desk-nxst-001 vLLM";
                 limit = {
-                  context = 131072;
-                  output = 131072;
+                  context = 65536;
+                  output = 65536;
                 };
               };
               "desk-nxst-004-qwen3-32b" = {
