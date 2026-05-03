@@ -1143,11 +1143,11 @@ in
             "      - \"local-coder\""
             "      - \"embedding\""
             "      # Individual backend aliases (for direct pinning):"
-            "      - \"qwen3-coder-desk-nxst-001\""
-            "      - \"qwen3-coder-desk-nxst-004\""
-            "      - \"qwen3-coder-exo-gfr-02\""
-            "      - \"qwen3-coder-exo-gfr-03\""
-            "      - \"qwen3-coder-exo-laptop\""
+            "      - \"desk-nxst-001-qwen3-coder\""
+            "      - \"desk-nxst-004-qwen3-coder\""
+            "      - \"gfr-osx26-02-qwen3-coder\""
+            "      - \"gfr-osx26-03-qwen3-coder\""
+            "      - \"laptop-qwen3-coder\""
           ]
           ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
             "  # exo distributed inference cluster (only when LiteLLM is disabled)"
