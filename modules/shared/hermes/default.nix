@@ -765,6 +765,18 @@ in
       description = "Maximum characters per read_file call — increase for large-context models like Claude";
     };
 
+    memoryCharLimit = mkOption {
+      type = types.int;
+      default = 2200;
+      description = "Maximum characters per memory entry";
+    };
+
+    userCharLimit = mkOption {
+      type = types.int;
+      default = 1375;
+      description = "Maximum characters per user profile entry";
+    };
+
     soulMd = mkOption {
       type = types.lines;
       default = "";
@@ -1311,8 +1323,8 @@ in
             "  provider: \"holographic\""
             "  memory_enabled: true"
             "  user_profile_enabled: true"
-            "  memory_char_limit: 2200"
-            "  user_char_limit: 1375"
+            "  memory_char_limit: ${toString cfg.memoryCharLimit}"
+            "  user_char_limit: ${toString cfg.userCharLimit}"
             "  nudge_interval: 10"
             "  flush_min_turns: 6"
             ""
