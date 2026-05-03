@@ -1129,9 +1129,9 @@ in
           ++ optionals cfg.litellm.enable [
             "  # LiteLLM router on desk-nxst-001:4000. The model names below"
             "  # are the real router groups + the alias names registered via"
-            "  # `routerSettings.modelGroupAlias` on the proxy side. All four"
-            "  # qwen* aliases route to local-coder (Qwen3-Coder smart-routed"
-            "  # across desk-nxst-001 + desk-nxst-004 vLLMs)."
+            "  # `routerSettings.modelGroupAlias` on the proxy side. All qwen*"
+            "  # aliases route to local-coder (Qwen3-Coder smart-routed across"
+            "  # desk-nxst-001 + desk-nxst-004 vLLMs, exo nodes, laptop)."
             "  - name: \"litellm\""
             "    base_url: \"${cfg.litellm.endpoint}/v1\""
             "    api_key: \"$LITELLM_HERMES_API_KEY\""
@@ -1142,6 +1142,12 @@ in
             "      - \"Qwen3-Coder-30B\""
             "      - \"local-coder\""
             "      - \"embedding\""
+            "      # Individual backend aliases (for direct pinning):"
+            "      - \"qwen3-coder-desk-nxst-001\""
+            "      - \"qwen3-coder-desk-nxst-004\""
+            "      - \"qwen3-coder-exo-gfr-02\""
+            "      - \"qwen3-coder-exo-gfr-03\""
+            "      - \"qwen3-coder-exo-laptop\""
           ]
           ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
             "  # exo distributed inference cluster (only when LiteLLM is disabled)"

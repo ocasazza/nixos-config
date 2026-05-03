@@ -96,15 +96,14 @@ in
     # for the full list of pinnable backends.
     home.file.".config/opencode/oh-my-openagent.jsonc".text = ''
       {
-        // LiteLLM-routed Qwen3-Coder for every agent. `litellm/local-coder`
-        // resolves to all self-hosted Qwen models (desk-nxst-001 vLLM
-        // primary, gfr exo cluster fallback). The full list of real
-        // model_groups on the proxy is in provider.litellm.models below.
+        // Default agent model: desk-nxst-001 vLLM (262k context).
+        // Override per-session with `/model` to any backend in
+        // provider.litellm.models below.
         "agents": {
-          "sisyphus": { "model": "litellm/local-coder" },
-          "prometheus": { "model": "litellm/local-coder" },
-          "atlas": { "model": "litellm/local-coder" },
-          "explore": { "model": "litellm/local-coder" }
+          "sisyphus": { "model": "litellm/qwen3-coder-desk-nxst-001" },
+          "prometheus": { "model": "litellm/qwen3-coder-desk-nxst-001" },
+          "atlas": { "model": "litellm/qwen3-coder-desk-nxst-001" },
+          "explore": { "model": "litellm/qwen3-coder-desk-nxst-001" }
         },
         "disabled_hooks": [],
         "mcp": {
@@ -119,10 +118,9 @@ in
       (pkgs.formats.json { }).generate "opencode-user.json"
         {
           "$schema" = "https://opencode.ai/config.json";
-          # Default model: Qwen3-Coder via LiteLLM hitting the desk-nxst-001
-          # vLLM directly (loopback on the proxy host). Override per-session
-          # with `/model`. Real groups: local-coder, coder-cloud-claude, embedding.
-          model = "litellm/local-coder";
+          # Default model: desk-nxst-001 vLLM (Qwen3-Coder-30B, 262k context).
+          # No smart-routing — all backends are explicit aliases below.
+          model = "litellm/qwen3-coder-desk-nxst-001";
           # Disable the in-TUI auto-update prompt — supervisor-spawned
           # sessions can't dismiss it and end up wedged on the modal.
           autoupdate = false;
@@ -190,20 +188,6 @@ in
             # the LiteLLM side first (nixstation modules/nixos/litellm) and
             # mirror here.
             models = {
-              local-coder = {
-                name = "Qwen3-Coder smart-routed (all self-hosted backends)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              coder-local = {
-                name = "Qwen3-Coder @ desk-nxst-001 vLLM (legacy alias)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
               qwen3-coder-desk-nxst-001 = {
                 name = "Qwen3-Coder @ desk-nxst-001 vLLM";
                 limit = {
@@ -239,11 +223,18 @@ in
                   output = 8192;
                 };
               };
-              Qwen3-Coder-30B = {
-                name = "Qwen3-Coder 30B (full precision)";
+              gpt-oss-120b-exo-gfr-02 = {
+                name = "GPT-OSS 120B @ GFR exo-02 (MLX)";
                 limit = {
-                  context = 262144;
-                  output = 8192;
+                  context = 131072;
+                  output = 32768;
+                };
+              };
+              gpt-oss-120b-exo-gfr-03 = {
+                name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
+                limit = {
+                  context = 131072;
+                  output = 32768;
                 };
               };
               coder-cloud-claude = {

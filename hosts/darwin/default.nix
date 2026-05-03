@@ -255,6 +255,10 @@ in
          subagent-driven-development, plan, research-paper-writing.
        - Save reusable workflows as skills via `skill_manage` rather than repeating them.
     '';
+
+    # Memory limits: increase for larger context models
+    memoryCharLimit = 8192;
+    userCharLimit = 4096;
   };
 
   # oMLX local inference server with continuous batching & tiered KV cache.
