@@ -187,68 +187,93 @@ in
             # but fail at request time. To add new groups, register them on
             # the LiteLLM side first (nixstation modules/nixos/litellm) and
             # mirror here.
+            # Models exposed by desk-nxst-001's LiteLLM proxy for the
+            # opencode-darwin virtual key. Mirrored from the proxy's
+            # allowlist verbatim — any model not in this list returns a
+            # 403 "team not allowed to access model" error.
             models = {
-              "desk-nxst-001-llama-3.3-70b" = {
-                name = "Llama-3.3-70B @ desk-nxst-001 vLLM";
-                limit = {
-                  context = 16384;
-                  output = 4096;
-                };
-              };
-              "qwen3-coder-desk-nxst-001" = {
-                name = "Qwen3-Coder @ desk-nxst-001 vLLM";
+              local-coder = {
+                name = "Qwen3-Coder smart-routed (all self-hosted backends)";
                 limit = {
                   context = 262144;
                   output = 8192;
                 };
               };
-              "qwen3-coder-desk-nxst-004" = {
+              qwen = {
+                name = "Qwen (legacy alias → local-coder)";
+                limit = {
+                  context = 262144;
+                  output = 8192;
+                };
+              };
+              "qwen-coder" = {
+                name = "Qwen Coder (legacy alias → local-coder)";
+                limit = {
+                  context = 262144;
+                  output = 8192;
+                };
+              };
+              "qwen3-coder" = {
+                name = "Qwen3-Coder (alias → local-coder)";
+                limit = {
+                  context = 262144;
+                  output = 8192;
+                };
+              };
+              "Qwen3-Coder-30B" = {
+                name = "Qwen3-Coder 30B (full precision)";
+                limit = {
+                  context = 262144;
+                  output = 8192;
+                };
+              };
+              "desk-nxst-001-llama-3.3-70b" = {
+                name = "Llama-3.3-70B @ desk-nxst-001 vLLM";
+                limit = {
+                  context = 262144;
+                  output = 16384;
+                };
+              };
+              "desk-nxst-004-qwen3-coder" = {
                 name = "Qwen3-Coder @ desk-nxst-004 vLLM";
                 limit = {
                   context = 262144;
                   output = 8192;
                 };
               };
-              "qwen3-coder-exo-gfr-02" = {
+              "gfr-osx26-02-qwen3-coder" = {
                 name = "Qwen3-Coder @ GFR exo-02 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
                 };
               };
-              "qwen3-coder-exo-gfr-03" = {
+              "gfr-osx26-03-qwen3-coder" = {
                 name = "Qwen3-Coder @ GFR exo-03 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
                 };
               };
-              "qwen3-coder-exo-laptop" = {
+              "laptop-qwen3-coder" = {
                 name = "Qwen3-Coder @ gfr-laptop exo (MLX)";
                 limit = {
                   context = 65536;
                   output = 8192;
                 };
               };
-              "gpt-oss-120b-exo-gfr-02" = {
+              "gfr-osx26-02-gpt-oss-120b" = {
                 name = "GPT-OSS 120B @ GFR exo-02 (MLX)";
                 limit = {
                   context = 131072;
                   output = 32768;
                 };
               };
-              "gpt-oss-120b-exo-gfr-03" = {
+              "gfr-osx26-03-gpt-oss-120b" = {
                 name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
                 limit = {
                   context = 131072;
                   output = 32768;
-                };
-              };
-              coder-cloud-claude = {
-                name = "Claude (Vertex passthrough via LiteLLM)";
-                limit = {
-                  context = 200000;
-                  output = 8192;
                 };
               };
               embedding = {
@@ -256,6 +281,29 @@ in
                 limit = {
                   context = 2048;
                   output = 0;
+                };
+              };
+              # Remaining aliases from the LiteLLM allowlist; these are
+              # historical names that also resolve to local-coder.
+              "coder-local" = {
+                name = "Coder Local (legacy alias → local-coder)";
+                limit = {
+                  context = 262144;
+                  output = 8192;
+                };
+              };
+              "coder-remote" = {
+                name = "Coder Remote (legacy alias → local-coder)";
+                limit = {
+                  context = 262144;
+                  output = 8192;
+                };
+              };
+              "coder-laptop" = {
+                name = "Coder Laptop (legacy alias → local-coder)";
+                limit = {
+                  context = 65536;
+                  output = 8192;
                 };
               };
             };

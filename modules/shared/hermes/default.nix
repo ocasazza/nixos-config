@@ -702,10 +702,9 @@ in
 
       summaryModel = mkOption {
         type = types.str;
-        # Use the local LiteLLM-routed Qwen model for compression — never
-        # cloud/vertex. Provider prefix matches the `litellm` custom_provider
-        # declared in the generated config.yaml below.
-        default = "litellm/local-coder";
+        # Use a fast local model for compression. Must be in the LiteLLM
+        # allowlist for the hermes virtual key.
+        default = "litellm/desk-nxst-001-llama-3.3-70b";
         description = "Model used for compression summarisation (should be fast/cheap). Use a local model to avoid cloud egress.";
       };
     };
@@ -1097,13 +1096,11 @@ in
           (
             if cfg.litellm.enable then
               [
-                "# Main model: Qwen3-Coder via LiteLLM smart-routed across the"
-                "# desk-nxst-001 + desk-nxst-004 GPU pool. Bare `qwen` is an"
-                "# alias on the LiteLLM side that rewrites to local-coder."
-                "# To use cloud Claude instead, pick the `vertex` custom_provider"
-                "# below or `litellm/coder-cloud-claude` (when re-enabled)."
+                "# Main model: Llama-3.3-70B on desk-nxst-001 (always-on)."
+                "# To switch models, use `/model litellm/<name>` with any alias"
+                "# in the custom_providers list below."
                 "model:"
-                "  default: \"qwen\""
+                "  default: \"desk-nxst-001-llama-3.3-70b\""
                 "  provider: \"litellm\""
                 "  base_url: \"${cfg.litellm.endpoint}/v1\""
                 "  api_key: \"$LITELLM_HERMES_API_KEY\""
@@ -1127,11 +1124,9 @@ in
             "custom_providers:"
           ]
           ++ optionals cfg.litellm.enable [
-            "  # LiteLLM router on desk-nxst-001:4000. The model names below"
-            "  # are the real router groups + the alias names registered via"
-            "  # `routerSettings.modelGroupAlias` on the proxy side. All qwen*"
-            "  # aliases route to local-coder (Qwen3-Coder smart-routed across"
-            "  # desk-nxst-001 + desk-nxst-004 vLLMs, exo nodes, laptop)."
+            "  # LiteLLM router on desk-nxst-001:4000. Model names must match"
+            "  # the allowlist configured on the LiteLLM proxy for the hermes"
+            "  # virtual key — any name not in that allowlist returns 403."
             "  - name: \"litellm\""
             "    base_url: \"${cfg.litellm.endpoint}/v1\""
             "    api_key: \"$LITELLM_HERMES_API_KEY\""
@@ -1140,16 +1135,17 @@ in
             "      - \"qwen-coder\""
             "      - \"qwen3-coder\""
             "      - \"Qwen3-Coder-30B\""
-            "      - \"local-coder\""
+            "      - \"desk-nxst-001-llama-3.3-70b\""
+            "      - \"desk-nxst-004-qwen3-coder\""
+            "      - \"gfr-osx26-02-qwen3-coder\""
+            "      - \"gfr-osx26-03-qwen3-coder\""
+            "      - \"laptop-qwen3-coder\""
+            "      - \"gfr-osx26-02-gpt-oss-120b\""
+            "      - \"gfr-osx26-03-gpt-oss-120b\""
             "      - \"embedding\""
-            "      # Individual backend aliases (for direct pinning):"
-            "      - \"qwen3-coder-desk-nxst-001\""
-            "      - \"qwen3-coder-desk-nxst-004\""
-            "      - \"qwen3-coder-exo-gfr-02\""
-            "      - \"qwen3-coder-exo-gfr-03\""
-            "      - \"qwen3-coder-exo-laptop\""
-            "      - \"gpt-oss-120b-exo-gfr-02\""
-            "      - \"gpt-oss-120b-exo-gfr-03\""
+            "      - \"coder-local\""
+            "      - \"coder-remote\""
+            "      - \"coder-laptop\""
           ]
           ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
             "  # exo distributed inference cluster (only when LiteLLM is disabled)"
