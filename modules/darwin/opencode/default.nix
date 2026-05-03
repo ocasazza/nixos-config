@@ -100,10 +100,10 @@ in
         // Override per-session with `/model` to any backend in
         // provider.litellm.models below.
         "agents": {
-      "sisyphus": { "model": "litellm/desk-nxst-001-llama-3.3-70b" },
-      "prometheus": { "model": "litellm/desk-nxst-001-llama-3.3-70b" },
-      "atlas": { "model": "litellm/desk-nxst-001-llama-3.3-70b" },
-      "explore": { "model": "litellm/desk-nxst-001-llama-3.3-70b" }
+      "sisyphus": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
+      "prometheus": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
+      "atlas": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
+      "explore": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" }
         },
         "disabled_hooks": [],
         "mcp": {
@@ -118,9 +118,9 @@ in
       (pkgs.formats.json { }).generate "opencode-user.json"
         {
           "$schema" = "https://opencode.ai/config.json";
-          # Default model: desk-nxst-001 vLLM (Llama-3.3-70B-AWQ, 16k context).
+          # Default model: desk-nxst-001 vLLM (Qwen3.6-35B-A3B-AWQ, 65k context).
           # No smart-routing — all backends are explicit aliases below.
-          model = "litellm/desk-nxst-001-llama-3.3-70b";
+          model = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
           # Disable the in-TUI auto-update prompt — supervisor-spawned
           # sessions can't dismiss it and end up wedged on the modal.
           autoupdate = false;
@@ -187,58 +187,30 @@ in
             # but fail at request time. To add new groups, register them on
             # the LiteLLM side first (nixstation modules/nixos/litellm) and
             # mirror here.
-            # Models exposed by desk-nxst-001's LiteLLM proxy for the
-            # opencode-darwin virtual key. Mirrored from the proxy's
-            # allowlist verbatim — any model not in this list returns a
-            # 403 "team not allowed to access model" error.
+            # Explicit host-model aliases exposed by desk-nxst-001's LiteLLM
+            # proxy. Each key is <hostname>-<modelname> — uniquely identifies
+            # one backend. Omitted aliases return 403 "team not allowed to
+            # access model" from the proxy.
             models = {
-              local-coder = {
-                name = "Qwen3-Coder smart-routed (all self-hosted backends)";
+              "desk-nxst-001-qwen3.6-35b-a3b" = {
+                name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
                 limit = {
-                  context = 262144;
-                  output = 8192;
+                  context = 65536;
+                  output = 65536;
                 };
               };
-              qwen = {
-                name = "Qwen (legacy alias → local-coder)";
+              "desk-nxst-004-qwen3-32b" = {
+                name = "Qwen3-32B @ desk-nxst-004 vLLM";
                 limit = {
-                  context = 262144;
-                  output = 8192;
+                  context = 65536;
+                  output = 65536;
                 };
               };
-              "qwen-coder" = {
-                name = "Qwen Coder (legacy alias → local-coder)";
+              "desk-nxst-004-qwen3-embedding" = {
+                name = "Qwen3-Embedding-0.6B @ desk-nxst-004";
                 limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              "qwen3-coder" = {
-                name = "Qwen3-Coder (alias → local-coder)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              "Qwen3-Coder-30B" = {
-                name = "Qwen3-Coder 30B (full precision)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              "desk-nxst-001-llama-3.3-70b" = {
-                name = "Llama-3.3-70B @ desk-nxst-001 vLLM";
-                limit = {
-                  context = 262144;
-                  output = 16384;
-                };
-              };
-              "desk-nxst-004-qwen3-coder" = {
-                name = "Qwen3-Coder @ desk-nxst-004 vLLM";
-                limit = {
-                  context = 262144;
-                  output = 8192;
+                  context = 2048;
+                  output = 0;
                 };
               };
               "gfr-osx26-02-qwen3-coder" = {
@@ -256,7 +228,7 @@ in
                 };
               };
               "laptop-qwen3-coder" = {
-                name = "Qwen3-Coder @ gfr-laptop exo (MLX)";
+                name = "Qwen3-Coder-480B @ laptop exo (MLX)";
                 limit = {
                   context = 65536;
                   output = 8192;
@@ -274,36 +246,6 @@ in
                 limit = {
                   context = 131072;
                   output = 32768;
-                };
-              };
-              embedding = {
-                name = "Qwen3-Embedding-0.6B";
-                limit = {
-                  context = 2048;
-                  output = 0;
-                };
-              };
-              # Remaining aliases from the LiteLLM allowlist; these are
-              # historical names that also resolve to local-coder.
-              "coder-local" = {
-                name = "Coder Local (legacy alias → local-coder)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              "coder-remote" = {
-                name = "Coder Remote (legacy alias → local-coder)";
-                limit = {
-                  context = 262144;
-                  output = 8192;
-                };
-              };
-              "coder-laptop" = {
-                name = "Coder Laptop (legacy alias → local-coder)";
-                limit = {
-                  context = 65536;
-                  output = 8192;
                 };
               };
             };
