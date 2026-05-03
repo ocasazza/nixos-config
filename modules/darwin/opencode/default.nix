@@ -191,8 +191,8 @@ in
               "desk-nxst-001-qwen3-next-80b" = {
                 name = "Qwen3-Next-80B @ desk-nxst-001 vLLM";
                 limit = {
-                  context = 8192;
-                  output = 8192;
+                  context = 4096;
+                  output = 4096;
                 };
               };
               desk-nxst-004-qwen3-coder = {
