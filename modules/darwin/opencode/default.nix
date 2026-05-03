@@ -86,16 +86,6 @@ in
       pkgs.bun
     ];
 
-    # Install opencode plugins whenever package.json changes.
-    home.activation.installOpencodePlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      if command -v bun >/dev/null 2>&1 && [[ -f "$HOME/.config/opencode/package.json" ]]; then
-        cd "$HOME/.config/opencode"
-        if [[ ! -d node_modules ]] || [[ package.json -nt node_modules/.package-lock ]]; then
-          $DRY_RUN_CMD bun install --no-summary $VERBOSE_ARG
-        fi
-      fi
-    '';
-
     # Static (non-secret) provider env. AI-SDK's @ai-sdk/azure provider
     # reads AZURE_RESOURCE_NAME to build endpoint URLs.
     home.sessionVariables = {
@@ -330,4 +320,19 @@ in
           };
         };
   };
+
+  # Function form required to get lib.hm.dag in scope (nix-darwin module
+  # outer lib doesn't carry the hm extension; home-manager injects it here).
+  home-manager.users.${user.name} =
+    { lib, ... }:
+    {
+      home.activation.installOpencodePlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if command -v bun >/dev/null 2>&1 && [[ -f "$HOME/.config/opencode/package.json" ]]; then
+          cd "$HOME/.config/opencode"
+          if [[ ! -d node_modules ]] || [[ package.json -nt node_modules/.package-lock ]]; then
+            $DRY_RUN_CMD bun install --no-summary $VERBOSE_ARG
+          fi
+        fi
+      '';
+    };
 }
