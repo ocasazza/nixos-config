@@ -213,15 +213,15 @@ in
                   output = 0;
                 };
               };
-              "gfr-osx26-02-qwen3-coder" = {
-                name = "Qwen3-Coder @ GFR exo-02 (MLX 8-bit)";
+              "gfr-osx26-02-qwen3-coder-next" = {
+                name = "Qwen3-Coder-Next @ GFR exo-02 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
                 };
               };
-              "gfr-osx26-03-qwen3-coder" = {
-                name = "Qwen3-Coder @ GFR exo-03 (MLX 8-bit)";
+              "gfr-osx26-03-qwen3-coder-next" = {
+                name = "Qwen3-Coder-Next @ GFR exo-03 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
