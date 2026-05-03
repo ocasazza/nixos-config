@@ -100,10 +100,10 @@ in
         // Override per-session with `/model` to any backend in
         // provider.litellm.models below.
         "agents": {
-          "sisyphus": { "model": "litellm/qwen3-coder-desk-nxst-001" },
-          "prometheus": { "model": "litellm/qwen3-coder-desk-nxst-001" },
-          "atlas": { "model": "litellm/qwen3-coder-desk-nxst-001" },
-          "explore": { "model": "litellm/qwen3-coder-desk-nxst-001" }
+          "sisyphus": { "model": "litellm/desk-nxst-001-qwen3.6" },
+          "prometheus": { "model": "litellm/desk-nxst-001-qwen3.6" },
+          "atlas": { "model": "litellm/desk-nxst-001-qwen3.6" },
+          "explore": { "model": "litellm/desk-nxst-001-qwen3.6" }
         },
         "disabled_hooks": [],
         "mcp": {
@@ -120,7 +120,7 @@ in
           "$schema" = "https://opencode.ai/config.json";
           # Default model: desk-nxst-001 vLLM (Qwen3-Coder-30B, 262k context).
           # No smart-routing — all backends are explicit aliases below.
-          model = "litellm/qwen3-coder-desk-nxst-001";
+          model = "litellm/desk-nxst-001-qwen3.6";
           # Disable the in-TUI auto-update prompt — supervisor-spawned
           # sessions can't dismiss it and end up wedged on the modal.
           autoupdate = false;
@@ -188,49 +188,49 @@ in
             # the LiteLLM side first (nixstation modules/nixos/litellm) and
             # mirror here.
             models = {
-              qwen3-coder-desk-nxst-001 = {
-                name = "Qwen3-Coder @ desk-nxst-001 vLLM";
+              "desk-nxst-001-qwen3.6" = {
+                name = "Qwen3.6 @ desk-nxst-001 vLLM";
                 limit = {
                   context = 262144;
                   output = 8192;
                 };
               };
-              qwen3-coder-desk-nxst-004 = {
+              desk-nxst-004-qwen3-coder = {
                 name = "Qwen3-Coder @ desk-nxst-004 vLLM";
                 limit = {
                   context = 262144;
                   output = 8192;
                 };
               };
-              qwen3-coder-exo-gfr-02 = {
+              gfr-osx26-02-qwen3-coder = {
                 name = "Qwen3-Coder @ GFR exo-02 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
                 };
               };
-              qwen3-coder-exo-gfr-03 = {
+              gfr-osx26-03-qwen3-coder = {
                 name = "Qwen3-Coder @ GFR exo-03 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
                 };
               };
-              qwen3-coder-exo-laptop = {
+              laptop-qwen3-coder = {
                 name = "Qwen3-Coder @ gfr-laptop exo (MLX)";
                 limit = {
                   context = 65536;
                   output = 8192;
                 };
               };
-              gpt-oss-120b-exo-gfr-02 = {
+              gfr-osx26-02-gpt-oss-120b = {
                 name = "GPT-OSS 120B @ GFR exo-02 (MLX)";
                 limit = {
                   context = 131072;
                   output = 32768;
                 };
               };
-              gpt-oss-120b-exo-gfr-03 = {
+              gfr-osx26-03-gpt-oss-120b = {
                 name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
                 limit = {
                   context = 131072;
