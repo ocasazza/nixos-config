@@ -195,42 +195,49 @@ in
                   output = 4096;
                 };
               };
-              desk-nxst-004-qwen3-coder = {
+              "qwen3-coder-desk-nxst-001" = {
+                name = "Qwen3-Coder @ desk-nxst-001 vLLM";
+                limit = {
+                  context = 262144;
+                  output = 8192;
+                };
+              };
+              "qwen3-coder-desk-nxst-004" = {
                 name = "Qwen3-Coder @ desk-nxst-004 vLLM";
                 limit = {
                   context = 262144;
                   output = 8192;
                 };
               };
-              gfr-osx26-02-qwen3-coder = {
+              "qwen3-coder-exo-gfr-02" = {
                 name = "Qwen3-Coder @ GFR exo-02 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
                 };
               };
-              gfr-osx26-03-qwen3-coder = {
+              "qwen3-coder-exo-gfr-03" = {
                 name = "Qwen3-Coder @ GFR exo-03 (MLX 8-bit)";
                 limit = {
                   context = 131072;
                   output = 8192;
                 };
               };
-              laptop-qwen3-coder = {
+              "qwen3-coder-exo-laptop" = {
                 name = "Qwen3-Coder @ gfr-laptop exo (MLX)";
                 limit = {
                   context = 65536;
                   output = 8192;
                 };
               };
-              gfr-osx26-02-gpt-oss-120b = {
+              "gpt-oss-120b-exo-gfr-02" = {
                 name = "GPT-OSS 120B @ GFR exo-02 (MLX)";
                 limit = {
                   context = 131072;
                   output = 32768;
                 };
               };
-              gfr-osx26-03-gpt-oss-120b = {
+              "gpt-oss-120b-exo-gfr-03" = {
                 name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
                 limit = {
                   context = 131072;
