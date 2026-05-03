@@ -704,7 +704,7 @@ in
         type = types.str;
         # Use a fast local model for compression. Must be in the LiteLLM
         # allowlist for the hermes virtual key.
-        default = "litellm/desk-nxst-001-llama-3.3-70b";
+        default = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
         description = "Model used for compression summarisation (should be fast/cheap). Use a local model to avoid cloud egress.";
       };
     };
@@ -1096,11 +1096,11 @@ in
           (
             if cfg.litellm.enable then
               [
-                "# Main model: Llama-3.3-70B on desk-nxst-001 (always-on)."
+                "# Main model: Qwen3.6-35B-A3B-AWQ on desk-nxst-001 vLLM (always-on)."
                 "# To switch models, use `/model litellm/<name>` with any alias"
                 "# in the custom_providers list below."
                 "model:"
-                "  default: \"desk-nxst-001-llama-3.3-70b\""
+                "  default: \"desk-nxst-001-qwen3.6-35b-a3b\""
                 "  provider: \"litellm\""
                 "  base_url: \"${cfg.litellm.endpoint}/v1\""
                 "  api_key: \"$LITELLM_HERMES_API_KEY\""
@@ -1131,21 +1131,15 @@ in
             "    base_url: \"${cfg.litellm.endpoint}/v1\""
             "    api_key: \"$LITELLM_HERMES_API_KEY\""
             "    models:"
-            "      - \"qwen\""
-            "      - \"qwen-coder\""
-            "      - \"qwen3-coder\""
-            "      - \"Qwen3-Coder-30B\""
-            "      - \"desk-nxst-001-llama-3.3-70b\""
-            "      - \"desk-nxst-004-qwen3-coder\""
-            "      - \"gfr-osx26-02-qwen3-coder\""
-            "      - \"gfr-osx26-03-qwen3-coder\""
+            "      - \"desk-nxst-001-qwen3.6-35b-a3b\""
+            "      - \"desk-nxst-004-qwen3-32b\""
+            "      - \"gfr-osx26-02-qwen3-coder-next\""
+            "      - \"gfr-osx26-03-qwen3-coder-next\""
             "      - \"laptop-qwen3-coder\""
             "      - \"gfr-osx26-02-gpt-oss-120b\""
             "      - \"gfr-osx26-03-gpt-oss-120b\""
-            "      - \"embedding\""
-            "      - \"coder-local\""
-            "      - \"coder-remote\""
-            "      - \"coder-laptop\""
+            "      - \"desk-nxst-004-qwen3-embedding\""
+            "      - \"local-coder\""
           ]
           ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
             "  # exo distributed inference cluster (only when LiteLLM is disabled)"
