@@ -81,35 +81,27 @@ in
           version = "1.0.0";
           dependencies = {
             "@opencode-ai/plugin" = "1.3.13";
-            "oh-my-opencode" = "3.17.12";
+            "oh-my-opencode-slim" = "1.0.6";
             "@tarquinen/opencode-dcp" = "3.1.9";
           };
         };
 
-    # Minimal oh-my-openagent plugin config: route agents to the LiteLLM
-    # smart-routed Qwen3-Coder pool on desk-nxst-001. The proxy fans
-    # requests across the full GPU fleet (desk-nxst-001 vLLM + desk-nxst-004
-    # vLLM + the gfr/laptop exo MLX backends) and picks the freshest
-    # backend per request — substantially better throughput than pinning
-    # to one local oMLX instance. Users can override per-project in
-    # .opencode/oh-my-openagent.jsonc; see provider.litellm.models below
-    # for the full list of pinnable backends.
-    home.file.".config/opencode/oh-my-openagent.jsonc".text = ''
+    # oh-my-opencode-slim plugin config: route all agents to the LiteLLM
+    # smart-routed Qwen3-Coder pool on desk-nxst-001. Override per-project
+    # in .opencode/oh-my-opencode-slim.json; see provider.litellm.models
+    # below for the full list of pinnable backends.
+    home.file.".config/opencode/oh-my-opencode-slim.json".text = ''
       {
-        // Default agent model: desk-nxst-001 vLLM (262k context).
-        // Override per-session with `/model` to any backend in
-        // provider.litellm.models below.
-        "agents": {
-      "sisyphus": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
-      "prometheus": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
-      "atlas": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" },
-      "explore": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b" }
-        },
-        "disabled_hooks": [],
-        "mcp": {
-          "websearch": { "enabled": true },
-          "context7": { "enabled": true },
-          "grep_app": { "enabled": true }
+        "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
+        "preset": "local",
+        "presets": {
+          "local": {
+            "orchestrator": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+            "explorer":     { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+            "oracle":       { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+            "fixer":        { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+            "librarian":    { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["websearch", "context7", "grep_app"] }
+          }
         }
       }
     '';
@@ -128,9 +120,8 @@ in
           # call so each AI SDK span (ai.streamText, ai.doStream, etc.)
           # routes through the OTLP pipeline alongside Effect's own spans.
           experimental.openTelemetry = true;
-          # oh-my-openagent (legacy name: oh-my-opencode) multi-agent harness.
           plugin = [
-            "oh-my-openagent"
+            "oh-my-opencode-slim"
             "@tarquinen/opencode-dcp"
           ];
           enabled_providers = [
