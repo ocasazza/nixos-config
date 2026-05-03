@@ -32,11 +32,55 @@
       vim_mode = false;
       agent = {
         default_model = {
-          provider = "copilot_chat";
-          model = "gpt-5-mini";
+          provider = "openai";
+          model = "desk-nxst-001-qwen3.6-35b-a3b";
         };
-        # inline_alternatives = [
-        # ];
+      };
+      # LiteLLM proxy on desk-nxst-001 exposed as an OpenAI-compatible
+      # provider. API key (OPENAI_API_KEY) is injected into the GUI session
+      # at login by the dev.schrodinger.opencode-env LaunchAgent in
+      # modules/darwin/opencode/default.nix — no manual keychain setup needed.
+      language_models = {
+        openai = {
+          api_url = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
+          available_models = [
+            {
+              name = "desk-nxst-001-qwen3.6-35b-a3b";
+              display_name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
+              max_tokens = 131072;
+            }
+            {
+              name = "desk-nxst-004-qwen3-32b";
+              display_name = "Qwen3-32B @ desk-nxst-004 vLLM";
+              max_tokens = 65536;
+            }
+            {
+              name = "gfr-osx26-02-qwen3-coder-next";
+              display_name = "Qwen3-Coder-Next @ GFR exo-02 (MLX)";
+              max_tokens = 131072;
+            }
+            {
+              name = "gfr-osx26-03-qwen3-coder-next";
+              display_name = "Qwen3-Coder-Next @ GFR exo-03 (MLX)";
+              max_tokens = 131072;
+            }
+            {
+              name = "laptop-qwen3-coder";
+              display_name = "Qwen3-Coder-480B @ laptop exo (MLX)";
+              max_tokens = 65536;
+            }
+            {
+              name = "gfr-osx26-02-gpt-oss-120b";
+              display_name = "GPT-OSS 120B @ GFR exo-02 (MLX)";
+              max_tokens = 131072;
+            }
+            {
+              name = "gfr-osx26-03-gpt-oss-120b";
+              display_name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
+              max_tokens = 131072;
+            }
+          ];
+        };
       };
       features = {
         copilot = true;

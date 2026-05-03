@@ -1,11 +1,14 @@
-# opencode user-level config: provider registrations + MCP servers.
+# opencode: binary, plugin install, and user-level config.
 #
-# The opencode binary itself comes from `pkgs.opencode` (stock upstream),
-# added to the HM profile in homes/aarch64-darwin/casazza@*/default.nix.
-# The Schrodinger fork (with its `programs.opencode` darwin module —
-# managedConfig, vertex, apiKeyHelper, telemetry, secrets) was dropped
-# 2026-04-30; everything below is configured at the user-level
-# ~/.config/opencode/opencode.json which stock opencode reads natively.
+# Installs pkgs.opencode, pkgs.opencode-voice, and pkgs.bun into the HM
+# profile and manages ~/.config/opencode/{opencode.json,package.json,...}.
+# The Schrodinger fork (with its `programs.opencode` darwin module) was
+# dropped 2026-04-30; everything below uses stock opencode natively.
+#
+# Also injects OPENAI_API_KEY into the GUI session via a user LaunchAgent
+# so Zed (and other GUI OpenAI-compatible clients) can hit LiteLLM without
+# manual keychain setup. The same key is exported into shells via
+# home.sessionVariablesExtra below.
 #
 # Snowfall auto-discovers this module from modules/darwin/opencode/.
 {
@@ -42,7 +45,57 @@ in
     };
   };
 
+  # Inject OPENAI_API_KEY (= LiteLLM key) into the GUI session so Zed and
+  # other OpenAI-compatible GUI apps see it without manual keychain setup.
+  # Runs at login; the sops secret is always decrypted before login.
+  environment.userLaunchAgents."dev.schrodinger.opencode-env.plist".text = ''
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>Label</key>
+      <string>dev.schrodinger.opencode-env</string>
+      <key>RunAtLoad</key>
+      <true/>
+      <key>ProgramArguments</key>
+      <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>
+          SECRET="${config.sops.secrets.litellm-key-opencode-darwin.path}"
+          if [ -r "$SECRET" ]; then
+            KEY="$(cut -d= -f2- "$SECRET")"
+            launchctl setenv OPENAI_API_KEY "$KEY"
+            launchctl setenv LITELLM_API_KEY_OPENCODE_DARWIN "$KEY"
+          fi
+        </string>
+      </array>
+      <key>StandardOutPath</key>
+      <string>/tmp/opencode-env.log</string>
+      <key>StandardErrorPath</key>
+      <string>/tmp/opencode-env.err</string>
+    </dict>
+    </plist>
+  '';
+
   home-manager.users.${user.name} = {
+    # opencode binary, voice wrapper, and bun (for plugin installs).
+    home.packages = [
+      pkgs.opencode
+      pkgs.opencode-voice
+      pkgs.bun
+    ];
+
+    # Install opencode plugins whenever package.json changes.
+    home.activation.installOpencodePlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      if command -v bun >/dev/null 2>&1 && [[ -f "$HOME/.config/opencode/package.json" ]]; then
+        cd "$HOME/.config/opencode"
+        if [[ ! -d node_modules ]] || [[ package.json -nt node_modules/.package-lock ]]; then
+          $DRY_RUN_CMD bun install --no-summary $VERBOSE_ARG
+        fi
+      fi
+    '';
+
     # Static (non-secret) provider env. AI-SDK's @ai-sdk/azure provider
     # reads AZURE_RESOURCE_NAME to build endpoint URLs.
     home.sessionVariables = {
