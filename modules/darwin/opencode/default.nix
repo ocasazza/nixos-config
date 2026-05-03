@@ -100,10 +100,10 @@ in
         // Override per-session with `/model` to any backend in
         // provider.litellm.models below.
         "agents": {
-          "sisyphus": { "model": "litellm/desk-nxst-001-qwen3.6" },
-          "prometheus": { "model": "litellm/desk-nxst-001-qwen3.6" },
-          "atlas": { "model": "litellm/desk-nxst-001-qwen3.6" },
-          "explore": { "model": "litellm/desk-nxst-001-qwen3.6" }
+      "sisyphus": { "model": "litellm/desk-nxst-001-qwen3-next-80b" },
+      "prometheus": { "model": "litellm/desk-nxst-001-qwen3-next-80b" },
+      "atlas": { "model": "litellm/desk-nxst-001-qwen3-next-80b" },
+      "explore": { "model": "litellm/desk-nxst-001-qwen3-next-80b" }
         },
         "disabled_hooks": [],
         "mcp": {
@@ -120,7 +120,7 @@ in
           "$schema" = "https://opencode.ai/config.json";
           # Default model: desk-nxst-001 vLLM (Qwen3-Coder-30B, 262k context).
           # No smart-routing — all backends are explicit aliases below.
-          model = "litellm/desk-nxst-001-qwen3.6";
+          model = "litellm/desk-nxst-001-qwen3-next-80b";
           # Disable the in-TUI auto-update prompt — supervisor-spawned
           # sessions can't dismiss it and end up wedged on the modal.
           autoupdate = false;
@@ -188,10 +188,10 @@ in
             # the LiteLLM side first (nixstation modules/nixos/litellm) and
             # mirror here.
             models = {
-              "desk-nxst-001-qwen3.6" = {
-                name = "Qwen3.6 @ desk-nxst-001 vLLM";
+              "desk-nxst-001-qwen3-next-80b" = {
+                name = "Qwen3-Next-80B @ desk-nxst-001 vLLM";
                 limit = {
-                  context = 262144;
+                  context = 8192;
                   output = 8192;
                 };
               };

@@ -1143,7 +1143,7 @@ in
             "      - \"local-coder\""
             "      - \"embedding\""
             "      # Individual backend aliases (for direct pinning):"
-            "      - \"desk-nxst-001-qwen3.6\""
+            "      - \"desk-nxst-001-qwen3-next-80b\""
             "      - \"desk-nxst-004-qwen3-coder\""
             "      - \"gfr-osx26-02-qwen3-coder\""
             "      - \"gfr-osx26-03-qwen3-coder\""
