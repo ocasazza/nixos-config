@@ -47,7 +47,7 @@
             {
               name = "desk-nxst-001-qwen3.6-35b-a3b";
               display_name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
-              max_tokens = 131072;
+              max_tokens = 32768;
             }
             {
               name = "desk-nxst-004-qwen3-32b";

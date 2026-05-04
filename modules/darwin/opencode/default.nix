@@ -232,7 +232,7 @@ in
                   name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
                   limit = {
                     context = 131072;
-                    output = 131072;
+                    output = 32768;
                   };
                 };
                 "desk-nxst-004-qwen3-32b" = {
