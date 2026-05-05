@@ -165,7 +165,8 @@ in
     localModel = "mlx-community/Qwen3-Coder-Next-8bit";
     exo.enable = true; # cluster-wide — see comment block above
     exo.apiPort = 52415;
-    delegation.useVertexProxy = false; # exo cluster handles local subagent
+    delegation.useVertexProxy = false; # local LLM via LiteLLM router
+    delegation.model = "local-coder"; # resilient group: desk-nxst-001 vLLM primary, gfr exo fallback
     auxiliary.useVertexProxy = true; # vision/web/approval: vertex haiku
 
     # Compression: trigger earlier (0.60 vs default 0.70) so the summary

@@ -1209,7 +1209,7 @@ in
                 "# Subagent delegation: local LLM (LiteLLM router when enabled)"
                 "delegation:"
                 "  base_url: \"${localBaseUrl}\""
-                "  model: \"${localModelName}\""
+                "  model: \"${cfg.delegation.model}\""
                 "  api_key: \"${localApiKey}\""
                 "  max_iterations: ${toString cfg.delegation.maxIterations}"
                 "  default_toolsets: [${
