@@ -79,6 +79,26 @@
               display_name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
               max_tokens = 131072;
             }
+            {
+              name = "desk-nxst-004-qwen3-embedding";
+              display_name = "Qwen3-Embedding-0.6B @ desk-nxst-004";
+              max_tokens = 2048;
+            }
+            {
+              name = "pdx-nxst-001-qwen3-32b";
+              display_name = "Qwen3-32B @ pdx-nxst-001 vLLM";
+              max_tokens = 65536;
+            }
+            {
+              name = "pdx-nxst-002-qwen3-32b";
+              display_name = "Qwen3-32B @ pdx-nxst-002 vLLM";
+              max_tokens = 65536;
+            }
+            {
+              name = "pdx-nxst-002-qwen3-embedding";
+              display_name = "Qwen3-Embedding-0.6B @ pdx-nxst-002";
+              max_tokens = 2048;
+            }
           ];
         };
       };

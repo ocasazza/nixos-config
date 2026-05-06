@@ -40,7 +40,7 @@ let
   # Model name hermes uses for "local" completions. When LiteLLM is in
   # the path, hermes talks to LiteLLM's router by model-GROUP name, not
   # by the underlying model id — the group maps to the right backend in
-  # desk-nxst-001's host config. Defaults to `local-coder` (burst-safe)
+  # desk-nxst-001's host config. Defaults to `desk-nxst-001-qwen3.6-35b-a3b` (burst-safe)
   # but host configs can override via `local.hermes.litellm.defaultLocalGroup`.
   localModelName = if cfg.litellm.enable then cfg.litellm.defaultLocalGroup else cfg.localModel;
 
@@ -590,11 +590,9 @@ in
         type = types.str;
         default = lib.salt.ai.providers.litellm.defaultLocalGroup;
         description = ''
-          LiteLLM model-group name hermes refers to when picking a
+          LiteLLM model alias hermes refers to when picking a
           "local" model (delegation in non-vertex mode, auxiliary
-          in non-vertex mode). Only option: local-coder (resolves to
-          all self-hosted Qwen models; desk-nxst-001 vLLM primary,
-          gfr exo cluster fallback).
+          in non-vertex mode). Defaults to desk-nxst-001-qwen3.6-35b-a3b.
         '';
       };
     };
@@ -1139,7 +1137,9 @@ in
             "      - \"gfr-osx26-02-gpt-oss-120b\""
             "      - \"gfr-osx26-03-gpt-oss-120b\""
             "      - \"desk-nxst-004-qwen3-embedding\""
-            "      - \"local-coder\""
+            "      - \"pdx-nxst-001-qwen3-32b\""
+            "      - \"pdx-nxst-002-qwen3-32b\""
+            "      - \"pdx-nxst-002-qwen3-embedding\""
           ]
           ++ optionals (cfg.exo.enable && !cfg.litellm.enable) [
             "  # exo distributed inference cluster (only when LiteLLM is disabled)"

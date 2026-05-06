@@ -166,7 +166,7 @@ in
     exo.enable = true; # cluster-wide — see comment block above
     exo.apiPort = 52415;
     delegation.useVertexProxy = false; # local LLM via LiteLLM router
-    delegation.model = "local-coder"; # resilient group: desk-nxst-001 vLLM primary, gfr exo fallback
+    delegation.model = "desk-nxst-001-qwen3.6-35b-a3b"; # explicit alias — no smart-routing
     auxiliary.useVertexProxy = true; # vision/web/approval: vertex haiku
 
     # Compression: trigger earlier (0.60 vs default 0.70) so the summary
@@ -174,13 +174,13 @@ in
     # context compression itself never hits cloud/vertex as an automatic
     # fallback — the user explicitly decides when to invoke cloud paths.
     compression.threshold = "0.60";
-    compression.summaryModel = "litellm/local-coder";
+    compression.summaryModel = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'
-    # local-routing path (`local-coder`/`embedding` model
-    # groups) authenticates against desk-nxst-001:4000/v1 and unlocks
-    # the rest of the GPU pool fronted by LiteLLM. Without it, only
-    # /vertex/v1 (gcloud id-token, no virtual key) is reachable.
+    # local-routing path (explicit model aliases / embedding) authenticates
+    # against desk-nxst-001:4000/v1 and unlocks the rest of the GPU pool
+    # fronted by LiteLLM. Without it, only /vertex/v1 (gcloud id-token,
+    # no virtual key) is reachable.
     # Use the Caddy proxy endpoint (:8080/litellm) so no local SSH tunnel
     # is required.
     litellm.endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
@@ -297,9 +297,9 @@ in
   #
   # So claude-code talks straight to vertex-proxy with a gcloud
   # id-token from apiKeyHelper. We lose Phoenix attribution for
-  # cloud-claude calls (acceptable). Local model groups (local-coder,
-  # embedding) still route through desk-nxst-001's /v1 with
-  # per-host virtual keys and DO get per-key attribution, but
+  # cloud-claude calls (acceptable). Local model aliases (explicit
+  # host-model names, embedding) still route through desk-nxst-001's
+  # /v1 with per-host virtual keys and DO get per-key attribution, but
   # neither claude-code nor opencode calls those today \u2014
   # they're consumed by hermes / ingest / open-webui instead.
   programs.claude-code = {

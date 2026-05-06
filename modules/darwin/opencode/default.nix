@@ -284,6 +284,27 @@ in
                     output = 32768;
                   };
                 };
+                "pdx-nxst-001-qwen3-32b" = {
+                  name = "Qwen3-32B @ pdx-nxst-001 vLLM";
+                  limit = {
+                    context = 65536;
+                    output = 65536;
+                  };
+                };
+                "pdx-nxst-002-qwen3-32b" = {
+                  name = "Qwen3-32B @ pdx-nxst-002 vLLM";
+                  limit = {
+                    context = 65536;
+                    output = 65536;
+                  };
+                };
+                "pdx-nxst-002-qwen3-embedding" = {
+                  name = "Qwen3-Embedding-0.6B @ pdx-nxst-002";
+                  limit = {
+                    context = 2048;
+                    output = 0;
+                  };
+                };
               };
             };
             # oMLX local inference server (localhost:8000/v1). Apple-Silicon-optimized

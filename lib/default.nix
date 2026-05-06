@@ -101,10 +101,10 @@ in
         endpoint = "http://desk-nxst-001.schrodinger.com:4000";
         localEndpoint = "http://localhost:4000";
         caddyEndpoint = "http://desk-nxst-001.schrodinger.com:8080/litellm";
-        defaultLocalGroup = "local-coder";
+        defaultLocalGroup = "desk-nxst-001-qwen3.6-35b-a3b";
         defaultCloudGroup = "coder-cloud-claude";
         modelGroups = {
-          local-coder = "local-coder";
+          "desk-nxst-001-qwen3.6-35b-a3b" = "desk-nxst-001-qwen3.6-35b-a3b";
           coder-cloud-claude = "coder-cloud-claude";
           embedding = "embedding";
         };
@@ -143,7 +143,7 @@ in
 
     models = {
       claudeOpus = "claude-opus-4-7";
-      claudeSonnet = "claude-sonnet-4-6";
+      claudeSonnet = "claude-sonnet-4-7";
       claudeHaiku = "claude-haiku-4-5";
       gemini3Pro = "gemini-3-pro";
       gemini3Flash = "gemini-3-flash";

@@ -24,10 +24,7 @@ in
           package = pkgs.oh-my-zsh;
           plugins = [
             "git"
-            "zsh-autosuggestions"
-            "zsh-syntax-highlighting"
             "history-substring-search"
-            "zsh-you-should-use"
           ];
         };
 
@@ -49,6 +46,21 @@ in
             name = "fzf-tab";
             src = pkgs.zsh-fzf-tab;
             file = "share/fzf-tab/fzf-tab.plugin.zsh";
+          }
+          {
+            name = "zsh-autosuggestions";
+            src = pkgs.zsh-autosuggestions;
+            file = "share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.plugin.zsh";
+          }
+          {
+            name = "zsh-syntax-highlighting";
+            src = pkgs.zsh-syntax-highlighting;
+            file = "share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh";
+          }
+          {
+            name = "zsh-you-should-use";
+            src = pkgs.zsh-you-should-use;
+            file = "share/zsh/plugins/you-should-use/you-should-use.plugin.zsh";
           }
         ];
 
