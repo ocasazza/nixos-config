@@ -5,172 +5,153 @@
   ...
 }:
 
-# zsh: shell + completion + plugins. Snowfall auto-discovers this
-# module and applies it to every HM user. We derive `hostName` from
-# `osConfig.networking.hostName` when available (every real deploy
-# runs HM inside a NixOS/darwin eval) and fall back to `null` so
-# pure-HM contexts (if any ever exist) don't crash.
+# zsh: shell + completion + plugins (oh-my-zsh framework).
+# Snowfall auto-discovers this module and applies it to every HM user.
+# We derive hostName from osConfig.networking.hostName for darwin-specific
+# features (nds function) and fall back to null so pure-HM contexts don't crash.
 let
   hostName = if osConfig != null then osConfig.networking.hostName else null;
 in
 {
   programs.zsh = {
     enable = true;
-    completionInit = ''
-      # extra completion definitions (nix, docker, git, etc.)
-      fpath=(${pkgs.zsh-completions}/share/zsh/site-functions $fpath)
-      fpath=(${pkgs.nix-zsh-completions}/share/zsh/site-functions $fpath)
-      fpath=(~/.zsh/completions $fpath)
-      autoload -Uz compinit && compinit
-    '';
-    initContent = ''
-      # ── zellij auto-attach (local only) ───────────────────────
-      # Attach to an existing zellij session (or create one) ONLY when
-      # we're in a LOCAL interactive shell — never on SSH. Otherwise
-      # every `ssh <host>` lands in the same existing pane as the prior
-      # SSH connection, mirroring input/output. $SSH_CONNECTION is set
-      # by sshd; absence means this is a local login.
-      if [[ -z "''${SSH_CONNECTION:-}" && -z "''${SSH_CLIENT:-}" ]]; then
-        export ZELLIJ_AUTO_ATTACH=true
-        export ZELLIJ_AUTO_EXIT=true
-      fi
 
-      # ── completion system tuning ──────────────────────────────
-      # case-insensitive, partial-word, and substring completion
-      zstyle ':completion:*' matcher-list \
-        'm:{a-zA-Z}={A-Za-z}' \
-        'r:|[._-]=* r:|=*' \
-        'l:|=* r:|=*'
-      # menu-driven completion with selection highlight
-      zstyle ':completion:*' menu select
-      # group completions by category with headers
-      zstyle ':completion:*' group-name '''
-      zstyle ':completion:*:descriptions' format '%F{yellow}── %d ──%f'
-      # colorize file completions like ls
-      zstyle ':completion:*' list-colors ''${(s.:.)LS_COLORS}
-
-      # ── fzf-tab settings ──────────────────────────────────────
-      # use tmux popup if available, otherwise default fzf
-      zstyle ':fzf-tab:*' fzf-flags --height=40% --layout=reverse --border
-      # preview directory contents and file heads
-      zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls -1 --color=always $realpath'
-      zstyle ':fzf-tab:complete:ls:*' fzf-preview 'ls -1 --color=always $realpath'
-      zstyle ':fzf-tab:complete:*:*' fzf-preview \
-        '[[ -d $realpath ]] && ls -1 --color=always $realpath || [[ -f $realpath ]] && bat --style=numbers --color=always --line-range :50 $realpath 2>/dev/null || echo $realpath'
-      # switch groups with < and >
-      zstyle ':fzf-tab:*' switch-group '<' '>'
-      # accept selection on enter instead of just inserting
-      zstyle ':fzf-tab:*' fzf-bindings 'enter:accept'
-
-      # ── custom functions ──────────────────────────────────────
-      # Wrapper for just package command with path completion
-      pkg() {
-        local env="''${1:-prod}"
-        local path="$2"
-        local dry_run="''${3:-true}"
-
-        if [[ -z "$path" ]]; then
-          echo "Usage: pkg [ENV] SOFTWARE_DIR [DRY_RUN]"
-          echo "Example: pkg prod lib/software/appgate/macos"
-          echo "Example: pkg prod lib/software/appgate/macos false"
-          return 1
-        fi
-
-        just ops::package "$env" "$path" "$dry_run"
-      }
-
-      # Custom completion for pkg command
-      _pkg() {
-        local -a args
-        args=(
-          '1:environment:(prod staging local)'
-          '2:software directory:_files -/'
-          '3:dry run:(true false)'
-        )
-        _arguments $args
-      }
-      compdef _pkg pkg
-
-      # history substring search keybindings (up/down arrows)
-      bindkey '^[[A' history-substring-search-up
-      bindkey '^[[B' history-substring-search-down
-
-      # ── Cheatsheet toggle ────────────────────────────────────
-      # Lives as a sketchybar popup item (`cheatsheet`) on the right
-      # side of the bar. `cheat` flips its visibility; click the
-      # keyboard glyph in the bar for the same effect.
-      if [[ "$OSTYPE" == "darwin"* ]] && command -v sketchybar >/dev/null 2>&1; then
-        cheat() { sketchybar --set cheatsheet popup.drawing=toggle; }
-      fi
-    ''
-    + lib.optionalString (hostName != null && pkgs.stdenv.isDarwin) ''
-
-      # ── nds: rebuild + refresh HM session vars in-place ───────
-      # Defined as a function (not an alias) so it can mutate the
-      # current shell's environment after `nh darwin switch`. The
-      # hm-session-vars.sh guard (__HM_SESS_VARS_SOURCED) latches
-      # at first source and is INHERITED by any child shell, so a
-      # plain `exec zsh` after `nds` keeps the stale guard and
-      # silently skips the new exports. Unsetting both guards before
-      # re-sourcing ~/.zshenv picks up freshly-added vars (e.g.
-      # AZURE_API_KEY) without needing a brand-new terminal window.
-      nds() {
-        nh darwin switch --elevation-strategy /usr/bin/sudo "$HOME/.config/nixos-config#${hostName}" "''$@" || return ''$?
-        unset __HM_SESS_VARS_SOURCED __HM_ZSH_SESS_VARS_SOURCED
-        [ -r "$HOME/.zshenv" ] && . "$HOME/.zshenv"
-        print -P "%F{green}nds: HM session vars refreshed%f"
-      }
-    '';
-    autosuggestion = {
+    # ── Oh-My-Zsh configuration ───────────────────────────────
+    ohMyZsh = {
       enable = true;
-      strategy = [
-        "history"
-        "completion"
+      template = "${pkgs.oh-my-zsh}/share/oh-my-zsh/templates/zshrc.oh-my-zsh.template";
+      plugins = [
+        "git"
+        "zsh-autosuggestions"
+        "zsh-syntax-highlighting"
+        "history-substring-search"
+        "zsh-you-should-use"
       ];
     };
-    syntaxHighlighting.enable = true;
-    historySubstringSearch.enable = true;
+
+    # ── Init before compinit (OMZ calls compinit) ─────────────
+    initExtraBeforeCompInit = ''
+      # ── fzf-tab completion sources ──
+      fpath=(\
+        ${pkgs.zsh-fzf-tab}/share/fzf-tab \
+        ${pkgs.zsh-completions}/share/zsh/site-functions \
+        ${pkgs.nix-zsh-completions}/share/zsh/site-functions \
+        ~/.zsh/completions \
+        $fpath\
+      )
+    '';
+
+    # Custom plugins (sourced after compinit; separate from oh-my-zsh)
     plugins = [
       {
-        # fzf-based tab completion - must load before autosuggestions
         name = "fzf-tab";
         src = pkgs.zsh-fzf-tab;
         file = "share/fzf-tab/fzf-tab.plugin.zsh";
       }
-      {
-        # reminds you to use aliases you've already defined
-        name = "zsh-you-should-use";
-        src = pkgs.zsh-you-should-use;
-        file = "share/zsh/plugins/zsh-you-should-use/you-should-use.plugin.zsh";
-      }
     ];
+
+    # ── Init after compinit (main zsh config) ────────────────
+    initExtra = ''
+      # ── completion tuning ──────────────────────────────────
+      zstyle ':completion:*' matcher-list \
+        'm:{a-zA-Z}={A-Za-z}' \
+        'r:|[._-]=* r:|=*' \
+        'l:|=* r:|=*'
+      zstyle ':completion:*' menu select
+      zstyle ':completion:*' group-name ""
+      zstyle ':completion:*:descriptions' format '%F{yellow}── %d ──%f'
+      zstyle ':completion:*' list-colors ''${(s.:.)LS_COLORS}
+
+      # ── fzf-tab settings ───────────────────────────────────
+      zstyle ':fzf-tab:*' fzf-flags --height=40% --layout=reverse --border
+      zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls -1 --color=always $realpath'
+      zstyle ':fzf-tab:complete:ls:*' fzf-preview 'ls -1 --color=always $realpath'
+      zstyle ':fzf-tab:complete:*:*' fzf-preview \
+        '[[ -d $realpath ]] && ls -1 --color=always $realpath || [[ -f $realpath ]] && bat --style=numbers --color=always --line-range :50 $realpath 2>/dev/null || echo $realpath'
+      zstyle ':fzf-tab:*' switch-group '<' '>'
+      zstyle ':fzf-tab:*' fzf-bindings 'enter:accept'
+
+      # ── history substring search keybindings ───────────────
+      bindkey '^[[A' history-substring-search-up
+      bindkey '^[[B' history-substring-search-down
+      bindkey '^p' history-substring-search-up
+      bindkey '^n' history-substring-search-down
+
+      # ── escape-timeout for vim-mode compatibility ──────────
+      export ESCAPE_TIME=100
+
+      # ── zellij auto-attach (local only, never on SSH) ──────
+      if [[ -z ''${SSH_CONNECTION:-} && -z ''${SSH_CLIENT:-} ]]; then
+        export ZELLIJ_AUTO_ATTACH=true
+        export ZELLIJ_AUTO_EXIT=true
+      fi
+
+      # ── carapace completions ───────────────────────────────
+      if command -v carapace >/dev/null 2>&1; then
+        eval "$(carapace _carapace zsh)"
+      fi
+
+      # ── pkg function with completion ───────────────────────
+      pkg() {
+        local env="''${1:-prod}"
+        local path="$2"
+        local dry_run="''${3:-true}"
+        if [[ -z "$path" ]]; then
+          echo "Usage: pkg [ENV] SOFTWARE_DIR [DRY_RUN]"
+          return 1
+        fi
+        just ops::package "$env" "$path" "$dry_run"
+      }
+      _pkg() {
+        _arguments \
+          '1:environment:(prod staging local)' \
+          '2:software directory:_files -/' \
+          '3:dry run:(true false)'
+      }
+      compdef _pkg pkg
+
+      # ── Cheatsheet toggle (darwin only) ────────────────────
+      if [[ ''${OSTYPE} == "darwin"* ]] && command -v sketchybar >/dev/null 2>&1; then
+        cheat() { sketchybar --set cheatsheet popup.drawing=toggle; }
+      fi
+    '';
+
+    # ── History settings ──────────────────────────────────────
     history = {
-      append = true; # parallel history until shell exit
-      ignoreAllDups = true; # remove previous when duplicate commands run
+      append = true;
+      ignoreAllDups = true;
+      size = 10000;
+      save = 10000;
       ignorePatterns = [
         "cd"
         "ls"
         "pwd"
       ];
     };
+
+    # ── Shell aliases ─────────────────────────────────────────
     shellAliases = {
       cat = "bat";
       ls = "ls --color=auto";
     };
-    # NOTE: `nds` is defined as a *function* in initContent (below) on
-    # darwin hosts, NOT as a shell alias. Aliases run in the calling
-    # shell but can't modify its environment after `nh darwin switch`,
-    # so the home-manager session vars don't refresh — leaving fresh
-    # secrets (e.g. AZURE_API_KEY just added to home.sessionVariablesExtra)
-    # invisible until the next `exec zsh`. The function form re-sources
-    # hm-session-vars.sh in-place after a successful activation.
+
+    # ── Session variables ─────────────────────────────────────
     sessionVariables = {
       EDITOR = "nvim";
       CLICOLOR = "1";
-      # Zellij auto-attach is gated in initContent (below) on NOT being
-      # in an SSH session — setting these unconditionally here would
-      # make `ssh <host>` land every new shell in the same existing
-      # zellij pane, mirroring input/output across terminals.
     };
+  };
+
+  # ── Darwin-specific: nds function (uses nix interpolation) ──
+  config = lib.mkIf (hostName != null && pkgs.stdenv.isDarwin) {
+    programs.zsh.shellInit = lib.mkAfter ''
+      # ── nds: rebuild + refresh HM session vars in-place ───────
+      nds() {
+        nh darwin switch --elevation-strategy /usr/bin/sudo "$HOME/.config/nixos-config#${hostName}" "$@" || return $?
+        unset __HM_SESS_VARS_SOURCED __HM_ZSH_SESS_VARS_SOURCED
+        [ -r "$HOME/.zshenv" ] && . "$HOME/.zshenv"
+        print -P "%F{green}nds: HM session vars refreshed%f"
+      }
+    '';
   };
 }

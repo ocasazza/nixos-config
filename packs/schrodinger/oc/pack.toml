@@ -1,8 +1,0 @@
-# oc — opencode → LiteLLM provider variant of the schrodinger
-# four-agent setup. Each agent uses opencode pointing at the LiteLLM
-# proxy on desk-nxst-001:4000, with role-based model aliases that
-# LiteLLM resolves to the healthiest backend (cloud first, vLLM/local
-# fallback).
-[pack]
-name = "oc"
-schema = 2
