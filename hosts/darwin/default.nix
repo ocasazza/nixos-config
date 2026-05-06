@@ -536,11 +536,12 @@ in
       # you change one, change the other (or AeroSpace's outer.top will
       # drift out of sync).
       #
-      # The "bottom-border-only" trick: sketchybar only supports a
-      # 4-sided border, so we use `y_offset=-1` to push the bar 1px
-      # above the screen edge — the top/left/right borders fall off-
-      # screen and only the bottom border remains visible as a
-      # divider between the bar and tiled windows below.
+      # `topmost=window` places sketchybar above all windows but below
+      # the native macOS menu bar. The bar sits directly below the
+      # menu bar with no vertical offset (`y_offset=0` is the default).
+      # Combined with `border_width=1` and a transparent `color`, only
+      # the bottom border is visible as a subtle divider between the
+      # bar and the tiled windows below.
       sketchybar --bar \
         height=${toString sketchybarHeight} \
         color=$BAR_COLOR \
@@ -552,7 +553,6 @@ in
         padding_left=6 \
         padding_right=6 \
         topmost=window \
-        y_offset=-1 \
         margin=0 \
         corner_radius=0
 
