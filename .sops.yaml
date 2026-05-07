@@ -104,3 +104,16 @@ creation_rules:
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
           - *host_l75t4yhxv7_mba
+  # TWG (Atlassian Teamwork Graph CLI) authentication. Three secrets needed:
+  #   - atlassian-email: Atlassian account email
+  #   - atlassian-api-token: API token from Atlassian
+  #   - atlassian-site: Site name (e.g., "schrodinger" for schrodinger.atlassian.net)
+  # These are used to generate ~/.config/twg/auth.conf declaratively.
+  - path_regex: secrets/(atlassian-email|atlassian-api-token|atlassian-site)\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba

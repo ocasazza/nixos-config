@@ -1,53 +1,6 @@
-# casazza on every aarch64-darwin host (all 4 cluster Macs).
-#
-# See homes/x86_64-linux/casazza/default.nix for how snowfall's home
+# See `homes/aarch64-darwin/casazza` for how snowfall's home
 # matching works. This file applies to every Darwin system because it
 # has no `@host` suffix in its directory name.
 #
-# For per-host overrides, create `homes/aarch64-darwin/casazza@<host>/`
-# (e.g. one with extra brews or a different terminal pinned).
-{
-  config,
-  pkgs,
-  lib,
-  inputs,
-  ...
-}:
-
-let
-  user = lib.salt.user;
-
-  sharedFiles = import ../../../modules/shared/files { inherit config pkgs user; };
-  additionalFiles = import ../../../modules/_darwin-support/files { inherit config pkgs user; };
-in
-{
-  imports = [
-    inputs.nix4nvchad.homeManagerModule
-    # Provides `programs.gascity` and `programs.beads` HM options.
-    # Snowfall auto-applies `modules/home/gascity/default.nix`, which
-    # flips both on for the fleet.
-    inputs.gascity-flake.homeManagerModules.default
-  ];
-
-  home = {
-    stateVersion = "23.11";
-
-    packages = [
-    ];
-
-    file = lib.mkMerge [
-      sharedFiles
-      additionalFiles
-    ];
-  };
-
-  programs = {
-    # Pin ghostty to the prebuilt binary on Darwin (the source build
-    # via the ghostty flake input is slow and does not benefit from
-    # the binary cache the same way). The rest of the ghostty config
-    # lives in `modules/home/ghostty`, auto-applied via snowfall.
-    ghostty.package = lib.mkForce pkgs.ghostty-bin;
-  };
-
-  manual.manpages.enable = false;
-}
+# For per-host home-manager overrides, add below
+{ ... }: { }

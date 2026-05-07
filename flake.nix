@@ -175,6 +175,10 @@
         (_final: prev: {
           opencode-voice = prev.callPackage ./packages/opencode-voice { };
         })
+        # twg — Atlassian Teamwork Graph CLI for Jira/Confluence/Bitbucket
+        (_final: prev: {
+          twg = prev.callPackage ./packages/twg { };
+        })
         # gascity (`gc`) + beads (`bd`) — sourced from the standalone
         # gascity-flake (overlays.default exposes both packages on pkgs).
         inputs.gascity-flake.overlays.default
