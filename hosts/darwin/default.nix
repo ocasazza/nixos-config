@@ -260,6 +260,8 @@ in
     # Memory limits: increase for larger context models
     memoryCharLimit = 8192;
     userCharLimit = 4096;
+
+    skin = "schrodinger";
   };
 
   # oMLX local inference server with continuous batching & tiered KV cache.

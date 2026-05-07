@@ -784,6 +784,16 @@ in
       '';
     };
 
+    skin = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Hermes display skin name (e.g. "schrodinger", "cyberpunk", "ares").
+        Skins are YAML files placed at ~/.hermes/skins/<name>.yaml.
+        Leave null to use the default skin.
+      '';
+    };
+
     exo = {
       enable = mkEnableOption "exo distributed inference cluster (alternative to Ollama)";
 
@@ -1351,6 +1361,11 @@ in
             "  show_reasoning: ${if cfg.display.showReasoning then "true" else "false"}"
             "  tool_progress: \"${cfg.display.toolProgress}\""
             "  inline_diffs: true"
+          ]
+          ++ optionals (cfg.skin != null) [
+            "  skin: \"${cfg.skin}\""
+          ]
+          ++ [
             ""
             "security:"
             "  redact_secrets: true"
@@ -1444,6 +1459,113 @@ in
     # SOUL.md: global agent identity (only written when soulMd option is set)
     (mkIf (cfg.soulMd != "") {
       home-manager.users.${user.name}.home.file.".hermes/SOUL.md".text = cfg.soulMd;
+    })
+
+    # Custom display skins: ~/.hermes/skins/<name>.yaml
+    (mkIf (cfg.skin != null) {
+      home-manager.users.${user.name}.home.file.".hermes/skins/${cfg.skin}.yaml".text =
+        builtins.readFile (
+          pkgs.writeText "${cfg.skin}-skin.yaml" ''
+            name: ${cfg.skin}
+            description: Schrodinger Inc. — physics-based molecular discovery & drug design theme
+            colors:
+              banner_border: "#1032CF"
+              banner_title: "#FFFFFF"
+              banner_accent: "#A6DDF5"
+              banner_dim: "#534698"
+              banner_text: "#E8EDF5"
+              ui_accent: "#2A4EEF"
+              ui_label: "#1032CF"
+              ui_ok: "#4CAF50"
+              ui_error: "#EF5350"
+              ui_warn: "#F37C28"
+              prompt: "#E8EDF5"
+              input_rule: "#1032CF"
+              response_border: "#2A4EEF"
+              status_bar_bg: "#12122D"
+              status_bar_text: "#E8EDF5"
+              status_bar_strong: "#A6DDF5"
+              status_bar_dim: "#534698"
+              status_bar_good: "#4CAF50"
+              status_bar_warn: "#F37C28"
+              status_bar_bad: "#2A4EEF"
+              status_bar_critical: "#EF5350"
+              voice_status_bg: "#12122D"
+              completion_menu_bg: "#0D0D22"
+              completion_menu_current_bg: "#1A1A45"
+              completion_menu_meta_bg: "#12122D"
+              completion_menu_meta_current_bg: "#1E1E50"
+              session_label: "#2A4EEF"
+              session_border: "#534698"
+            spinner:
+              waiting_faces:
+                - "(⚛)"
+                - "(◈)"
+                - "(◎)"
+                - "(⊕)"
+                - "(⬡)"
+              thinking_faces:
+                - "(⚛)"
+                - "(◈)"
+                - "(◎)"
+                - "(⌁)"
+                - "(⊕)"
+              thinking_verbs:
+                - "simulating conformation"
+                - "computing binding affinity"
+                - "running FEP+ calculation"
+                - "optimizing scaffold"
+                - "mapping electron density"
+                - "sampling molecular dynamics"
+                - "equilibrating system"
+                - "minimizing energy"
+              wings:
+                - ["⟪⚛", "⚛⟫"]
+                - ["⟪◈", "◈⟫"]
+                - ["⟪⊕", "⊕⟫"]
+                - ["⟪⬡", "⬡⟫"]
+            branding:
+              agent_name: "Schrodinger Agent"
+              welcome: "Welcome to Schrödinger. Physics-based AI for molecular discovery. Type your message or /help for commands."
+              goodbye: "Until next simulation. ⚛"
+              response_label: " ⚛ Schrodinger "
+              prompt_symbol: "⚛ ❯ "
+              help_header: "(⚛) Available Commands"
+            tool_prefix: "│"
+            tool_emojis:
+              terminal: "⚙"
+              web_search: "◎"
+              read_file: "◇"
+              write_file: "◆"
+              search_files: "⊕"
+              execute_code: "⌁"
+              browser_navigate: "◈"
+              delegate_task: "▣"
+              mixture_of_agents: "⚛"
+              memory: "◐"
+              clarify: "?"
+              cronjob: "↻"
+              process: "⚙"
+              todo: "☐"
+            banner_logo: |
+              [#2A4EEF]  ⚛[/]  [bold #E8EDF5]S C H R Ö D I N G E R[/]
+            banner_hero: |
+              [dim #534698]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+              [dim #534698]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠞⠛⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⢷⣄⠀⠀⠀⠀⠀⠀⠀[/]
+              [dim #534698]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⢦⡀⠀⠀⠀⠀[/]
+              [dim #534698]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣤⣤⣤⣤⣤⣤⣤⣤⣄⠀⠀⠀⠀⠀⠈⢻⡆⠀⠀[/]
+              [#1032CF]⠀⠀⠀⠀⠀⠀⠀⢀⡴⠋⠀⠀⠀⠀⠀⠀⢀⡴⠟⠁⠀⠀⠀⠀⠈⠙⠻⢷⣤⣤⣤⡿⠟⠁⠀⠀⠀⠀⠀⢀⡴⠋⠀⠀[/]
+              [#2A4EEF]⠀⠀⢀⡴⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⢠⠟⠁⠀⠀⠀⠀⢀⡴⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠞⠁⠀⠀⠀⠀[/]
+              [bold #2A4EEF]⢠⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠋⠀⠀⠀⠀⢀⡴⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠋⠀⠀⠞⠁⠀⠀⠀⠀⠀⠀[/]
+              [bold #1032CF]⠈⠙⢷⣤⣀⣀⣀⡴⠋⠀⠀⠈⠙⢦⣄⣀⡴⠟⠁⠀⠀⠀⠀⢀⡴⠋⠀⠀⢀⡴⠋⠀⠀⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+              [bold #A6DDF5]⠀⠀⠀⠈⠙⠻⢦⣤⣀⣀⣀⡴⠋⠀⠀⠈⠙⠻⢷⣤⣀⣀⣀⡴⠋⠀⠀⢀⡴⠋⠀⠀⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+              [bold #A6DDF5]⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⢦⣤⣀⣀⣀⡴⠋⠀⠀⠈⠙⠻⢦⣤⣀⣀⣀⡴⠋⠀⠀⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+              [#2A4EEF]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⢦⣤⣀⣀⣀⡴⠋⠀⠀⠈⠙⠻⢷⣤⣀⣀⣀⡴⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+              [dim #534698]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⢦⣤⣀⣀⣀⡴⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+              [dim #534698]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⢦⣤⣤⣤⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+              [bold #2A4EEF]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⚛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⚛[/]
+          ''
+        );
     })
 
     # NixOS (Linux): Ollama as a systemd service
