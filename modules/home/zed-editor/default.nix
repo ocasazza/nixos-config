@@ -41,6 +41,7 @@
       # at login by the dev.schrodinger.opencode-env LaunchAgent in
       # modules/darwin/opencode/default.nix — no manual keychain setup needed.
       language_models = {
+        # LiteLLM router (local vLLM models + cloud routing)
         openai = {
           api_url = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
           available_models = [
@@ -98,6 +99,67 @@
               name = "pdx-nxst-002-qwen3-embedding";
               display_name = "Qwen3-Embedding-0.6B @ pdx-nxst-002";
               max_tokens = 2048;
+            }
+          ];
+        };
+
+        # Anthropic (Claude) via vertex-proxy
+        anthropic = {
+          api_url = "${lib.salt.ai.providers.vertex.proxyEndpoint}";
+          available_models = [
+            {
+              name = "${lib.salt.ai.models.claudeSonnet}";
+              display_name = "Claude Sonnet 4.7 (Vertex)";
+              max_tokens = 200000;
+            }
+            {
+              name = "${lib.salt.ai.models.claudeOpus}";
+              display_name = "Claude Opus 4.7 (Vertex)";
+              max_tokens = 200000;
+            }
+            {
+              name = "${lib.salt.ai.models.claudeHaiku}";
+              display_name = "Claude Haiku 4.5 (Vertex)";
+              max_tokens = 200000;
+            }
+          ];
+        };
+
+        # Google Gemini via vertex-proxy
+        google = {
+          api_url = "${lib.salt.ai.providers.vertex.proxyEndpoint}";
+          available_models = [
+            {
+              name = "${lib.salt.ai.models.gemini25Pro}";
+              display_name = "Gemini 2.5 Pro (Vertex)";
+              max_tokens = 1000000;
+            }
+            {
+              name = "${lib.salt.ai.models.gemini25Flash}";
+              display_name = "Gemini 2.5 Flash (Vertex)";
+              max_tokens = 1000000;
+            }
+            {
+              name = "${lib.salt.ai.models.gemini3Pro}";
+              display_name = "Gemini 3.0 Pro (Vertex)";
+              max_tokens = 2000000;
+            }
+            {
+              name = "${lib.salt.ai.models.gemini3Flash}";
+              display_name = "Gemini 3.0 Flash (Vertex)";
+              max_tokens = 1000000;
+            }
+          ];
+        };
+
+        # Local oMLX server (workstation only)
+        ollama = {
+          api_url = "${lib.salt.ai.providers.omlx.baseURL}";
+          available_models = [
+            {
+              name = "qwen3-coder";
+              display_name = "Qwen3-Coder (Local MLX)";
+              max_tokens = 65536;
             }
           ];
         };

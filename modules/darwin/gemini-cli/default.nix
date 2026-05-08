@@ -1,42 +1,145 @@
-# Gemini CLI configuration: Vertex AI auth + shared provider settings.
-#
-# Gemini CLI uses `GOOGLE_GENAI_USE_VERTEXAI=true` to route through
-# Vertex AI (Application Default Credentials). Unlike opencode/claude-code,
-# gemini-cli doesn't support a custom proxy baseURL — it talks to
-# Vertex AI directly via the @google/genai SDK.
-#
-# Auth: `gcloud auth application-default login` (one-time setup).
-# The identity token helper used by claude-code/opencode (gcloud auth
-# print-identity-token) is NOT used here — gemini-cli handles its own
-# Vertex AI auth via ADC.
+# Gemini CLI configuration: support for Vertex AI, Google Sign-in (OAuth), and API Keys.
 #
 # Snowfall auto-discovers this module from modules/darwin/gemini-cli/.
 {
+  config,
   lib,
   pkgs,
   ...
 }:
 
 let
+  cfg = config.programs.gemini-cli;
+  ai = config.local.ai;
   user = lib.salt.user;
+
+  # Use unified defaults if not overridden
+  vertexProjectIdResolved =
+    if cfg.vertex.projectId != "" then cfg.vertex.projectId else ai.providers.gemini.projectId;
+  vertexRegionResolved =
+    if cfg.vertex.region != "" then cfg.vertex.region else ai.providers.gemini.location;
 in
 {
-  home-manager.users.${user.name} = {
-    # Vertex AI env vars for gemini-cli. These are the same project/region
-    # that opencode and claude-code use via lib.salt.ai.providers.vertex.
-    home.sessionVariables = {
-      GOOGLE_GENAI_USE_VERTEXAI = "true";
-      GOOGLE_CLOUD_PROJECT = lib.salt.ai.providers.vertex.projectId;
-      GOOGLE_CLOUD_LOCATION = lib.salt.ai.providers.vertex.region;
+  options.programs.gemini-cli = {
+    enable = lib.mkEnableOption "Gemini CLI configuration";
+
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.gemini-cli-bin;
+      description = "The gemini-cli package to use.";
     };
 
-    # Managed settings.json: select vertex-ai auth, skip the interactive
-    # auth prompt on first launch.
-    home.file.".gemini/settings.json".source = (pkgs.formats.json { }).generate "gemini-settings.json" {
-      security = {
-        auth = {
-          selectedType = "vertex-ai";
+    authType = lib.mkOption {
+      type = lib.types.enum [
+        "vertex-ai"
+        "oauth-personal"
+        "api-key"
+      ];
+      default = "vertex-ai";
+      description = ''
+        Authentication method to use:
+        * `vertex-ai`: Google Cloud Vertex AI (uses ADC or Service Account).
+        * `oauth-personal`: Standard Google Account sign-in (Sign in with Google).
+        * `api-key`: Gemini API key from AI Studio.
+      '';
+    };
+
+    vertex = {
+      projectId = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "Google Cloud project ID for Vertex AI.";
+      };
+
+      region = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "Google Cloud region for Vertex AI.";
+      };
+    };
+
+    telemetry = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Enable Gemini telemetry.";
+      };
+    };
+
+    sandbox = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Enable Gemini sandbox.";
+      };
+    };
+
+    seatbeltProfile = lib.mkOption {
+      type = lib.types.str;
+      default = "permissive-open";
+      description = "Seatbelt profile for Gemini.";
+    };
+
+    apiKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Sops-decrypted path to the Gemini API key.";
+    };
+
+    serviceAccountKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Optional path to a sops-managed service account JSON key file.";
+    };
+
+    googleAccountsFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Optional path to a sops-managed google_accounts.json file.";
+    };
+
+    oauthCredsFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Optional path to a sops-managed oauth_creds.json file.";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    home-manager.users.${user.name} = {
+      # Environment variables for gemini-cli.
+      # Unified variables are now handled by modules/darwin/ai.
+      home.sessionVariablesExtra = ''
+        export GEMINI_TELEMETRY_ENABLED="${if cfg.telemetry.enable then "true" else "false"}"
+        export GEMINI_SANDBOX="${if cfg.sandbox.enable then "true" else "false"}"
+        export SEATBELT_PROFILE="${cfg.seatbeltProfile}"
+        ${lib.optionalString (cfg.authType == "vertex-ai") "export GOOGLE_GENAI_USE_VERTEXAI=\"true\""}
+        ${lib.optionalString (
+          cfg.authType == "vertex-ai" && cfg.serviceAccountKeyFile != null
+        ) "export GOOGLE_APPLICATION_CREDENTIALS=\"${toString cfg.serviceAccountKeyFile}\""}
+        ${lib.optionalString (cfg.authType == "api-key" && cfg.apiKeyFile != null) ''
+          if [ -r "${toString cfg.apiKeyFile}" ]; then
+            export GEMINI_API_KEY="$(cat "${toString cfg.apiKeyFile}")"
+          fi
+        ''}
+      '';
+
+      # Managed settings.json: select the desired auth type.
+      home.file.".gemini/settings.json".text = builtins.toJSON {
+        security = {
+          auth = {
+            selectedType = cfg.authType;
+          };
         };
+      };
+
+      # Optional credentials files from sops
+      home.file.".gemini/google_accounts.json" = lib.mkIf (cfg.googleAccountsFile != null) {
+        source = cfg.googleAccountsFile;
+      };
+
+      home.file.".gemini/oauth_creds.json" = lib.mkIf (cfg.oauthCredsFile != null) {
+        source = cfg.oauthCredsFile;
       };
     };
   };

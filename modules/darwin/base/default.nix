@@ -1,14 +1,14 @@
 {
   pkgs,
   lib,
-  user,
+  user ? lib.salt.user,
   config,
-  consortium,
+  consortium ? null,
   ...
 }:
 
 let
-  wallpaper = ../../modules/_darwin-support/files/AFRC2017-0233-007-large.jpg;
+  wallpaper = ../../../modules/_darwin-support/files/AFRC2017-0233-007-large.jpg;
   # Sketchybar's pixel height. AeroSpace's `gaps.outer.top` is set to
   # this same value so tiled windows start beneath the bar instead of
   # being clipped by it. Adjust here to keep both in sync.
@@ -21,13 +21,13 @@ let
 in
 {
   imports = [
-    ../../modules/darwin/home-manager.nix
-    ../../modules/darwin/power
-    ../../modules/shared
-    ../../modules/shared/cachix
-    ../../modules/shared/distributed-builds
-    ../../modules/shared/hermes
-    ../../modules/shared/obsidian-vault
+    ../../../modules/darwin/home-manager.nix
+    ../../../modules/darwin/power
+    ../../../modules/shared
+    ../../../modules/shared/cachix
+    ../../../modules/shared/distributed-builds
+    ../../../modules/shared/hermes
+    ../../../modules/shared/obsidian-vault
   ];
 
   # ── sops-nix (darwin) ───────────────────────────────────────────────
@@ -49,7 +49,7 @@ in
   #     error message if the file is missing, rather than crashing
   #     the shell.
   sops = {
-    defaultSopsFile = ../../secrets/fleet.env;
+    defaultSopsFile = ../../../secrets/fleet.env;
     defaultSopsFormat = "dotenv";
     # age.sshKeyPaths defaults to [ /etc/ssh/ssh_host_ed25519_key ] which
     # is exactly what we want — no override needed.
@@ -58,7 +58,7 @@ in
       # fleetSecrets activation script below which copies the decrypted
       # file verbatim to ~/.fleet_secrets and sources it from zsh.
       fleet = {
-        sopsFile = ../../secrets/fleet.env;
+        sopsFile = ../../../secrets/fleet.env;
         format = "dotenv";
       };
       # LiteLLM virtual key for claude-code. Single `litellm_api_key`
@@ -71,7 +71,7 @@ in
       # ANTHROPIC_API_KEY. opencode's keys live in
       # modules/darwin/opencode/default.nix — see the NOTE just below.
       litellm-key-claude-code-darwin = {
-        sopsFile = ../../secrets/litellm-key-claude-code-darwin.yaml;
+        sopsFile = ../../../secrets/litellm-key-claude-code-darwin.yaml;
         format = "yaml";
         key = "litellm_api_key";
         # Mode 0440 + group=staff so the user-shell sourcing the file
@@ -102,7 +102,7 @@ in
       # need a `sops updatekeys` to join the keygroup before this option
       # decrypts cleanly on those hosts).
       litellm-key-hermes = {
-        sopsFile = ../../secrets/litellm-key-hermes.yaml;
+        sopsFile = ../../../secrets/litellm-key-hermes.yaml;
         format = "yaml";
         key = "litellm_api_key";
         mode = "0440";
@@ -115,7 +115,7 @@ in
       # Mac surfaces it at activation. See `nixos-config/todo.md`
       # Stage 0.9.
       redis-seaweedfs-password = {
-        sopsFile = ../../secrets/redis-seaweedfs-password.yaml;
+        sopsFile = ../../../secrets/redis-seaweedfs-password.yaml;
         format = "yaml";
         key = "redis_seaweedfs_password";
       };
@@ -125,7 +125,7 @@ in
       # this, the operator had to manually `cp /var/lib/seaweedfs/...`
       # onto each Mac (recorded in earlier doc comments below).
       seaweedfs-admin-secret = {
-        sopsFile = ../../secrets/seaweedfs-admin-secret.yaml;
+        sopsFile = ../../../secrets/seaweedfs-admin-secret.yaml;
         format = "yaml";
         key = "seaweedfs_admin_secret";
       };
@@ -159,15 +159,22 @@ in
   # by topology, so its `exo.enable = true` is a no-op there.
   local.hermes = {
     enable = true;
-    claw3d.enable = true;
     voice.enable = isWorkstation; # faster-whisper model is large
 
-    localModel = "mlx-community/Qwen3-Coder-Next-8bit";
-    exo.enable = true; # cluster-wide — see comment block above
-    exo.apiPort = 52415;
-    delegation.useVertexProxy = false; # local LLM via LiteLLM router
-    delegation.model = "desk-nxst-001-qwen3.6-35b-a3b"; # explicit alias — no smart-routing
-    auxiliary.useVertexProxy = true; # vision/web/approval: vertex haiku
+    # Main model: Gemini 3.0 Pro via OAuth personal login (gemini-cli)
+    mainModel = {
+      provider = "gemini";
+      name = lib.salt.ai.models.gemini3Pro; # gemini-3-pro
+    };
+
+    # Tool calling (delegation): local Qwen via LiteLLM router
+    delegation.useVertexProxy = false;
+    delegation.model = "desk-nxst-001-qwen3.6-35b-a3b";
+
+    # Regular tasks (auxiliary): use main model (Gemini 3.0 Pro OAuth)
+    # Since auxiliary doesn't have separate provider/model settings when not
+    # using vertex, it will use the delegation model path
+    auxiliary.useVertexProxy = false;
 
     # Compression: trigger earlier (0.60 vs default 0.70) so the summary
     # model has more room to work, and use local Qwen via LiteLLM so
@@ -301,6 +308,23 @@ in
   # id-token from apiKeyHelper. We lose Phoenix attribution for
   # cloud-claude calls (acceptable). Local model aliases (explicit
   # host-model names, embedding) still route through desk-nxst-001's
+  # ── Unified AI Infrastructure ──────────────────────────────────────
+  local.ai = {
+    enable = true;
+    providers = {
+      litellm = {
+        enable = true;
+        apiKeyFile = config.sops.secrets.litellm-key-hermes.path;
+      };
+      vertex.enable = true;
+      gemini.enable = true;
+      azure = {
+        enable = true;
+        apiKeyFile = config.sops.secrets.azure-api-key-opencode-darwin.path;
+      };
+    };
+  };
+
   # /v1 with per-host virtual keys and DO get per-key attribution, but
   # neither claude-code nor opencode calls those today \u2014
   # they're consumed by hermes / ingest / open-webui instead.
@@ -315,6 +339,12 @@ in
     };
     apiKeyHelper = true;
     telemetry.enable = false;
+  };
+
+  # Gemini CLI with personal sign-in access
+  programs.gemini-cli = {
+    enable = true;
+    authType = "oauth-personal";
   };
 
   # opencode wiring (binary, sops keys, user-level config, MCP servers)
@@ -786,7 +816,7 @@ in
   # virtual keys can't carry the gcloud id-token vertex-proxy needs.
   # The regular `opencode` binary (vertex-direct) is the supported
   # path for cloud claude.
-  environment.systemPackages = [
+  environment.systemPackages = lib.optionals (consortium != null) [
     consortium.packages.${pkgs.stdenv.hostPlatform.system}.consortium-cli
   ];
 

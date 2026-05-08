@@ -12,14 +12,19 @@ with lib;
 
 let
   cfg = config.local.hermes;
+  ai = config.local.ai;
 
   # The effective local base_url: LiteLLM's router takes priority over
   # exo takes priority over ollama when all are configured.
   localBaseUrl =
     if cfg.litellm.enable then
-      "${cfg.litellm.endpoint}/v1"
+      "${ai.providers.litellm.endpoint}/v1"
     else
       throw "No LiteLLM endpoint provided. Check hermes module paramaters";
+
+  localModelName = ai.models.defaultLocal;
+
+  vertexProxyBaseUrl = ai.providers.vertex.proxyEndpoint;
 
   # api_key injected into hermes' generated config. LiteLLM's router
   # expects the virtual-key bearer; everything else keeps the legacy
@@ -207,6 +212,50 @@ in
         Path to a directory of additional custom skills.
         These are merged alongside the upstream bundled skills.
       '';
+    };
+
+    # ── Main model configuration ──────────────────────────────────────
+    # Controls the default model and provider for Hermes. This overrides
+    # the litellm/vertexProxy automatic selection when set.
+    mainModel = {
+      provider = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Provider for the main model. Options: "gemini" (OAuth), "anthropic"
+          (Vertex proxy), "litellm" (LiteLLM router). When null, defaults to
+          "litellm" if litellm.enable=true, otherwise "anthropic".
+        '';
+      };
+
+      name = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Model name for the main provider. Required when mainModel.provider
+          is set. Examples: "gemini-3-pro", "claude-sonnet-4-7",
+          "desk-nxst-001-qwen3.6-35b-a3b".
+        '';
+      };
+
+      baseURL = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Base URL for the main provider. Optional - most providers use
+          auto-resolution. Set this for custom endpoints.
+        '';
+      };
+
+      apiKey = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          API key for the main provider. Optional - OAuth providers (gemini)
+          don't need this. Use environment variable references like
+          "$LITELLM_HERMES_API_KEY".
+        '';
+      };
     };
 
     vertexProxy = {
@@ -569,7 +618,23 @@ in
         force = true;
         text = concatStringsSep "\n" (
           (
-            if cfg.litellm.enable then
+            # Explicit mainModel.provider overrides automatic selection
+            if cfg.mainModel.provider != null then
+              [
+                "# Main model: ${cfg.mainModel.provider}/${cfg.mainModel.name}"
+                "# Explicit override via local.hermes.mainModel.provider"
+                "model:"
+                "  default: \"${cfg.mainModel.name}\""
+                "  provider: \"${cfg.mainModel.provider}\""
+              ]
+              ++ (optionals (cfg.mainModel.baseURL != null) [
+                "  base_url: \"${cfg.mainModel.baseURL}\""
+              ])
+              ++ (optionals (cfg.mainModel.apiKey != null) [
+                "  api_key: \"${cfg.mainModel.apiKey}\""
+              ])
+              ++ [ "" ]
+            else if cfg.litellm.enable then
               [
                 "# Main model: Qwen3.6-35B-A3B-AWQ on desk-nxst-001 vLLM (always-on)."
                 "# To switch models, use `/model litellm/<name>` with any alias"
@@ -617,6 +682,16 @@ in
             "      - \"pdx-nxst-001-qwen3-32b\""
             "      - \"pdx-nxst-002-qwen3-32b\""
             "      - \"pdx-nxst-002-qwen3-embedding\""
+          ]
+          ++ [
+            "  # Google Gemini via OAuth personal login (gemini-cli)"
+            "  # No API key needed - uses ~/.gemini/oauth_creds.json"
+            "  - name: \"gemini\""
+            "    models:"
+            "      - \"gemini-3-pro\""
+            "      - \"gemini-3-flash\""
+            "      - \"gemini-2.5-pro\""
+            "      - \"gemini-2.5-flash\""
           ]
           ++ optionals cfg.delegation.enable ([
             "# Subagent delegation: local LLM (LiteLLM router when enabled)"
@@ -745,16 +820,42 @@ in
         # faster-whisper model is already cached locally; suppress the
         # huggingface_hub unauthenticated-request warning at transcription time.
         export HF_HUB_OFFLINE=1
-        # Export the LiteLLM virtual key for ad-hoc shell use (curl,
-        # debugging). The hermes config.yaml itself gets the key
-        # baked in at activation time — see `home.activation
-        # .hermesConfigInjectKey` below — so the daemon doesn't
-        # depend on this env var being set.
-        if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then
-          export LITELLM_HERMES_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
-        fi
+        # Unified AI Provider Environment handled by modules/darwin/ai
       '');
     }
+
+    # One-shot at activation: render ~/.hermes/config.yaml from the
+    # nix-store template with the sops-decrypted LITELLM virtual key
+    # spliced in. Replaces the previous per-shell sed approach, which
+    # had three problems: (1) BSD-vs-GNU sed-i incompatibility on macOS,
+    # (2) raced when hermes was launched outside an interactive shell
+    # (launchd, cron), (3) ran on every shell open for a one-shot op.
+    #
+    # Lives in its own mkMerge block so it doesn't collide with the
+    # `home-manager.users.<u>.home.file.".hermes/config.yaml".text`
+    # attribute defined above (Nix attribute paths can't repeat at
+    # the same nesting level within a single attrset literal).
+    (mkIf (cfg.litellm.enable && cfg.litellm.virtualKeyFile != null) {
+      # Use the function form so `lib.hm.dag` (home-manager's extension
+      # namespace) is in scope. The outer nix-darwin lib doesn't have it.
+      home-manager.users.${user.name} =
+        { lib, ... }:
+        {
+          home.activation.hermesConfigInjectKey = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+            if [ -r "${toString cfg.litellm.virtualKeyFile}" ] \
+                && [ -L "$HOME/.hermes/config.yaml" ]; then
+              KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
+              TEMPLATE="$(readlink "$HOME/.hermes/config.yaml")"
+              # Replace the symlink with a real, key-injected file.
+              # Writing to a tmp file + mv keeps the swap atomic.
+              run sed "s|\$LITELLM_HERMES_API_KEY|$KEY|g" "$TEMPLATE" \
+                > "$HOME/.hermes/config.yaml.new"
+              run mv -f "$HOME/.hermes/config.yaml.new" "$HOME/.hermes/config.yaml"
+              run chmod 0400 "$HOME/.hermes/config.yaml"
+            fi
+          '';
+        };
+    })
 
     # SOUL.md: global agent identity (only written when soulMd option is set)
     (mkIf (cfg.soulMd != "") {
@@ -883,11 +984,6 @@ in
         environment.systemPackages = [ pkgs.portaudio ];
       }
     ))
-
-    # Darwin (macOS): Ollama via Homebrew cask (launchd-managed)
-    (mkIf (isDarwin && !cfg.exo.enable) {
-      homebrew.casks = [ "ollama" ];
-    })
 
     # Darwin (macOS): portaudio for CLI voice mode microphone input
     (optionalAttrs isDarwin (

@@ -6,14 +6,8 @@
 
 let
   hostname = "GN9CFLM92K-MBP";
-  exoPeers = lib.salt.exoPeersFor hostname;
 in
 {
-  imports = [
-    ../../../hosts/darwin
-    ../../../hosts/darwin/exo-cluster.nix
-  ];
-
   networking.hostName = hostname;
 
   # The other cluster nodes (CK2Q9LN7PM-MBA, GJHC5VVN49-MBP, L75T4YHXV7-MBA)
@@ -23,14 +17,4 @@ in
   # is back on the same network.
   casazza.distributedBuilds.enable = false;
 
-  # Pass exo cluster args that exo-cluster.nix expects
-  _module.args = {
-    exoPeers = exoPeers;
-    exoPackage = pkgs.exo;
-    exoNetwork = "thunderbolt";
-    exoListenInterfaces = [ ];
-    exoThunderboltHostname = hostname;
-    exoThunderboltCluster = lib.salt.thunderboltHosts;
-    thunderboltLinks = lib.salt.thunderboltLinks;
-  };
 }

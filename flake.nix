@@ -99,7 +99,7 @@
     # URL avoids the lockfile drift the old git-daemon split caused.
     # See CLAUDE.md `Cross-repo push targets` for the rationale.
     hermes = {
-      url = "git+ssh://casazza@desk-nxst-001/srv/git/hermes-agent.git?ref=schrodinger";
+      url = "git+file:///Users/casazza/Repositories/schrodinger/hermes-agent?ref=schrodinger";
     };
 
     consortium = {
@@ -159,6 +159,16 @@
         allowBroken = true;
       };
 
+      # outputs-builder: Expose additional packages beyond auto-discovered packages/
+      # This is required because snowfall-lib's mkFlake doesn't automatically expose
+      # packages from overlays to the packages.<system> attrset.
+      outputs-builder = channels: {
+        packages = {
+          # Expose nixpkgs.skills for the skills CLI tool (open agent skills manager).
+          skills = inputs.nixpkgs.legacyPackages.${channels.nixpkgs.system}.skills;
+        };
+      };
+
       # Overlays applied to all channels
       overlays = [
         # Make our claude-code package available as pkgs.claude-code
@@ -182,6 +192,10 @@
         # gascity (`gc`) + beads (`bd`) — sourced from the standalone
         # gascity-flake (overlays.default exposes both packages on pkgs).
         inputs.gascity-flake.overlays.default
+        # Expose nixpkgs.skills to pkgs for use in Home Manager packages.
+        (final: _prev: {
+          skills = inputs.nixpkgs.legacyPackages.${final.stdenv.hostPlatform.system}.skills;
+        })
         # NOTE: seaweedfs's overlay (which exposed pkgs.seaweedfs.{tikv,
         # tikv-pd}) is intentionally dropped — desk-nxst-001 pivoted from
         # TiKV to Redis for JuiceFS metadata, so no consumer remains.

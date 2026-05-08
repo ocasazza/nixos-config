@@ -885,18 +885,18 @@
         "uv2nix": "uv2nix_2"
       },
       "locked": {
-        "lastModified": 1775881823,
-        "narHash": "sha256-vkGqA3lrBYCSGbJqjxOJH5hapr1WqQqbuOwBKOfpmis=",
+        "lastModified": 1778201685,
+        "narHash": "sha256-Lxi97+7b4QYvC/tT1w4yZ2NwgJHdZTQXJxkO23P18A4=",
         "ref": "schrodinger",
-        "rev": "944d281fc0cd74dd8b01e539612c52feeecb134f",
-        "revCount": 3396,
+        "rev": "020164eb301384ac61284c6914ed18ef5ae1d1dd",
+        "revCount": 3398,
         "type": "git",
-        "url": "ssh://casazza@desk-nxst-001/srv/git/hermes-agent.git"
+        "url": "file:///Users/casazza/Repositories/schrodinger/hermes-agent"
       },
       "original": {
         "ref": "schrodinger",
         "type": "git",
-        "url": "ssh://casazza@desk-nxst-001/srv/git/hermes-agent.git"
+        "url": "file:///Users/casazza/Repositories/schrodinger/hermes-agent"
       }
     },
     "home-manager": {

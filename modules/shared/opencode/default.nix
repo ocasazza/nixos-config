@@ -7,7 +7,6 @@
 # The Schrodinger fork (with its `programs.opencode` darwin module) was
 # dropped 2026-04-30; everything below uses stock opencode natively.
 {
-  config,
   lib,
   pkgs,
   ...
@@ -27,13 +26,9 @@ in
         pkgs.bun
       ];
 
-      # Static (non-secret) provider env. AI-SDK's @ai-sdk/azure provider
-      # reads AZURE_RESOURCE_NAME to build endpoint URLs.
-      home.sessionVariables = {
-        AZURE_RESOURCE_NAME = lib.salt.ai.providers.azure.resourceName;
-        GOOGLE_VERTEX_PROJECT = lib.salt.ai.providers.vertex.projectId;
-        GOOGLE_VERTEX_LOCATION = lib.salt.ai.providers.vertex.region;
-      };
+      # Static (non-secret) provider env.
+      # Unified variables are now handled by modules/darwin/ai.
+      home.sessionVariables = { };
 
       # Source the per-provider sops secrets at shell init so the user-level
       # opencode config below can resolve `{env:...}` references.
@@ -47,14 +42,8 @@ in
       #
       # NOTE: The sops secrets themselves must be declared by the
       # consuming module. This module only *sources* them at shell init time.
-      home.sessionVariablesExtra = ''
-        if [ -r "${config.sops.secrets.litellm-key-opencode-darwin.path}" ]; then
-          export LITELLM_API_KEY_OPENCODE_DARWIN=$(cut -d= -f2- < "${config.sops.secrets.litellm-key-opencode-darwin.path}")
-        fi
-        if [ -r "${config.sops.secrets.azure-api-key-opencode-darwin.path}" ]; then
-          export AZURE_API_KEY=$(cut -d= -f2- < "${config.sops.secrets.azure-api-key-opencode-darwin.path}")
-        fi
-      '';
+      # (Unified sourcing now handled by modules/darwin/ai).
+      home.sessionVariablesExtra = "";
 
       # Managed opencode plugin manifest. Home-manager symlinks this, then
       # the activation script below runs `bun install` so node_modules is
@@ -131,8 +120,8 @@ in
               npm = "@ai-sdk/azure";
               name = "Schrodinger Azure";
               options = {
-                apiKey = "{env:AZURE_API_KEY}";
-                resourceName = "{env:AZURE_RESOURCE_NAME}";
+                apiKey = "$AZURE_API_KEY";
+                resourceName = "$AZURE_RESOURCE_NAME";
               };
               models = {
                 "${lib.salt.ai.providers.azure.deployment}" = {
@@ -157,7 +146,7 @@ in
                 # corporate VPN allows :8080 but not :4000, so Hermes and
                 # opencode both route through this shared endpoint.
                 baseURL = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
-                apiKey = "{env:LITELLM_API_KEY_OPENCODE_DARWIN}";
+                apiKey = "$LITELLM_API_KEY_OPENCODE_DARWIN";
               };
               # Real model_groups exposed by desk-nxst-001's LiteLLM proxy
               # (verified via `curl localhost:4000/v1/models`). Adding entries

@@ -3,4 +3,7 @@
 # has no `@host` suffix in its directory name.
 #
 # For per-host home-manager overrides, add below
-{ ... }: { }
+{ ... }:
+{
+  home.stateVersion = "23.11";
+}

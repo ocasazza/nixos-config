@@ -7,14 +7,15 @@
 
 let
   cfg = config.programs.claude-code;
+  ai = config.local.ai;
   user = lib.salt.user;
 
   useLegacyVertex = cfg.vertex.enable && !cfg.litellm.enable;
 
   vertexProjectIdResolved =
-    if cfg.vertex.projectId != "" then cfg.vertex.projectId else lib.salt.ai.providers.vertex.projectId;
+    if cfg.vertex.projectId != "" then cfg.vertex.projectId else ai.providers.vertex.projectId;
   vertexRegionResolved =
-    if cfg.vertex.region != "" then cfg.vertex.region else lib.salt.ai.providers.vertex.region;
+    if cfg.vertex.region != "" then cfg.vertex.region else ai.providers.vertex.region;
 
   # All env vars land in settings.json#env — Claude Code exports them
   # before forking subprocesses, so wrapper-level injection is not needed.
