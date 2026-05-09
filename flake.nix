@@ -1,5 +1,5 @@
 {
-  description = "salt";
+  description = "Olive Casazza's Nix Darwin and NixOS system configurations";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/68d8aa3d661f0e6bd5862291b5bb263b2a6595c9"; # nixos-unstable Feb 2026, has cached darwin closure for zed/librosa/etc.
@@ -8,12 +8,14 @@
     # it). The main `nixpkgs` above is held back so we keep cached darwin
     # builds for zed-editor / librosa / mlx / exo. Hydra has dolt 1.86.2
     # cached on aarch64-darwin at this rev.
+    # TODO: remove this any any other gascity references
     nixpkgs-dolt.url = "github:nixos/nixpkgs/01fbdeef22b76df85ea168fbfe1bfd9e63681b30";
 
     # Surgical pin for opencode 1.14.x. The main nixpkgs above ships
     # 1.3.13 (Feb 2026) which predates the Azure provider and the
     # current `/connect` flow. This rev is the most recent nixpkgs commit
     # that bumps `pkgs.opencode` (1.14.24 → 1.14.25 on 2026-04-26).
+    # TODO: update to latest stable pin
     nixpkgs-opencode.url = "github:nixos/nixpkgs/937bc9b4c03e25545fd8057a1570063a52f3db1b";
 
     snowfall-lib = {

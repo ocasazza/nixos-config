@@ -184,12 +184,14 @@ in
         # Same — reuse the opencode-darwin LiteLLM virtual key.
         apiKeyFile = config.sops.secrets.litellm-key-opencode-darwin.path;
       };
-      vertexProxy = {
-        enable = true;
-      };
-      geminiVertex = {
-        enable = true;
-      };
+      # vertex-proxy.enable = false: bifrost can't talk to vertex-proxy.sdgr.app
+      # because bifrost's anthropic provider sends x-api-key (vertex-proxy needs
+      # Authorization: Bearer with rotating id-token) and extra_headers don't
+      # support env-var indirection. claude-code goes direct to vertex-proxy
+      # via its existing apiKeyHelper instead. Set true if/when bifrost adds
+      # rotating-Bearer support upstream.
+      vertexProxy.enable = false;
+      geminiVertex.enable = true;
     };
   };
 
@@ -388,13 +390,20 @@ in
       enable = true;
       projectId = lib.salt.ai.providers.vertex.projectId;
       region = lib.salt.ai.providers.vertex.region;
-      # Route through local bifrost gateway. Bifrost's "vertex-proxy"
-      # custom provider forwards to vertex-proxy.sdgr.app/v1 with the
-      # gcloud ADC access token (refreshed every 50 min by
-      # ai.bifrost.gcloud-token-refresh launchd job). claude-code's
-      # apiKeyHelper still runs and produces a token, but bifrost
-      # ignores it — bifrost manages auth itself.
-      baseURL = lib.salt.ai.providers.bifrost.endpoint;
+      # Direct to Schrodinger vertex-proxy. We tried routing this through
+      # bifrost but ran into two architectural blockers:
+      #   1. Bifrost's anthropic base provider hardcodes the `x-api-key`
+      #      header — vertex-proxy needs `Authorization: Bearer <id-token>`.
+      #      Bifrost's `extra_headers` is static (no env-var indirection)
+      #      so we can't inject a rotating id-token without runtime config
+      #      rewrites + bifrost restarts every 50 min.
+      #   2. Bifrost's vertex provider URL is hardcoded to
+      #      aiplatform.googleapis.com (no BaseURL override) so we can't
+      #      point its native vertex provider at vertex-proxy either.
+      # apiKeyHelper script (`gcloud auth print-identity-token`) handles
+      # token rotation per-request. Bifrost still fronts Azure + Gemini +
+      # LiteLLM; claude-code just bypasses it for the Anthropic path.
+      baseURL = lib.salt.ai.providers.vertex.proxyEndpoint;
     };
     apiKeyHelper = true;
     telemetry.enable = false;

@@ -21,7 +21,12 @@
   ...
 }:
 
+# Note: `bd` (Schrodinger Beads) is referenced from .claude/settings.json
+# hooks. Claude Code spawns hook subprocesses with a minimal env that may
+# not include home-manager's PATH, so we use the absolute /nix/store path
+# in the hook command and ALSO put `bd` on PATH via home.packages.
 let
+  bdBin = "${pkgs.beads}/bin/bd";
   user = lib.salt.user;
 
   forkLib = inputs.schrodinger-agentic-stack.lib.${pkgs.stdenv.hostPlatform.system};
@@ -101,6 +106,15 @@ in
     {
       imports = [ inputs.schrodinger-agentic-stack.homeManagerModules.default ];
 
+      # Install `bd` (Beads) and `gc` (Gas City) on the user's PATH.
+      # `bd prime` is invoked from .claude/settings.json hooks (the hook
+      # commands use the absolute /nix/store path for safety, but having
+      # `bd` on PATH lets the user invoke it directly too).
+      home.packages = [
+        pkgs.beads
+        pkgs.gascity
+      ];
+
       programs.agentic-stack = {
         enable = true;
 
@@ -136,7 +150,7 @@ in
                 hooks = [
                   {
                     type = "command";
-                    command = "bd prime";
+                    command = "${bdBin} prime";
                   }
                 ];
               }
@@ -147,7 +161,7 @@ in
                 hooks = [
                   {
                     type = "command";
-                    command = "bd prime";
+                    command = "${bdBin} prime";
                   }
                 ];
               }

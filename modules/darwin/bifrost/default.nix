@@ -104,7 +104,10 @@ let
           keys = [
             {
               name = "main";
-              value = "env.GCLOUD_ACCESS_TOKEN";
+              # vertex-proxy validates a Google IDENTITY token (JWT), not
+              # an access token. Sourced from `gcloud auth print-identity-token`
+              # by the refresh helper; written to ~/.bifrost/secrets/gcloud-id-token.
+              value = "env.GCLOUD_ID_TOKEN";
               weight = 1;
               models = [ "*" ];
             }
@@ -308,9 +311,14 @@ in
                 export LITELLM_API_KEY="$(cut -d= -f2- < "${toString cfg.providers.litellm.apiKeyFile}")"
               fi
             ''}
-            ${lib.optionalString (cfg.providers.vertexProxy.enable || cfg.providers.geminiVertex.enable) ''
+            ${lib.optionalString cfg.providers.geminiVertex.enable ''
               if [ -r "${configDirAbs}/secrets/gcloud-access-token" ]; then
                 export GCLOUD_ACCESS_TOKEN="$(cat "${configDirAbs}/secrets/gcloud-access-token")"
+              fi
+            ''}
+            ${lib.optionalString cfg.providers.vertexProxy.enable ''
+              if [ -r "${configDirAbs}/secrets/gcloud-id-token" ]; then
+                export GCLOUD_ID_TOKEN="$(cat "${configDirAbs}/secrets/gcloud-id-token")"
               fi
             ''}
             exec ${cfg.package}/bin/bifrost-http \
