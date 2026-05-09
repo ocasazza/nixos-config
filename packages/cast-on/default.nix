@@ -7,9 +7,9 @@
 #
 # Usage:
 #   nix run .#cast-on                 # deploy to all-deploy group
-#   nix run .#cast-on -- desk-nxst-001         # deploy only to desk-nxst-001
+#   nix run .#cast-on -- pdx-nxst-003         # deploy only to pdx-nxst-003
 #   nix run .#cast-on -- @darwin      # deploy to the darwin claw group
-#   nix run .#cast-on -- --dry-run desk-nxst-001
+#   nix run .#cast-on -- --dry-run pdx-nxst-003
 #
 # Targets are resolved by claw, so any group/pattern from
 # ~/.config/clustershell/groups.d/cluster.cfg works.
@@ -53,10 +53,10 @@ writeShellApplication {
     #
     # Targets default to the `all-deploy` claw group when no args given.
     # Any claw-supported syntax works:
-    #   cast-on desk-nxst-001
+    #   cast-on pdx-nxst-003
     #   cast-on @darwin
     #   cast-on @gpu
-    #   cast-on desk-nxst-001,GN9CFLM92K-MBP.local
+    #   cast-on pdx-nxst-003,GN9CFLM92K-MBP.local
 
     DRY_RUN=0
     SKIP_GIT=0
@@ -82,7 +82,7 @@ writeShellApplication {
 
     Examples:
       cast-on                 # all hosts in the all-deploy group
-      cast-on desk-nxst-001            # just desk-nxst-001
+      cast-on pdx-nxst-003            # just pdx-nxst-003
       cast-on @darwin         # the darwin group
       cast-on @gpu --dry-run  # build for GPU nodes, don't activate
     EOF
@@ -173,7 +173,7 @@ writeShellApplication {
       echo "$h"
     }
 
-    # NixOS hosts (desk-nxst-001 and friends) get the darwin-only inputs stubbed
+    # NixOS hosts (pdx-nxst-003 and friends) get the darwin-only inputs stubbed
     # out so we don't pull private schrodinger repos from a Linux box
     # (and from a Mac driving fleet deploys, so `is_nixos_attr` below
     # doesn't trip on a dead darwin-only input). See

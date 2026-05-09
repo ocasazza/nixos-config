@@ -32,7 +32,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Secrets management (sops-nix). Used by desk-nxst-001 to decrypt
+    # Secrets management (sops-nix). Used by pdx-nxst-003 to decrypt
     # secrets/*.yaml at activation via its SSH host key (derived to
     # an age identity automatically). Already a transitive input via
     # git-fleet* but snowfall needs a direct handle to import
@@ -92,8 +92,8 @@
       url = "git+ssh://git@github.com/schrodinger/git-fleet-runner";
     };
 
-    # Flake inputs served from desk-nxst-001's bare git mirrors at
-    # `/srv/git/<name>.git`. We use `git+ssh://casazza@desk-nxst-001/...`
+    # Flake inputs served from pdx-nxst-003's bare git mirrors at
+    # `/srv/git/<name>.git`. We use `git+ssh://casazza@pdx-nxst-003/...`
     # for both fetch and push — anonymous git:// over port 9418 is
     # firewalled at the corp boundary, and unifying read/write on one
     # URL avoids the lockfile drift the old git-daemon split caused.
@@ -110,6 +110,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Bifrost — Go-based LLM gateway (~40x faster than LiteLLM, OpenAI-compatible,
+    # 20+ providers, MCP gateway). Upstream ships its own flake exposing
+    # packages.<sys>.bifrost-http and a (NixOS-only) services.bifrost module.
+    # We use the package directly and write our own darwin module wrapping
+    # launchd.user.agents (modules/darwin/bifrost/).
+    #
+    # NOT following our nixpkgs — bifrost's go.mod requires go >= 1.26.2,
+    # but our pinned nixpkgs (Feb 2026) has go_1_26 = 1.26.1. Bifrost's
+    # own staging-next nixpkgs has the newer go.
+    bifrost = {
+      url = "github:maximhq/bifrost?ref=transports/v1.5.0";
+    };
+
     consortium = {
       url = "github:olivecasazza/consortium";
     };
@@ -118,14 +131,14 @@
     # for the auto-snapshot launchd agent on darwin. Same git+ssh
     # transport as opencode/hermes above.
     obsidian-vault = {
-      url = "git+ssh://casazza@desk-nxst-001/srv/git/obsidian.git";
+      url = "git+ssh://casazza@pdx-nxst-001/srv/git/obsidian.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     # Shared SeaweedFS + JuiceFS + TiKV + macFUSE modules. Same flake is
     # consumed by ~/Repositories/schrodinger/git-fleet-runner so the
     # corp cluster (gfr-osx26-02/03/04) and the personal cluster
-    # (desk-nxst-001 + Macs) share one source of truth for the
+    # (pdx-nxst-003 + Macs) share one source of truth for the
     # storage stack.
     seaweedfs = {
       url = "git+ssh://git@github.com/schrodinger/seaweedfs";
@@ -207,6 +220,15 @@
           agentic-stack =
             inputs.schrodinger-agentic-stack.packages.${final.stdenv.hostPlatform.system}.default;
         })
+        # bifrost — high-performance LLM gateway (Go, 40x faster than LiteLLM).
+        # Wrapper at packages/bifrost/ uses upstream's bifrost-http.nix with
+        # a stub bifrost-ui (upstream's UI npmDepsHash drifted post-v1.5.0).
+        # The /v1/* API works fully; only the localhost:8080/ui page is stubbed.
+        # Pass `inputs` through callPackage so the package can resolve the
+        # bifrost flake input (and its newer nixpkgs for Go 1.26.2).
+        (_final: prev: {
+          bifrost = prev.callPackage ./packages/bifrost { inherit inputs; };
+        })
         # gascity (`gc`) + beads (`bd`) — sourced from the standalone
         # gascity-flake (overlays.default exposes both packages on pkgs).
         inputs.gascity-flake.overlays.default
@@ -215,7 +237,7 @@
           skills = inputs.nixpkgs.legacyPackages.${final.stdenv.hostPlatform.system}.skills;
         })
         # NOTE: seaweedfs's overlay (which exposed pkgs.seaweedfs.{tikv,
-        # tikv-pd}) is intentionally dropped — desk-nxst-001 pivoted from
+        # tikv-pd}) is intentionally dropped — pdx-nxst-003 pivoted from
         # TiKV to Redis for JuiceFS metadata, so no consumer remains.
         # Re-add if some future host brings TiKV back.
 

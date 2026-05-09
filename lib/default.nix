@@ -31,15 +31,15 @@ rec {
   ai = {
     providers = {
       litellm = {
-        host = "desk-nxst-001.schrodinger.com";
+        host = "pdx-nxst-001.schrodinger.com";
         port = 4000;
-        endpoint = "http://desk-nxst-001.schrodinger.com:4000";
+        endpoint = "http://pdx-nxst-001.schrodinger.com:4000";
         localEndpoint = "http://localhost:4000";
-        caddyEndpoint = "http://desk-nxst-001.schrodinger.com:8080/litellm";
-        defaultLocalGroup = "desk-nxst-001-qwen3.6-35b-a3b";
+        caddyEndpoint = "http://pdx-nxst-001.schrodinger.com:8080/litellm";
+        defaultLocalGroup = "pdx-nxst-003-qwen3.6-35b-a3b";
         defaultCloudGroup = "coder-cloud-claude";
         modelGroups = {
-          "desk-nxst-001-qwen3.6-35b-a3b" = "desk-nxst-001-qwen3.6-35b-a3b";
+          "pdx-nxst-003-qwen3.6-35b-a3b" = "pdx-nxst-003-qwen3.6-35b-a3b";
           coder-cloud-claude = "coder-cloud-claude";
           embedding = "embedding";
         };
@@ -68,11 +68,25 @@ rec {
         baseURL = "http://localhost:52415/v1";
       };
 
+      # Bifrost — local LLM gateway running per-Mac (launchd user agent).
+      # Fronts LiteLLM, Azure (Schrodinger), Vertex CLI proxy, and Gemini
+      # via Vertex (using gcloud ADC tokens). All harnesses (hermes,
+      # opencode, claude-code, pi) point at this single endpoint.
+      bifrost = {
+        host = "localhost";
+        port = 8080;
+        endpoint = "http://localhost:8080/v1";
+        # Default route key the harnesses pick if no override.
+        # `bifrost/azure/Kimi-K2.6` resolves: bifrost provider →
+        # azure subroute → Kimi-K2.6 deployment on schrodinger-code.
+        defaultModel = "azure/Kimi-K2.6";
+      };
+
       telemetry = {
-        host = "desk-nxst-001.schrodinger.com";
+        host = "pdx-nxst-001.schrodinger.com";
         otlpGrpcPort = 4317;
         otlpHttpPort = 4318;
-        otlpEndpoint = "http://desk-nxst-001.schrodinger.com:4317";
+        otlpEndpoint = "http://pdx-nxst-001.schrodinger.com:4317";
       };
     };
 

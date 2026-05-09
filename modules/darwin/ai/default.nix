@@ -20,10 +20,10 @@ in
 
     providers = {
       litellm = {
-        enable = mkEnableOption "LiteLLM federated proxy (desk-nxst-001)";
+        enable = mkEnableOption "LiteLLM federated proxy (pdx-nxst-003)";
         endpoint = mkOption {
           type = types.str;
-          default = "http://desk-nxst-001.schrodinger.com:8080/litellm";
+          default = "http://pdx-nxst-001.schrodinger.com:8080/litellm";
           description = "LiteLLM Caddy-fronted endpoint.";
         };
         apiKeyFile = mkOption {
@@ -85,6 +85,32 @@ in
           default = null;
         };
       };
+
+      # Bifrost — local gateway. Runtime config layered on top of
+      # lib.salt.ai.providers.bifrost. Consumed by modules/darwin/bifrost/
+      # which renders ~/.bifrost/config.json and runs the launchd agent.
+      bifrost = {
+        enable = mkEnableOption "Local Bifrost LLM gateway (per-Mac launchd)";
+        port = mkOption {
+          type = types.port;
+          default = lib.salt.ai.providers.bifrost.port;
+          description = "TCP port the Bifrost gateway binds to.";
+        };
+        endpoint = mkOption {
+          type = types.str;
+          default = lib.salt.ai.providers.bifrost.endpoint;
+          description = "OpenAI-compatible endpoint URL harnesses point at.";
+        };
+        apiKeyFile = mkOption {
+          type = types.nullOr types.path;
+          default = null;
+          description = ''
+            Sops-decrypted path to the local Bifrost admin key. Bifrost
+            uses this for `BIFROST_API_KEY` env var; harnesses send it as
+            Bearer auth. Currently single-user / no-auth is also supported.
+          '';
+        };
+      };
     };
 
     # Standard model mappings
@@ -99,7 +125,7 @@ in
       };
       defaultLocal = mkOption {
         type = types.str;
-        default = "desk-nxst-001-qwen3.6-35b-a3b";
+        default = "pdx-nxst-003-qwen3.6-35b-a3b";
       };
     };
   };

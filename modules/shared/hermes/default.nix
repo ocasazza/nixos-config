@@ -234,7 +234,7 @@ in
         description = ''
           Model name for the main provider. Required when mainModel.provider
           is set. Examples: "gemini-3-pro", "claude-sonnet-4-7",
-          "desk-nxst-001-qwen3.6-35b-a3b".
+          "pdx-nxst-003-qwen3.6-35b-a3b".
         '';
       };
 
@@ -278,7 +278,7 @@ in
     };
 
     # ── LiteLLM-routed path ───────────────────────────────────────────
-    # Route all hermes calls through the LiteLLM proxy on desk-nxst-001:
+    # Route all hermes calls through the LiteLLM proxy on pdx-nxst-003:
     #   - `vertexProxy.baseURL` references become `<endpoint>/vertex/v1`
     #     (passthrough — gcloud id-token still flows via the refresh_token
     #     shim into ~/.hermes/.env)
@@ -308,7 +308,7 @@ in
           Claude) and `/v1` (OpenAI-compat router for local groups).
 
           Defaults to the Caddy-fronted FQDN path
-          (`http://desk-nxst-001.schrodinger.com:8080/litellm`) so every
+          (`http://pdx-nxst-001.schrodinger.com:8080/litellm`) so every
           fleet client routes through one auditable reverse proxy that
           aggregates the various upstream providers. Bare `:4000` is
           reachable inside the corp LAN but bypasses Caddy.
@@ -326,7 +326,7 @@ in
           file to pick up via its `env:LITELLM_HERMES_API_KEY` indirect
           reference.
 
-          On desk-nxst-001 this is
+          On pdx-nxst-003 this is
           `config.sops.secrets.litellm-key-hermes.path`; on darwin
           it's the /run/secrets path once sops-nix is wired on darwin
           hosts.
@@ -339,7 +339,7 @@ in
         description = ''
           LiteLLM model alias hermes refers to when picking a
           "local" model (delegation in non-vertex mode, auxiliary
-          in non-vertex mode). Defaults to desk-nxst-001-qwen3.6-35b-a3b.
+          in non-vertex mode). Defaults to pdx-nxst-003-qwen3.6-35b-a3b.
         '';
       };
     };
@@ -449,7 +449,7 @@ in
         type = types.str;
         # Use a fast local model for compression. Must be in the LiteLLM
         # allowlist for the hermes virtual key.
-        default = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
+        default = "litellm/pdx-nxst-003-qwen3.6-35b-a3b";
         description = "Model used for compression summarisation (should be fast/cheap). Use a local model to avoid cloud egress.";
       };
     };
@@ -636,11 +636,11 @@ in
               ++ [ "" ]
             else if cfg.litellm.enable then
               [
-                "# Main model: Qwen3.6-35B-A3B-AWQ on desk-nxst-001 vLLM (always-on)."
+                "# Main model: Qwen3.6-35B-A3B-AWQ on pdx-nxst-003 vLLM (always-on)."
                 "# To switch models, use `/model litellm/<name>` with any alias"
                 "# in the custom_providers list below."
                 "model:"
-                "  default: \"desk-nxst-001-qwen3.6-35b-a3b\""
+                "  default: \"pdx-nxst-003-qwen3.6-35b-a3b\""
                 "  provider: \"litellm\""
                 "  base_url: \"${cfg.litellm.endpoint}/v1\""
                 "  api_key: \"$LITELLM_HERMES_API_KEY\""
@@ -664,14 +664,14 @@ in
             "custom_providers:"
           ]
           ++ optionals cfg.litellm.enable [
-            "  # LiteLLM router on desk-nxst-001:4000. Model names must match"
+            "  # LiteLLM router on pdx-nxst-003:4000. Model names must match"
             "  # the allowlist configured on the LiteLLM proxy for the hermes"
             "  # virtual key — any name not in that allowlist returns 403."
             "  - name: \"litellm\""
             "    base_url: \"${cfg.litellm.endpoint}/v1\""
             "    api_key: \"$LITELLM_HERMES_API_KEY\""
             "    models:"
-            "      - \"desk-nxst-001-qwen3.6-35b-a3b\""
+            "      - \"pdx-nxst-003-qwen3.6-35b-a3b\""
             "      - \"desk-nxst-004-qwen3-32b\""
             "      - \"gfr-osx26-02-qwen3-coder-next\""
             "      - \"gfr-osx26-03-qwen3-coder-next\""

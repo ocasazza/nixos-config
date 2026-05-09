@@ -67,7 +67,7 @@ in
           };
 
       # oh-my-opencode-slim plugin config: route all agents to the LiteLLM
-      # smart-routed Qwen3-Coder pool on desk-nxst-001. Override per-project
+      # smart-routed Qwen3-Coder pool on pdx-nxst-003. Override per-project
       # in .opencode/oh-my-opencode-slim.json; see provider.litellm.models
       # below for the full list of pinnable backends.
       home.file.".config/opencode/oh-my-opencode-slim.json".text = ''
@@ -76,11 +76,11 @@ in
           "preset": "local",
           "presets": {
             "local": {
-              "orchestrator": { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
-              "explorer":     { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
-              "oracle":       { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
-              "fixer":        { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
-              "librarian":    { "model": "litellm/desk-nxst-001-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["websearch", "context7", "grep_app"] }
+              "orchestrator": { "model": "litellm/pdx-nxst-003-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+              "explorer":     { "model": "litellm/pdx-nxst-003-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+              "oracle":       { "model": "litellm/pdx-nxst-003-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+              "fixer":        { "model": "litellm/pdx-nxst-003-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["*"] },
+              "librarian":    { "model": "litellm/pdx-nxst-003-qwen3.6-35b-a3b", "skills": ["*"], "mcps": ["websearch", "context7", "grep_app"] }
             }
           }
         }
@@ -91,9 +91,9 @@ in
           (
             {
               "$schema" = "https://opencode.ai/config.json";
-              # Default model: desk-nxst-001 vLLM (Qwen3.6-35B-A3B-AWQ, 65k context).
+              # Default model: pdx-nxst-003 vLLM (Qwen3.6-35B-A3B-AWQ, 65k context).
               # No smart-routing — all backends are explicit aliases below.
-              model = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
+              model = "litellm/pdx-nxst-003-qwen3.6-35b-a3b";
               # Disable the in-TUI auto-update prompt — supervisor-spawned
               # sessions can't dismiss it and end up wedged on the modal.
               autoupdate = false;
@@ -147,25 +147,25 @@ in
                 npm = "@ai-sdk/openai-compatible";
                 name = "Schrodinger LiteLLM";
                 options = {
-                  # Point at desk-nxst-001's Caddy proxy (:8080/litellm); the
+                  # Point at pdx-nxst-003's Caddy proxy (:8080/litellm); the
                   # corporate VPN allows :8080 but not :4000, so Hermes and
                   # opencode both route through this shared endpoint.
                   baseURL = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
                   apiKey = "$LITELLM_API_KEY_OPENCODE_DARWIN";
                 };
-                # Real model_groups exposed by desk-nxst-001's LiteLLM proxy
+                # Real model_groups exposed by pdx-nxst-003's LiteLLM proxy
                 # (verified via `curl localhost:4000/v1/models`). Adding entries
                 # here that don't exist on the proxy makes them appear in /model
                 # but fail at request time. To add new groups, register them on
                 # the LiteLLM side first (nixstation modules/nixos/litellm) and
                 # mirror here.
-                # Explicit host-model aliases exposed by desk-nxst-001's LiteLLM
+                # Explicit host-model aliases exposed by pdx-nxst-003's LiteLLM
                 # proxy. Each key is <hostname>-<modelname> — uniquely identifies
                 # one backend. Omitted aliases return 403 "team not allowed to
                 # access model" from the proxy.
                 models = {
-                  "desk-nxst-001-qwen3.6-35b-a3b" = {
-                    name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
+                  "pdx-nxst-003-qwen3.6-35b-a3b" = {
+                    name = "Qwen3.6-35B-A3B @ pdx-nxst-003 vLLM";
                     limit = {
                       context = 131072;
                       output = 32768;
@@ -263,6 +263,54 @@ in
                     limit = {
                       context = 32768;
                       output = 8192;
+                    };
+                  };
+                };
+              };
+              # Bifrost local gateway (http://localhost:8080/v1). Single endpoint
+              # that fronts Azure (Schrodinger), LiteLLM (pdx-nxst-001), Vertex
+              # CLI proxy (Anthropic), and Vertex AI (Gemini). Each model is
+              # prefixed by bifrost's provider name so the gateway routes correctly.
+              # Auth: bifrost is single-tenant on localhost (no key required);
+              # the apiKey here is sent but ignored by bifrost.
+              provider.bifrost = {
+                npm = "@ai-sdk/openai-compatible";
+                name = "Bifrost (local gateway)";
+                options = {
+                  baseURL = lib.salt.ai.providers.bifrost.endpoint;
+                  apiKey = "no-auth";
+                };
+                models = {
+                  "azure/${lib.salt.ai.providers.azure.deployment}" = {
+                    name = "Kimi K2.6 (via bifrost → Azure)";
+                    tool_call = true;
+                    limit = {
+                      context = 200000;
+                      output = 32768;
+                    };
+                  };
+                  "vertex/gemini-2.5-pro" = {
+                    name = "Gemini 2.5 Pro (via bifrost → Vertex)";
+                    tool_call = true;
+                    limit = {
+                      context = 1000000;
+                      output = 65536;
+                    };
+                  };
+                  "vertex-proxy/claude-sonnet-4-7" = {
+                    name = "Claude Sonnet 4.7 (via bifrost → Vertex proxy)";
+                    tool_call = true;
+                    limit = {
+                      context = 200000;
+                      output = 32768;
+                    };
+                  };
+                  "litellm/pdx-nxst-003-qwen3.6-35b-a3b" = {
+                    name = "Qwen3.6-35B (via bifrost → LiteLLM)";
+                    tool_call = true;
+                    limit = {
+                      context = 131072;
+                      output = 32768;
                     };
                   };
                 };

@@ -16,7 +16,7 @@ let
   # GN9 is the dev workstation (heavy local inference, full hippo
   # obsidian sync, faster-whisper voice). The other 3 cluster Macs
   # (CK2/GJH/L75T) are kept lean for compute headroom — they route
-  # local model calls through LiteLLM → desk-nxst-001 vLLM instead.
+  # local model calls through LiteLLM → pdx-nxst-003 vLLM instead.
   isWorkstation = config.networking.hostName == "GN9CFLM92K-MBP";
 in
 {
@@ -65,7 +65,7 @@ in
       # LiteLLM virtual key for claude-code. Single `litellm_api_key`
       # scalar holding a `KEY=value` line; sops-nix writes the value to
       # /run/secrets/litellm-key-claude-code-darwin. Minted by
-      # desk-nxst-001's `litellm-team-bootstrap.service` (in the
+      # pdx-nxst-003's `litellm-team-bootstrap.service` (in the
       # nixstation repo) and committed back into the sops yaml here.
       # The claude-code wrapper (modules/darwin/claude-code) reads the
       # file at invocation time and exports the value as
@@ -110,7 +110,7 @@ in
         owner = "root";
         group = "staff";
       };
-      # Redis password for desk-nxst-001's JuiceFS metadata KV. Sops-nix writes
+      # Redis password for pdx-nxst-003's JuiceFS metadata KV. Sops-nix writes
       # just the value to /run/secrets/redis-seaweedfs-password.
       # Re-encrypted to every host_*  age key in `.sops.yaml` so each
       # Mac surfaces it at activation. See `nixos-config/todo.md`
@@ -122,7 +122,7 @@ in
       };
       # SeaweedFS S3 admin secret. Same key group as redis above. The
       # juicefs mount script reads this as `--secret-key <value>` so
-      # the per-Mac S3 client auths against desk-nxst-001's S3 gateway. Without
+      # the per-Mac S3 client auths against pdx-nxst-003's S3 gateway. Without
       # this, the operator had to manually `cp /var/lib/seaweedfs/...`
       # onto each Mac (recorded in earlier doc comments below).
       seaweedfs-admin-secret = {
@@ -140,8 +140,8 @@ in
   };
 
   # Mac-side OTel collector daemon. Pushes hostmetrics + opencode
-  # pipeline logs + reingest gauges to desk-nxst-001's OTLP intake at
-  # desk-nxst-001:4317. Replaces the old "Macs send nothing" gap that
+  # pipeline logs + reingest gauges to pdx-nxst-003's OTLP intake at
+  # pdx-nxst-003:4317. Replaces the old "Macs send nothing" gap that
   # left the Grafana reingest tiles empty. See modules/darwin/observability.
   local.darwinObservability.enable = true;
 
@@ -162,6 +162,36 @@ in
   # the schrodinger-agentic-stack flake input and wires programs.agentic-stack
   # via the home-manager module. No options are configured here — see that
   # shared module for provider config + autoDream schedule.
+
+  # Bifrost — local LLM gateway (per-Mac). Single endpoint at localhost:8080
+  # that hermes/opencode/claude-code/pi all point at. Fronts LiteLLM (for
+  # local vLLM models), Azure (Schrodinger Kimi), Vertex proxy (Anthropic
+  # via gcloud id-token), and Vertex AI (Gemini via gcloud ADC).
+  #
+  # Requires once-per-machine: `gcloud auth application-default login` to
+  # set up ADC for the vertex-proxy + Gemini providers. The ADC tokens are
+  # refreshed every 50 min by ai.bifrost.gcloud-token-refresh launchd job.
+  local.bifrost = {
+    enable = true;
+    providers = {
+      azure = {
+        enable = true;
+        # Reuse the existing opencode key (single-tenant Mac).
+        apiKeyFile = config.sops.secrets.azure-api-key-opencode-darwin.path;
+      };
+      litellm = {
+        enable = true;
+        # Same — reuse the opencode-darwin LiteLLM virtual key.
+        apiKeyFile = config.sops.secrets.litellm-key-opencode-darwin.path;
+      };
+      vertexProxy = {
+        enable = true;
+      };
+      geminiVertex = {
+        enable = true;
+      };
+    };
+  };
 
   local.hermes = {
     enable = true;
@@ -186,7 +216,7 @@ in
 
     # Tool calling (delegation): local Qwen via LiteLLM router
     delegation.useVertexProxy = false;
-    delegation.model = "desk-nxst-001-qwen3.6-35b-a3b";
+    delegation.model = "pdx-nxst-003-qwen3.6-35b-a3b";
 
     # Regular tasks (auxiliary): use main model (Gemini 3.0 Pro OAuth)
     # Since auxiliary doesn't have separate provider/model settings when not
@@ -198,16 +228,22 @@ in
     # context compression itself never hits cloud/vertex as an automatic
     # fallback — the user explicitly decides when to invoke cloud paths.
     compression.threshold = "0.60";
-    compression.summaryModel = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
+    compression.summaryModel = "litellm/pdx-nxst-003-qwen3.6-35b-a3b";
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'
     # local-routing path (explicit model aliases / embedding) authenticates
-    # against desk-nxst-001:4000/v1 and unlocks the rest of the GPU pool
+    # against pdx-nxst-003:4000/v1 and unlocks the rest of the GPU pool
     # fronted by LiteLLM. Without it, only /vertex/v1 (gcloud id-token,
     # no virtual key) is reachable.
     # Use the Caddy proxy endpoint (:8080/litellm) so no local SSH tunnel
     # is required.
-    litellm.endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
+    #
+    # Now routed through local bifrost gateway (http://localhost:8080/v1)
+    # which fronts the upstream LiteLLM. Bifrost handles auth + routing;
+    # the per-host litellm-key-hermes is consumed by bifrost via env var,
+    # not by hermes directly. Hermes still supplies a key (ignored by
+    # bifrost in single-tenant mode) for compatibility.
+    litellm.endpoint = lib.salt.ai.providers.bifrost.endpoint;
     litellm.virtualKeyFile = config.sops.secrets.litellm-key-hermes.path;
 
     soulMd = ''
@@ -227,7 +263,7 @@ in
         Deploy with `nix run .#deploy-cluster` from `~/.config/nixos-config`.
       - AI stack: hermes-agent (Schrodinger fork), opencode (stock pkgs.opencode from
         nixpkgs; user-level config in modules/darwin/opencode), claude-code — all routed
-        through Vertex AI proxy at https://vertex-proxy.sdgr.app or desk-nxst-001's LiteLLM
+        through Vertex AI proxy at https://vertex-proxy.sdgr.app or pdx-nxst-003's LiteLLM
         proxy at :4000. Auth via `gcloud auth print-identity-token` written to `~/.hermes/.env`.
       - Distributed inference: exo cluster (gfr-osx26-02/03), OpenAI-compatible API at
         http://localhost:52415/v1. Subagent/coding model: mlx-community/Qwen3-Coder-Next-8bit.
@@ -295,7 +331,7 @@ in
   #
   # Workstation-only: oMLX loads a Qwen3-Coder MLX model (~16 GiB) into
   # RAM at boot. Non-workstation cluster Macs route through LiteLLM →
-  # desk-nxst-001 vLLM instead; no local MLX server needed.
+  # pdx-nxst-003 vLLM instead; no local MLX server needed.
   local.omlx = {
     enable = isWorkstation;
     port = 8000;
@@ -309,7 +345,7 @@ in
   # what's actually host-specific (hostname, exo peers, distributed-
   # builds toggle).
   #
-  # We tried routing through desk-nxst-001's LiteLLM (both /v1 router with
+  # We tried routing through pdx-nxst-003's LiteLLM (both /v1 router with
   # virtual keys and /vertex/v1 passthrough) for Phoenix attribution.
   # Both paths are blocked:
   #   * Router /v1 + virtual key: the coder-cloud-claude deployment
@@ -324,7 +360,7 @@ in
   # So claude-code talks straight to vertex-proxy with a gcloud
   # id-token from apiKeyHelper. We lose Phoenix attribution for
   # cloud-claude calls (acceptable). Local model aliases (explicit
-  # host-model names, embedding) still route through desk-nxst-001's
+  # host-model names, embedding) still route through pdx-nxst-003's
   # ── Unified AI Infrastructure ──────────────────────────────────────
   local.ai = {
     enable = true;
@@ -352,11 +388,21 @@ in
       enable = true;
       projectId = lib.salt.ai.providers.vertex.projectId;
       region = lib.salt.ai.providers.vertex.region;
-      baseURL = lib.salt.ai.providers.vertex.proxyEndpoint;
+      # Route through local bifrost gateway. Bifrost's "vertex-proxy"
+      # custom provider forwards to vertex-proxy.sdgr.app/v1 with the
+      # gcloud ADC access token (refreshed every 50 min by
+      # ai.bifrost.gcloud-token-refresh launchd job). claude-code's
+      # apiKeyHelper still runs and produces a token, but bifrost
+      # ignores it — bifrost manages auth itself.
+      baseURL = lib.salt.ai.providers.bifrost.endpoint;
     };
     apiKeyHelper = true;
     telemetry.enable = false;
   };
+
+  # Pi Coding Agent — TS-based terminal harness. npm-installed; routes
+  # through bifrost; ships agentic-stack's memory-hook extension.
+  programs.pi.enable = true;
 
   # Gemini CLI with personal sign-in access. extraSettings restores
   # custom seatbelt sandbox + UI verbosity that was previously hand-edited
@@ -379,7 +425,7 @@ in
   # lives in modules/darwin/opencode/default.nix. Snowfall auto-applies
   # it on every darwin host.
 
-  # Forward SSH tunnel from this Mac → desk-nxst-001:4000 (LiteLLM).
+  # Forward SSH tunnel from this Mac → pdx-nxst-003:4000 (LiteLLM).
   # AppGate SDP only forwards :22, so opencode (and anything else
   # talking to the LiteLLM federator) needs an SSH-tunneled path to
   # reach :4000 from off-LAN. autossh + launchd.user.agents keeps the
@@ -387,7 +433,7 @@ in
   # points at http://localhost:4000/v1 (see modules/darwin/opencode).
   #
   # Per-user agent (not a system daemon) because:
-  #   - The remote end is `casazza@desk-nxst-001` (regular login user),
+  #   - The remote end is `casazza@pdx-nxst-003` (regular login user),
   #     so it uses ~/.ssh/id_ed25519 and ~/.ssh/known_hosts directly.
   #   - Local bind 127.0.0.1:4000 is per-user state anyway.
   #
@@ -421,11 +467,11 @@ in
     fi
   '';
 
-  # ── shared JuiceFS client (talks to desk-nxst-001's Redis + S3) ──────
+  # ── shared JuiceFS client (talks to pdx-nxst-003's Redis + S3) ──────
   # Every Mac in the fleet mounts the shared filesystem at /Volumes/juicefs
-  # so writes from any host land in desk-nxst-001's SeaweedFS object store.
+  # so writes from any host land in pdx-nxst-003's SeaweedFS object store.
   #
-  # Off-LAN behavior: when desk-nxst-001 is unreachable the launchd
+  # Off-LAN behavior: when pdx-nxst-003 is unreachable the launchd
   # mount daemon retries (KeepAlive=true). The mount-point exists but
   # is empty until the host is back on the corp network.
   #
@@ -433,8 +479,8 @@ in
   # `install` on macOS rejects /dev/stdin as source; use tee + chmod:
   #   sudo install -d -m 0700 -o root -g wheel /var/lib/juicefs-secrets
   #   echo -n 'admin' | sudo tee /var/lib/juicefs-secrets/access-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/access-key
-  #   sudo tee /var/lib/juicefs-secrets/secret-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/secret-key  # paste desk-nxst-001's seaweedfs admin secret (/var/lib/seaweedfs/admin-secret on the server)
-  #   sudo tee /var/lib/juicefs-secrets/meta-password >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/meta-password  # paste desk-nxst-001's redis-seaweedfs password (sops decrypts to /run/secrets/redis-seaweedfs-password on the server)
+  #   sudo tee /var/lib/juicefs-secrets/secret-key >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/secret-key  # paste pdx-nxst-003's seaweedfs admin secret (/var/lib/seaweedfs/admin-secret on the server)
+  #   sudo tee /var/lib/juicefs-secrets/meta-password >/dev/null && sudo chmod 600 /var/lib/juicefs-secrets/meta-password  # paste pdx-nxst-003's redis-seaweedfs password (sops decrypts to /run/secrets/redis-seaweedfs-password on the server)
   #
   # macFUSE: nix-homebrew is currently disabled in this flake so the
   # cask install path is opted out via requireNixHomebrew=false. User
@@ -451,19 +497,19 @@ in
   services.juicefs = {
     enable = true;
     mounts.shared = {
-      # Migrated from `tikv://desk-nxst-001:2379/shared` when the
+      # Migrated from `tikv://pdx-nxst-003:2379/shared` when the
       # JuiceFS metadata backend flipped to Redis (TiKV 8.5.0 didn't
       # build under gcc 15 / cmake 4.1, see the nixstation config).
-      # desk-nxst-001's redis is now bound on 6379 with mandatory auth
+      # pdx-nxst-003's redis is now bound on 6379 with mandatory auth
       # — keep this URL credential-free; metaPasswordFile injects it
       # as META_PASSWORD.
-      metaUrl = "redis://desk-nxst-001:6379/0";
+      metaUrl = "redis://pdx-nxst-001.schrodinger.com:6379/0";
       # sops-nix surfaces the redis password at /run/secrets/...; the
       # /var/lib/juicefs-secrets/meta-password manual-seed path is no
       # longer needed.
       metaPasswordFile = config.sops.secrets.redis-seaweedfs-password.path;
       storageType = "s3";
-      bucket = "http://desk-nxst-001:8333/shared";
+      bucket = "http://pdx-nxst-001.schrodinger.com:8333/shared";
       mountPoint = "/Volumes/juicefs";
       # accessKey is the literal string "admin" — bake it as a
       # /nix/store text file so the upstream mount script (which only
@@ -473,7 +519,7 @@ in
       # secretKey is the SeaweedFS S3 admin secret, decrypted by sops-nix
       # at activation. See sops.secrets.seaweedfs-admin-secret above.
       secretKeyFile = config.sops.secrets.seaweedfs-admin-secret.path;
-      formatOnFirstBoot = false; # desk-nxst-001 formats; clients only mount
+      formatOnFirstBoot = false; # pdx-nxst-003 formats; clients only mount
       cacheDir = "/var/cache/juicefs/shared";
       cacheSize = 5120; # 5 GiB local read cache per Mac
     };
