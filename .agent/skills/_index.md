@@ -88,3 +88,9 @@ Triggers: "snowfall", "mkFlake", "add module", "add package", "add system",
 Preconditions: flake.nix uses snowfall-lib input.
 Constraints: preserve existing `snowfall.namespace`; files must be `default.nix`;
 new files must be `git add`-ed before `nix flake show` will see them.
+
+## litellm
+
+Manage LiteLLM proxy deployments (users, keys, models, teams, etc.).
+Triggers: "litellm", "proxy", "add-user", "add-key", "add-model", "view-usage"
+Preconditions: LiteLLM proxy is running; LITELLM_MASTER_KEY is set.

@@ -299,24 +299,37 @@ in
       - Private flake inputs (git-fleet, git-fleet-runner, hermes) require SSH agent
         with `~/.ssh/id_ed25519` loaded.
 
-       ## File System
+      ## Agentic Stack (The Brain)
 
-       - HOME is `/Users/casazza`. NEVER use `/root/` — it does not exist on macOS.
-       - Write temporary files to `/tmp/` or `~/` — never to `/root/`, `/home/`, or
-         Linux-style paths.
-       - When writing analysis output, use `~/` prefix or the current project directory.
-       - macOS does not have `/usr/local/bin` by default under nix-darwin — use
-         `$(which cmd)` or full nix store paths if a command isn't on PATH.
+      This project uses the **agentic-stack** portable brain. Memory, skills, and protocols
+      live in the `.agent/` directory.
 
-       ## Skills and Delegation
+      - **Recall first**: before non-trivial tasks, run `agentic-recall "<description>"`
+        (or `python3 .agent/tools/recall.py`) to consult distilled lessons.
+      - **Skills**: read `.agent/skills/_index.md` for discovery. Load full `SKILL.md` files
+        when triggers match (e.g., `snowfall-lib`, `litellm`).
+      - **Reflect**: after significant actions, run `agentic-learn` or
+        `python3 .agent/tools/memory_reflect.py <skill> <action> <outcome> --note "<why>"`
+        to teach the system new rules.
 
-       - Use `delegate_task` for parallel workstreams or tasks that benefit from a fresh
-         isolated context (refactoring, research, code review). Subagents run Haiku.
-       - Subagents also run on macOS — pass the same filesystem constraints above when
-         delegating: no /root/, use ~/tmp/ or /tmp/ for scratch files.
-       - Use skills when available: github-pr-workflow, systematic-debugging,
-         subagent-driven-development, plan, research-paper-writing.
-       - Save reusable workflows as skills via `skill_manage` rather than repeating them.
+      ## File System
+
+      - HOME is `/Users/casazza`. NEVER use `/root/` — it does not exist on macOS.
+      - Write temporary files to `/tmp/` or `~/` — never to `/root/`, `/home/`, or
+        Linux-style paths.
+      - When writing analysis output, use `~/` prefix or the current project directory.
+      - macOS does not have `/usr/local/bin` by default under nix-darwin — use
+        `$(which cmd)` or full nix store paths if a command isn't on PATH.
+
+      ## Skills and Delegation
+
+      - Use `delegate_task` for parallel workstreams or tasks that benefit from a fresh
+        isolated context (refactoring, research, code review). Subagents run Haiku.
+      - Subagents also run on macOS — pass the same filesystem constraints above when
+        delegating: no /root/, use ~/tmp/ or /tmp/ for scratch files.
+      - Use skills when available: github-pr-workflow, systematic-debugging,
+        subagent-driven-development, plan, research-paper-writing.
+      - Save reusable workflows as skills via `skill_manage` rather than repeating them.
     '';
 
     # Memory limits: increase for larger context models

@@ -4,13 +4,6 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/68d8aa3d661f0e6bd5862291b5bb263b2a6595c9"; # nixos-unstable Feb 2026, has cached darwin closure for zed/librosa/etc.
 
-    # Surgical pin: only used to source `dolt` ≥ 1.86.1 (gc init requires
-    # it). The main `nixpkgs` above is held back so we keep cached darwin
-    # builds for zed-editor / librosa / mlx / exo. Hydra has dolt 1.86.2
-    # cached on aarch64-darwin at this rev.
-    # TODO: remove this any any other gascity references
-    nixpkgs-dolt.url = "github:nixos/nixpkgs/01fbdeef22b76df85ea168fbfe1bfd9e63681b30";
-
     # Surgical pin for opencode 1.14.x. The main nixpkgs above ships
     # 1.3.13 (Feb 2026) which predates the Azure provider and the
     # current `/connect` flow. This rev is the most recent nixpkgs commit
@@ -73,15 +66,6 @@
 
     nix4nvchad = {
       url = "github:nix-community/nix4nvchad";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    # Gas City (`gc`) + Beads (`bd`) — packages, overlays, and
-    # Home Manager modules live in their own flake. Replaces the
-    # previous inline `packages/gascity`, `packages/beads`, and
-    # `modules/home/gascity` from the 2026-04-24 split.
-    gascity-flake = {
-      url = "github:ocasazza/gascity-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -231,9 +215,6 @@
         (_final: prev: {
           bifrost = prev.callPackage ./packages/bifrost { inherit inputs; };
         })
-        # gascity (`gc`) + beads (`bd`) — sourced from the standalone
-        # gascity-flake (overlays.default exposes both packages on pkgs).
-        inputs.gascity-flake.overlays.default
         # Expose nixpkgs.skills to pkgs for use in Home Manager packages.
         (final: _prev: {
           skills = inputs.nixpkgs.legacyPackages.${final.stdenv.hostPlatform.system}.skills;
@@ -243,14 +224,6 @@
         # TiKV to Redis for JuiceFS metadata, so no consumer remains.
         # Re-add if some future host brings TiKV back.
 
-        # Surgical dolt bump: gc init requires dolt ≥ 1.86.1, the main
-        # nixpkgs pin still ships 1.84.1. Sourcing only `dolt` from a
-        # newer nixpkgs avoids the closure-wide darwin rebuild that a
-        # full nixpkgs bump would trigger (zed 0.233.5, librosa 0.11.0,
-        # mlx, exo deps — none cached on hydra for darwin yet).
-        (final: _prev: {
-          dolt = inputs.nixpkgs-dolt.legacyPackages.${final.stdenv.hostPlatform.system}.dolt;
-        })
         # Surgical opencode bump: stock nixpkgs (Feb 2026) ships 1.3.13
         # which predates the Azure provider and the current `/connect`
         # flow. Sourced from a newer nixpkgs rev (1.14.25) without

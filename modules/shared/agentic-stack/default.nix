@@ -2,7 +2,7 @@
 # input. Imports the fork's home-manager module and supplies:
 #   - provider config from `lib.salt.ai.providers.*`
 #   - merged skills derivation (bundled + project-specific snowfall-lib)
-#   - claude-code wiring with `bd prime` extra hooks
+#   - claude-code adapter wiring (settings.json hooks, .claude/skills)
 #
 # The fork lives at `~/Repositories/schrodinger/schrodinger-agentic-stack/`
 # and exposes:
@@ -21,12 +21,7 @@
   ...
 }:
 
-# Note: `bd` (Schrodinger Beads) is referenced from .claude/settings.json
-# hooks. Claude Code spawns hook subprocesses with a minimal env that may
-# not include home-manager's PATH, so we use the absolute /nix/store path
-# in the hook command and ALSO put `bd` on PATH via home.packages.
 let
-  bdBin = "${pkgs.beads}/bin/bd";
   user = lib.salt.user;
 
   forkLib = inputs.schrodinger-agentic-stack.lib.${pkgs.stdenv.hostPlatform.system};
@@ -83,6 +78,34 @@ let
           will see them.
         '';
       };
+      litellm = {
+        src = ./skills/litellm;
+        manifest = {
+          name = "litellm";
+          version = "2026-05-09";
+          triggers = [
+            "litellm"
+            "proxy"
+            "add-user"
+            "add-key"
+            "add-model"
+            "view-usage"
+          ];
+          tools = [
+            "curl"
+            "bash"
+          ];
+          preconditions = [
+            "LiteLLM proxy is running"
+            "LITELLM_MASTER_KEY is set"
+          ];
+          category = "management";
+        };
+        indexEntry = ''
+          ## litellm
+          Manage LiteLLM proxy deployments (users, keys, models, teams, etc.).
+        '';
+      };
     };
   };
 in
@@ -105,15 +128,6 @@ in
     { ... }:
     {
       imports = [ inputs.schrodinger-agentic-stack.homeManagerModules.default ];
-
-      # Install `bd` (Beads) and `gc` (Gas City) on the user's PATH.
-      # `bd prime` is invoked from .claude/settings.json hooks (the hook
-      # commands use the absolute /nix/store path for safety, but having
-      # `bd` on PATH lets the user invoke it directly too).
-      home.packages = [
-        pkgs.beads
-        pkgs.gascity
-      ];
 
       programs.agentic-stack = {
         enable = true;
@@ -139,35 +153,12 @@ in
         providers.tools.enable = false;
 
         # Claude Code adapter: own .claude/settings.json + .claude/skills.
-        # bd-prime hooks (SessionStart, PreCompact) merge with agentic-stack's
-        # PostToolUse + Stop defaults via lib.recursiveUpdate in the fork module.
-        harnesses.claude-code = {
-          enable = true;
-          extraHooks = {
-            SessionStart = [
-              {
-                matcher = "";
-                hooks = [
-                  {
-                    type = "command";
-                    command = "${bdBin} prime";
-                  }
-                ];
-              }
-            ];
-            PreCompact = [
-              {
-                matcher = "";
-                hooks = [
-                  {
-                    type = "command";
-                    command = "${bdBin} prime";
-                  }
-                ];
-              }
-            ];
-          };
-        };
+        # extraHooks is empty — the fork module's PostToolUse + Stop
+        # defaults (claude_code_post_tool.py + auto_dream.py) are all
+        # we wire today. Add SessionStart / PreCompact entries here if
+        # something needs to run on session start.
+        harnesses.claude-code.enable = true;
+        harnesses.hermes.enable = true;
 
         # Nightly dream cycle.
         autoDream = {
