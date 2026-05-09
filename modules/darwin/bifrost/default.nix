@@ -78,7 +78,10 @@ let
             }
           ];
           network_config = {
-            base_url = "${cfg.providers.litellm.endpoint}/v1";
+            # base_url is the bare endpoint; bifrost's openai base type
+            # appends /v1/<path> itself. Don't include /v1 here (caused
+            # 404s like vertex-proxy did with /v1/v1/messages).
+            base_url = cfg.providers.litellm.endpoint;
             default_request_timeout_in_seconds = 300;
           };
         };
