@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "agentic_stack_version": "0.15.0",
+  "adapters": {
+    "claude-code": {
+      "installed_at": "2026-05-09T00:00:00Z",
+      "files_written": [],
+      "files_overwritten": ["CLAUDE.md", ".claude/settings.json"],
+      "files_alerted": [],
+      "file_results": [],
+      "post_install_results": [],
+      "_synthesized": true,
+      "_managed_by": "nix"
+    },
+    "opencode": {
+      "installed_at": "2026-05-09T00:00:00Z",
+      "files_written": [],
+      "files_overwritten": [],
+      "files_alerted": ["AGENTS.md"],
+      "file_results": [],
+      "post_install_results": [],
+      "_synthesized": true,
+      "_managed_by": "nix"
+    },
+    "hermes": {
+      "installed_at": "2026-05-09T00:00:00Z",
+      "files_written": [],
+      "files_overwritten": [],
+      "files_alerted": ["AGENTS.md"],
+      "file_results": [],
+      "post_install_results": [],
+      "_synthesized": true,
+      "_managed_by": "nix"
+    }
+  }
+}

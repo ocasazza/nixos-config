@@ -1,0 +1,43 @@
+{
+  "id": "0a64374c18f2",
+  "key": "pattern_schrodinger-agentic-stack_repositories_schrodinger_0a6437",
+  "name": "pattern_schrodinger-agentic-stack_repositories_schrodinger_0a6437",
+  "claim": "Wrote /Users/casazza/Repositories/schrodinger/schrodinger-agentic-stack/README.md (112 lines)",
+  "conditions": [
+    "casazza",
+    "content",
+    "file_path",
+    "lines",
+    "repositories",
+    "schrodinger",
+    "schrodinger-agentic-stack",
+    "users",
+    "write",
+    "wrote"
+  ],
+  "evidence_ids": [
+    "2026-05-09T16:13:40.893112+00:00",
+    "2026-05-09T16:14:09.337829+00:00",
+    "2026-05-09T16:14:46.212274+00:00",
+    "2026-05-09T16:15:53.869347+00:00",
+    "2026-05-09T16:16:54.124283+00:00",
+    "2026-05-09T16:19:52.769273+00:00"
+  ],
+  "cluster_size": 6,
+  "canonical_salience": 13.5,
+  "staged_at": "2026-05-09T16:27:34.402306+00:00",
+  "status": "staged",
+  "decisions": [
+    {
+      "ts": "2026-05-09T16:27:34.402306+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-05-09T16:30:07.585335+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    }
+  ],
+  "rejection_count": 0
+}

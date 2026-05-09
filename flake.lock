@@ -1500,6 +1500,7 @@
         "nixpkgs-dolt": "nixpkgs-dolt",
         "nixpkgs-opencode": "nixpkgs-opencode",
         "obsidian-vault": "obsidian-vault",
+        "schrodinger-agentic-stack": "schrodinger-agentic-stack",
         "seaweedfs": "seaweedfs",
         "snowfall-lib": "snowfall-lib_3",
         "sops-nix": "sops-nix_3"
@@ -1541,6 +1542,26 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
+      }
+    },
+    "schrodinger-agentic-stack": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1778344879,
+        "narHash": "sha256-skAjKQHNFiTtNwrLm192bJX3Ll4t80IdNeN7c5M20ws=",
+        "ref": "refs/heads/main",
+        "rev": "907f6204513587d485325e40b039812150c01615",
+        "revCount": 5,
+        "type": "git",
+        "url": "file:///Users/casazza/Repositories/schrodinger/schrodinger-agentic-stack"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:///Users/casazza/Repositories/schrodinger/schrodinger-agentic-stack"
       }
     },
     "seaweedfs": {

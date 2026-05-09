@@ -13,3 +13,7 @@ projects/*/.env
 
 # Agents
 .claude/settings.local.json
+
+# Nix-managed (programs.agentic-stack.harnesses.claude-code.enable)
+.claude/settings.json
+.claude/skills

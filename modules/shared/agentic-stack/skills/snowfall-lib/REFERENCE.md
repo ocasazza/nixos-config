@@ -9,13 +9,13 @@ Fetched: 2026-05-07T01:57:45Z
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -24,15 +24,15 @@ GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
 _ Overview
-_ Create_a_flake_if_you_don’t_have_one_already
-_ Add_Snowfall_Lib_to_your_flake
-_ Create_your_flake_outputs
-_ Configure_Snowfall_Lib
+_ Create*a_flake_if_you_don’t_have_one_already
+* Add*Snowfall_Lib_to_your_flake
+* Create*your_flake_outputs
+* Configure*Snowfall_Lib
 **\*** On this page **\***
-_ Overview
+* Overview
 _ Create_a_flake_if_you_don’t_have_one_already
-_ Add_Snowfall_Lib_to_your_flake
-_ Create_your_flake_outputs \* Configure_Snowfall_Lib
+_ Add*Snowfall_Lib_to_your_flake
+* Create_your_flake_outputs \* Configure_Snowfall_Lib
 **\*\*** Quickstart **\*\***
 Snowfall Lib is a library that makes it easy to manage your Nix flake by
 imposing an opinionated file structure.
@@ -142,13 +142,13 @@ Packages
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -156,7 +156,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Packages **\*\***
 Snowfall Lib automatically exports your packages on your flake and makes them
@@ -202,13 +202,13 @@ Overlays
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -216,7 +216,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Overlays **\*\***
 Snowfall Lib automatically exports your overlays and applies them to your
@@ -283,13 +283,13 @@ Modules
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -297,7 +297,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Modules **\*\***
 Snowfall Lib automatically applies all of your modules to your systems. This
@@ -354,13 +354,13 @@ Systems
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -377,7 +377,7 @@ o snowfallorg.users.<name>.home.path
 o snowfallorg.users.<name>.home.config
 **\*** On this page **\***
 _ Overview
-_ Options
+\_ Options
 o snowfallorg.users.<name>
 o snowfallorg.users.<name>.create
 o snowfallorg.users.<name>.admin
@@ -581,13 +581,13 @@ Homes
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -601,7 +601,7 @@ o snowfallorg.user.name
 o snowfallorg.user.home
 **\*** On this page **\***
 _ Overview
-_ Options
+\_ Options
 o snowfallorg.user.enable
 o snowfallorg.user.name
 o snowfallorg.user.home
@@ -732,13 +732,13 @@ Library
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -746,7 +746,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Library **\*\***
 Snowfall Lib automatically passes your merged library to all other parts of
@@ -802,13 +802,13 @@ Shells
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -816,7 +816,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Shells **\*\***
 To create a new shell, add a new directory your shells directory.
@@ -860,13 +860,13 @@ Checks
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -874,7 +874,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Checks **\*\***
 To create a new check, add a new directory your checks directory.
@@ -917,13 +917,13 @@ Templates
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -931,7 +931,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Templates **\*\***
 To create a new template, add a new directory your templates directory. This
@@ -980,13 +980,13 @@ Generic
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -995,8 +995,8 @@ GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
 _ Overview
-_ Outputs_Builder
-_ Custom
+_ Outputs*Builder
+* Custom
 **\*** On this page **\***
 _ Overview
 _ Outputs_Builder \* Custom
@@ -1071,13 +1071,13 @@ Channels
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -1085,7 +1085,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Channels **\*\***
 Snowfall Lib makes use of a core package set to build systems, packages, and
@@ -1137,13 +1137,13 @@ Aliases
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -1151,7 +1151,7 @@ o Migration # v2 # v3
 GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
-_ Overview
+\_ Overview
 **\*** On this page **\*** \* Overview
 **\*\*** Aliases **\*\***
 It is common for flakes to provide a default package, shell, overlay, etc.
@@ -1209,13 +1209,13 @@ Reference
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -1234,8 +1234,8 @@ _ Overview
 _ Namespace
 _ Aliases
 _ Modules
-_ External_Modules
-_ lib.snowfall.\*
+_ External*Modules
+* lib.snowfall.\*
 **\*\*** Snowfall Lib v2 Migration **\*\***
 Snowfall Lib v2 adds a large amount of features and has made a few breaking
 changes that are in the benefit of overall user experience. To migrate from v1
@@ -1306,13 +1306,13 @@ v3
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -1321,15 +1321,15 @@ GitHub
 Select theme[One of: Dark/Light/Auto]
 On this page
 _ Overview
-_ Home-Manager_Within_NixOS
-_ Target_Wide_Home-Manager
-_ Overlays
+_ Home-Manager*Within_NixOS
+* Target*Wide_Home-Manager
+* Overlays
 _ First-Class_Namespace_Support \* Snowfall_Modules
 **\*** On this page **\***
 _ Overview
 _ Home-Manager_Within_NixOS
-_ Target_Wide_Home-Manager
-_ Overlays
+_ Target*Wide_Home-Manager
+* Overlays
 _ First-Class_Namespace_Support
 _ Snowfall_Modules
 **\*\*** Snowfall Lib v3 Migration **\*\***
@@ -1407,13 +1407,13 @@ v2
 
 =========================================================================
 
-Skip_to_content
+Skip*to_content
 Snowfall
 Search
 Cancel
 GitHub
 Select theme[One of: Dark/Light/Auto]
-_ Lib
+* Lib
 o Quickstart
 o Guides # Packages # Overlays # Modules # Systems # Homes # Library # Shells # Checks # Templates # Generic # Channels # Aliases
 o Reference
@@ -1440,7 +1440,7 @@ o lib.snowfall.overlay # lib.snowfall.overlay.create-overlays-builder # lib.snow
 o lib.snowfall.template # lib.snowfall.template.create-templates
 **\*** On this page **\***
 _ Overview
-_ Usage
+\_ Usage
 o mkLib
 o mkFlake \* lib
 o lib.mkFlake # Flake_Structure # Default_Flake # Snowfall_Configuration # External_Overlays_And_Modules # Internal_Packages_And_Outputs # Default_Packages_And_Shells # Darwin_And_NixOS_Generators # Home_Manager
@@ -1611,11 +1611,11 @@ containing
 machines within.
 │ │
 │ │ The architecture is any supported architecture of NixPkgs, for example:
-│ │ - x86_64
+│ │ - x86*64
 │ │ - aarch64
 │ │ - i686
 │ │
-│ │ The format is any supported NixPkgs format _or_ a format provided by
+│ │ The format is any supported NixPkgs format \_or* a format provided by
 either nix-darwin
 │ │ or nixos-generators. However, in order to build systems with nix-darwin or
 nixos-generators,
@@ -1648,11 +1648,11 @@ directory name
 within.
 │ │
 │ │ The architecture is any supported architecture of NixPkgs, for example:
-│ │ - x86_64
+│ │ - x86*64
 │ │ - aarch64
 │ │ - i686
 │ │
-│ │ The format is any supported NixPkgs format _or_ a format provided by
+│ │ The format is any supported NixPkgs format \_or* a format provided by
 either nix-darwin
 │ │ or nixos-generators. However, in order to build systems with nix-darwin or
 nixos-generators,
@@ -1773,7 +1773,9 @@ src = ./.;
 in
 lib.mkFlake { # Add overlays for the `nixpkgs` channel.
 overlays = with inputs; [
+
 # my-inputs.overlays.my-overlay
+
 ];
 
         # Add modules to all NixOS systems.
@@ -1958,7 +1960,7 @@ hyperv Hyper-V Image (Generation 2 / VHDX)
 install-iso Installer ISO
 install-iso-hyperv Installer ISO with enabled hyper-v support
 iso ISO
-kexec kexec tarball (extract to / and run /kexec_nixos)
+kexec kexec tarball (extract to / and run /kexec*nixos)
 kexec-bundle Same as before, but it’s just an executable
 kubevirt KubeVirt image
 lxc Create a tarball which is importable as an lxc container,
@@ -1979,7 +1981,7 @@ vm-bootloader Same as vm, but uses a real bootloader instead of
 netbooting
 vm-nogui Same as vm, but without a GUI
 vmware VMWare image (VMDK)
-**_ Home Manager _**
+\*\** Home Manager \_\*\*
 Snowfall Lib supports configuring Home_Manager for both standalone use and for
 use as a module with NixOS or nix-darwin. To use this feature, your flake must
 include home-manager as an input.
@@ -2244,38 +2246,38 @@ second = 2;
 Check whether a named system is macOS.
 Type: String -> Bool
 Usage:
-is-darwin "x86*64-linux"
+is-darwin "x86\*64-linux"
 Result:
 false
-*** lib.snowfall.system.is-linux ***
+**_ lib.snowfall.system.is-linux _**
 Check whether a named system is Linux.
 Type: String -> Bool
 Usage:
 is-linux "x86_64-linux"
 Result:
 false
-*** lib.snowfall.system.is-virtual ***
+**_ lib.snowfall.system.is-virtual _**
 Check whether a named system is virtual.
 Type: String -> Bool
 Usage:
 is-linux "x86_64-iso"
 Result:
 true
-*** lib.snowfall.system.get-virtual-system-type ***
+**_ lib.snowfall.system.get-virtual-system-type _**
 Get the virtual system type of a system target.
 Type: String -> String
 Usage:
 get-virtual-system-type "x86_64-iso"
 Result:
 "iso"
-*** lib.snowfall.system.get-inferred-system-name ***
+**_ lib.snowfall.system.get-inferred-system-name _**
 Get the name of a system based on its file path.
 Type: Path -> String
 Usage:
 get-inferred-system-name "/systems/my-system/default.nix"
 Result:
 "my-system"
-*** lib.snowfall.system.get-target-systems-metadata ***
+**_ lib.snowfall.system.get-target-systems-metadata _**
 Get structured data about all systems for a given target.
 Type: String -> [Attrs]
 Usage:
@@ -2283,35 +2285,35 @@ get-target-systems-metadata "x86_64-linux"
 Result:
 [ { target = "x86_64-linux"; name = "my-machine"; path = "/systems/x86_64-
 linux/my-machine"; } ]
-*** lib.snowfall.system.get-system-builder ***
+**_ lib.snowfall.system.get-system-builder _**
 Get the system builder for a given target.
 Type: String -> Function
 Usage:
 get-system-builder "x86_64-iso"
 Result:
 (args: <system>)
-*** lib.snowfall.system.get-system-output ***
+**_ lib.snowfall.system.get-system-output _**
 Get the flake output attribute for a system target.
 Type: String -> String
 Usage:
 get-system-output "aarch64-darwin"
 Result:
 "darwinConfigurations"
-*** lib.snowfall.system.get-resolved-system-target ***
+**_ lib.snowfall.system.get-resolved-system-target _**
 Get the resolved (non-virtual) system target.
 Type: String -> String
 Usage:
 get-resolved-system-target "x86_64-iso"
 Result:
 "x86_64-linux"
-*** lib.snowfall.system.create-system ***
+**_ lib.snowfall.system.create-system _**
 Create a system.
 Type: Attrs -> Attrs
 Usage:
 create-system { path = ./systems/my-system; }
 Result:
 <flake-utils-plus-system-configuration>
-*** lib.snowfall.system.create-systems ***
+**_ lib.snowfall.system.create-systems _**
 Create all available systems.
 Type: Attrs -> Attrs
 Usage:
@@ -2319,21 +2321,21 @@ create-systems { hosts.my-host.specialArgs.x = true; modules.nixos = [ my-
 shared-module ]; }
 Result:
 { my-host = <flake-utils-plus-system-configuration>; } \***\* lib.snowfall.home \*\***
-*** lib.snowfall.home.split-user-and-host ***
+**_ lib.snowfall.home.split-user-and-host _**
 Get the user and host from a combined string.
 Type: String -> Attrs
 Usage:
 split-user-and-host "myuser@myhost"
 Result:
 { user = "myuser"; host = "myhost"; }
-*** lib.snowfall.home.create-home ***
+**_ lib.snowfall.home.create-home _**
 Create a home.
 Type: Attrs -> Attrs
 Usage:
 create-home { path = ./homes/my-home; }
 Result:
 <flake-utils-plus-home-configuration>
-*** lib.snowfall.home.create-homes ***
+**_ lib.snowfall.home.create-homes _**
 Create all available homes.
 Type: Attrs -> Attrs
 Usage:
@@ -2341,7 +2343,7 @@ create-homes { users."my-user@my-system".specialArgs.x = true; modules = [ my-
 shared-module ]; }
 Result:
 { "my-user@my-system" = <flake-utils-plus-home-configuration>; }
-*** lib.snowfall.home.get-target-homes-metadata ***
+**_ lib.snowfall.home.get-target-homes-metadata _**
 Get structured data about all homes for a given target.
 Type: String -> [Attrs]
 Usage:
@@ -2349,7 +2351,7 @@ get-target-homes-metadata ./homes
 Result:
 [ { system = "x86_64-linux"; name = "my-home"; path = "/homes/x86_64-linux/my-
 home";} ]
-*** lib.snowfall.home.create-home-system-modules ***
+**_ lib.snowfall.home.create-home-system-modules _**
 Create system modules for home-manager integration.
 Type: Attrs -> [Module]
 Usage:
@@ -2358,7 +2360,7 @@ modules = [ my-shared-module ]; }
 Result:
 [Module] \***\* lib.snowfall.package \*\***
 Utilities for working with flake packages.
-*** lib.snowfall.package.create-packages ***
+**_ lib.snowfall.package.create-packages _**
 Create flake output packages.
 Type: Attrs -> Attrs
 Usage:
@@ -2367,7 +2369,7 @@ another-package; }; alias = { default = "another-package"; }; }
 Result:
 { another-package = ...; my-package = ...; default = ...; } \***\* lib.snowfall.shell \*\***
 Utilities for working with flake dev shells.
-*** lib.snowfall.shell.create-shell ***
+**_ lib.snowfall.shell.create-shell _**
 Create flake output packages.
 Type: Attrs -> Attrs
 Usage:
@@ -2376,7 +2378,7 @@ another-shell; }; alias = { default = "another-shell"; }; }
 Result:
 { another-shell = ...; my-shell = ...; default = ...; } \***\* lib.snowfall.overlay \*\***
 Utilities for working with channel overlays.
-*** lib.snowfall.overlay.create-overlays-builder ***
+**_ lib.snowfall.overlay.create-overlays-builder _**
 Create a flake-utils-plus overlays builder.
 Type: Attrs -> Attrs -> [(a -> b -> c)]
 Usage:
@@ -2384,7 +2386,7 @@ create-overlays-builder { src = ./my-overlays; namespace = "my-namespace";
 extra-overlays = []; }
 Result:
 (channels: [ ... ])
-*** lib.snowfall.overlay.create-overlays ***
+**_ lib.snowfall.overlay.create-overlays _**
 Create overlays to be used for flake outputs.
 Type: Attrs -> Attrs
 Usage:
@@ -2403,7 +2405,7 @@ my-example = final: prev: {};
 some-overlay = final: prev: {};
 } \***\* lib.snowfall.template \*\***
 Utilities for working with flake templates.
-*** lib.snowfall.template.create-templates ***
+**_ lib.snowfall.template.create-templates _**
 Create flake templates.
 Type: Attrs -> Attrs
 Usage:
@@ -2412,5 +2414,5 @@ template; }; alias = { default = "another-template"; }; }
 Result:
 { another-template = ...; my-template = ...; default = ...; }
 Previous*
-Aliases*Next*
+Aliases*Next\*
 v2

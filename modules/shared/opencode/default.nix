@@ -14,6 +14,10 @@
 
 let
   user = lib.salt.user;
+  # agentic-stack is always-on now (provided by modules/shared/agentic-stack/
+  # which imports the schrodinger-agentic-stack fork's HM module
+  # unconditionally). The brain lives at .agent/ in the project root.
+  brainDir = ".agent";
 in
 {
   home-manager.users.${user.name} =
@@ -84,185 +88,206 @@ in
 
       home.file.".config/opencode/opencode.json".source =
         (pkgs.formats.json { }).generate "opencode-user.json"
-          {
-            "$schema" = "https://opencode.ai/config.json";
-            # Default model: desk-nxst-001 vLLM (Qwen3.6-35B-A3B-AWQ, 65k context).
-            # No smart-routing — all backends are explicit aliases below.
-            model = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
-            # Disable the in-TUI auto-update prompt — supervisor-spawned
-            # sessions can't dismiss it and end up wedged on the modal.
-            autoupdate = false;
-            # Flip experimental_telemetry.isEnabled = true on every AI SDK
-            # call so each AI SDK span (ai.streamText, ai.doStream, etc.)
-            # routes through the OTLP pipeline alongside Effect's own spans.
-            experimental.openTelemetry = true;
-            plugin = [
-              "oh-my-opencode-slim"
-              "@tarquinen/opencode-dcp"
-            ];
-            enabled_providers = [
-              "anthropic"
-              "exo"
-              "litellm"
-              "azure"
-              "omlx"
-              "google-vertex"
-            ];
-            # Schrodinger Azure OpenAI (resource: schrodinger-code). API key
-            # comes from the sops-decrypted AZURE_API_KEY env var sourced
-            # above; resourceName from AZURE_RESOURCE_NAME (set in
-            # home.sessionVariables). Deployment IDs are case-sensitive and
-            # exact — verified by hitting
-            #   POST https://schrodinger-code.openai.azure.com/openai/deployments/<id>/chat/completions?api-version=2024-10-21
-            # The display label in /model is `name`; the attribute key is
-            # the literal Azure deployment ID.
-            provider.azure = {
-              npm = "@ai-sdk/azure";
-              name = "Schrodinger Azure";
-              options = {
-                apiKey = "$AZURE_API_KEY";
-                resourceName = "$AZURE_RESOURCE_NAME";
-              };
-              models = {
-                "${lib.salt.ai.providers.azure.deployment}" = {
-                  name = "Kimi K2.6";
-                  tool_call = true;
-                  # Kimi K2.6 only supports Azure's Chat Completions endpoint,
-                  # not the OpenAI Responses API. opencode's azure loader
-                  # (packages/opencode/src/provider/provider.ts:296) defaults
-                  # to `sdk.responses(modelID)`; this flag flips it to
-                  # `sdk.chat(modelID)` for this model only.
-                  options = {
-                    useCompletionUrls = true;
+          (
+            {
+              "$schema" = "https://opencode.ai/config.json";
+              # Default model: desk-nxst-001 vLLM (Qwen3.6-35B-A3B-AWQ, 65k context).
+              # No smart-routing — all backends are explicit aliases below.
+              model = "litellm/desk-nxst-001-qwen3.6-35b-a3b";
+              # Disable the in-TUI auto-update prompt — supervisor-spawned
+              # sessions can't dismiss it and end up wedged on the modal.
+              autoupdate = false;
+              # Flip experimental_telemetry.isEnabled = true on every AI SDK
+              # call so each AI SDK span (ai.streamText, ai.doStream, etc.)
+              # routes through the OTLP pipeline alongside Effect's own spans.
+              experimental.openTelemetry = true;
+              plugin = [
+                "oh-my-opencode-slim"
+                "@tarquinen/opencode-dcp"
+              ];
+              enabled_providers = [
+                "anthropic"
+                "exo"
+                "litellm"
+                "azure"
+                "omlx"
+                "google-vertex"
+              ];
+              # Schrodinger Azure OpenAI (resource: schrodinger-code). API key
+              # comes from the sops-decrypted AZURE_API_KEY env var sourced
+              # above; resourceName from AZURE_RESOURCE_NAME (set in
+              # home.sessionVariables). Deployment IDs are case-sensitive and
+              # exact — verified by hitting
+              #   POST https://schrodinger-code.openai.azure.com/openai/deployments/<id>/chat/completions?api-version=2024-10-21
+              # The display label in /model is `name`; the attribute key is
+              # the literal Azure deployment ID.
+              provider.azure = {
+                npm = "@ai-sdk/azure";
+                name = "Schrodinger Azure";
+                options = {
+                  apiKey = "$AZURE_API_KEY";
+                  resourceName = "$AZURE_RESOURCE_NAME";
+                };
+                models = {
+                  "${lib.salt.ai.providers.azure.deployment}" = {
+                    name = "Kimi K2.6";
+                    tool_call = true;
+                    # Kimi K2.6 only supports Azure's Chat Completions endpoint,
+                    # not the OpenAI Responses API. opencode's azure loader
+                    # (packages/opencode/src/provider/provider.ts:296) defaults
+                    # to `sdk.responses(modelID)`; this flag flips it to
+                    # `sdk.chat(modelID)` for this model only.
+                    options = {
+                      useCompletionUrls = true;
+                    };
                   };
                 };
               };
-            };
-            provider.litellm = {
-              npm = "@ai-sdk/openai-compatible";
-              name = "Schrodinger LiteLLM";
-              options = {
-                # Point at desk-nxst-001's Caddy proxy (:8080/litellm); the
-                # corporate VPN allows :8080 but not :4000, so Hermes and
-                # opencode both route through this shared endpoint.
-                baseURL = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
-                apiKey = "$LITELLM_API_KEY_OPENCODE_DARWIN";
-              };
-              # Real model_groups exposed by desk-nxst-001's LiteLLM proxy
-              # (verified via `curl localhost:4000/v1/models`). Adding entries
-              # here that don't exist on the proxy makes them appear in /model
-              # but fail at request time. To add new groups, register them on
-              # the LiteLLM side first (nixstation modules/nixos/litellm) and
-              # mirror here.
-              # Explicit host-model aliases exposed by desk-nxst-001's LiteLLM
-              # proxy. Each key is <hostname>-<modelname> — uniquely identifies
-              # one backend. Omitted aliases return 403 "team not allowed to
-              # access model" from the proxy.
-              models = {
-                "desk-nxst-001-qwen3.6-35b-a3b" = {
-                  name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
-                  limit = {
-                    context = 131072;
-                    output = 32768;
-                  };
+              provider.litellm = {
+                npm = "@ai-sdk/openai-compatible";
+                name = "Schrodinger LiteLLM";
+                options = {
+                  # Point at desk-nxst-001's Caddy proxy (:8080/litellm); the
+                  # corporate VPN allows :8080 but not :4000, so Hermes and
+                  # opencode both route through this shared endpoint.
+                  baseURL = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
+                  apiKey = "$LITELLM_API_KEY_OPENCODE_DARWIN";
                 };
-                "desk-nxst-004-qwen3-32b" = {
-                  name = "Qwen3-32B @ desk-nxst-004 vLLM";
-                  limit = {
-                    context = 65536;
-                    output = 65536;
+                # Real model_groups exposed by desk-nxst-001's LiteLLM proxy
+                # (verified via `curl localhost:4000/v1/models`). Adding entries
+                # here that don't exist on the proxy makes them appear in /model
+                # but fail at request time. To add new groups, register them on
+                # the LiteLLM side first (nixstation modules/nixos/litellm) and
+                # mirror here.
+                # Explicit host-model aliases exposed by desk-nxst-001's LiteLLM
+                # proxy. Each key is <hostname>-<modelname> — uniquely identifies
+                # one backend. Omitted aliases return 403 "team not allowed to
+                # access model" from the proxy.
+                models = {
+                  "desk-nxst-001-qwen3.6-35b-a3b" = {
+                    name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
+                    limit = {
+                      context = 131072;
+                      output = 32768;
+                    };
                   };
-                };
-                "desk-nxst-004-qwen3-embedding" = {
-                  name = "Qwen3-Embedding-0.6B @ desk-nxst-004";
-                  limit = {
-                    context = 2048;
-                    output = 0;
+                  "desk-nxst-004-qwen3-32b" = {
+                    name = "Qwen3-32B @ desk-nxst-004 vLLM";
+                    limit = {
+                      context = 65536;
+                      output = 65536;
+                    };
                   };
-                };
-                "gfr-osx26-02-qwen3-coder-next" = {
-                  name = "Qwen3-Coder-Next @ GFR exo-02 (MLX 8-bit)";
-                  limit = {
-                    context = 131072;
-                    output = 8192;
+                  "desk-nxst-004-qwen3-embedding" = {
+                    name = "Qwen3-Embedding-0.6B @ desk-nxst-004";
+                    limit = {
+                      context = 2048;
+                      output = 0;
+                    };
                   };
-                };
-                "gfr-osx26-03-qwen3-coder-next" = {
-                  name = "Qwen3-Coder-Next @ GFR exo-03 (MLX 8-bit)";
-                  limit = {
-                    context = 131072;
-                    output = 8192;
+                  "gfr-osx26-02-qwen3-coder-next" = {
+                    name = "Qwen3-Coder-Next @ GFR exo-02 (MLX 8-bit)";
+                    limit = {
+                      context = 131072;
+                      output = 8192;
+                    };
                   };
-                };
-                "laptop-qwen3-coder" = {
-                  name = "Qwen3-Coder-480B @ laptop exo (MLX)";
-                  limit = {
-                    context = 65536;
-                    output = 8192;
+                  "gfr-osx26-03-qwen3-coder-next" = {
+                    name = "Qwen3-Coder-Next @ GFR exo-03 (MLX 8-bit)";
+                    limit = {
+                      context = 131072;
+                      output = 8192;
+                    };
                   };
-                };
-                "gfr-osx26-02-gpt-oss-120b" = {
-                  name = "GPT-OSS 120B @ GFR exo-02 (MLX)";
-                  limit = {
-                    context = 131072;
-                    output = 32768;
+                  "laptop-qwen3-coder" = {
+                    name = "Qwen3-Coder-480B @ laptop exo (MLX)";
+                    limit = {
+                      context = 65536;
+                      output = 8192;
+                    };
                   };
-                };
-                "gfr-osx26-03-gpt-oss-120b" = {
-                  name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
-                  limit = {
-                    context = 131072;
-                    output = 32768;
+                  "gfr-osx26-02-gpt-oss-120b" = {
+                    name = "GPT-OSS 120B @ GFR exo-02 (MLX)";
+                    limit = {
+                      context = 131072;
+                      output = 32768;
+                    };
                   };
-                };
-                "pdx-nxst-001-qwen3-32b" = {
-                  name = "Qwen3-32B @ pdx-nxst-001 vLLM";
-                  limit = {
-                    context = 65536;
-                    output = 65536;
+                  "gfr-osx26-03-gpt-oss-120b" = {
+                    name = "GPT-OSS 120B @ GFR exo-03 (MLX)";
+                    limit = {
+                      context = 131072;
+                      output = 32768;
+                    };
                   };
-                };
-                "pdx-nxst-002-qwen3-32b" = {
-                  name = "Qwen3-32B @ pdx-nxst-002 vLLM";
-                  limit = {
-                    context = 65536;
-                    output = 65536;
+                  "pdx-nxst-001-qwen3-32b" = {
+                    name = "Qwen3-32B @ pdx-nxst-001 vLLM";
+                    limit = {
+                      context = 65536;
+                      output = 65536;
+                    };
                   };
-                };
-                "pdx-nxst-002-qwen3-embedding" = {
-                  name = "Qwen3-Embedding-0.6B @ pdx-nxst-002";
-                  limit = {
-                    context = 2048;
-                    output = 0;
+                  "pdx-nxst-002-qwen3-32b" = {
+                    name = "Qwen3-32B @ pdx-nxst-002 vLLM";
+                    limit = {
+                      context = 65536;
+                      output = 65536;
+                    };
                   };
-                };
-              };
-            };
-            # oMLX local inference server (localhost:8000/v1). Apple-Silicon-optimized
-            # with continuous batching and tiered KV cache (hot RAM + cold SSD).
-            # Models are auto-discovered from ~/.omlx/models. Point any OpenAI-compatible
-            # client here for MLX-backed local inference with caching benefits.
-            provider.omlx = {
-              npm = "@ai-sdk/openai-compatible";
-              name = "oMLX Local";
-              options = {
-                baseURL = lib.salt.ai.providers.omlx.baseURL;
-                # oMLX localhost does not require auth by default; the API key
-                # field is ignored but ai-sdk requires a non-empty string.
-                apiKey = "ollama-not-needed";
-              };
-              models = {
-                qwen3-coder-next = {
-                  name = "Qwen3-Coder-Next-8bit (MLX local)";
-                  tool_call = true;
-                  limit = {
-                    context = 32768;
-                    output = 8192;
+                  "pdx-nxst-002-qwen3-embedding" = {
+                    name = "Qwen3-Embedding-0.6B @ pdx-nxst-002";
+                    limit = {
+                      context = 2048;
+                      output = 0;
+                    };
                   };
                 };
               };
-            };
-          };
+              # oMLX local inference server (localhost:8000/v1). Apple-Silicon-optimized
+              # with continuous batching and tiered KV cache (hot RAM + cold SSD).
+              # Models are auto-discovered from ~/.omlx/models. Point any OpenAI-compatible
+              # client here for MLX-backed local inference with caching benefits.
+              provider.omlx = {
+                npm = "@ai-sdk/openai-compatible";
+                name = "oMLX Local";
+                options = {
+                  baseURL = lib.salt.ai.providers.omlx.baseURL;
+                  # oMLX localhost does not require auth by default; the API key
+                  # field is ignored but ai-sdk requires a non-empty string.
+                  apiKey = "ollama-not-needed";
+                };
+                models = {
+                  qwen3-coder-next = {
+                    name = "Qwen3-Coder-Next-8bit (MLX local)";
+                    tool_call = true;
+                    limit = {
+                      context = 32768;
+                      output = 8192;
+                    };
+                  };
+                };
+              };
+            }
+            // {
+              # agentic-stack: load .agent/AGENTS.md alongside the user's
+              # AGENTS.md so opencode picks up the portable brain (memory
+              # layers, recall workflow, skills index, hard rules).
+              instructions = [
+                "AGENTS.md"
+                "${brainDir}/AGENTS.md"
+              ];
+              # agentic-stack default safety rules from upstream's opencode
+              # adapter (adapters/opencode/opencode.json).
+              permissions = {
+                bash = {
+                  "git push --force*" = "deny";
+                  "rm -rf /*" = "deny";
+                  "git push *" = "ask";
+                };
+                edit = "allow";
+              };
+            }
+          );
 
       # Install opencode plugins whenever package.json changes.
       # Uses lib.hm.dag which is only available in this function form scope.

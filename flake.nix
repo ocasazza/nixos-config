@@ -102,6 +102,14 @@
       url = "git+file:///Users/casazza/Repositories/schrodinger/hermes-agent?ref=schrodinger";
     };
 
+    # Schrodinger fork of agentic-stack — portable .agent/ brain (skills,
+    # memory, protocols, hooks, tools) + Schrodinger coordination patterns
+    # + provider integration. Local repo mirrors the hermes pattern above.
+    schrodinger-agentic-stack = {
+      url = "git+file:///Users/casazza/Repositories/schrodinger/schrodinger-agentic-stack";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     consortium = {
       url = "github:olivecasazza/consortium";
     };
@@ -188,6 +196,16 @@
         # twg — Atlassian Teamwork Graph CLI for Jira/Confluence/Bitbucket
         (_final: prev: {
           twg = prev.callPackage ./packages/twg { };
+        })
+        # agentic-stack — portable .agent/ brain (skills + memory + protocols
+        # + tools) for AI coding harnesses (claude-code, opencode, hermes).
+        # Sourced from the schrodinger-agentic-stack flake input (private fork
+        # of upstream codejunkie99/agentic-stack v0.15.0). The overlay exposes
+        # `pkgs.agentic-stack` for legacy consumers; new code should reference
+        # `inputs.schrodinger-agentic-stack.packages.<system>.default` directly.
+        (final: _prev: {
+          agentic-stack =
+            inputs.schrodinger-agentic-stack.packages.${final.stdenv.hostPlatform.system}.default;
         })
         # gascity (`gc`) + beads (`bd`) — sourced from the standalone
         # gascity-flake (overlays.default exposes both packages on pkgs).

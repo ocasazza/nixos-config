@@ -24,6 +24,7 @@ in
     ../../../modules/darwin/home-manager.nix
     ../../../modules/darwin/power
     ../../../modules/shared
+    ../../../modules/shared/agentic-stack
     ../../../modules/shared/cachix
     ../../../modules/shared/distributed-builds
     ../../../modules/shared/hermes
@@ -157,9 +158,25 @@ in
   # makes more of it available to the exo MLX shard. Don't gate exo
   # on workstation. GN9 has no TB cables and is excluded from the mesh
   # by topology, so its `exo.enable = true` is a no-op there.
+  # agentic-stack: provided by `modules/shared/agentic-stack/` which imports
+  # the schrodinger-agentic-stack flake input and wires programs.agentic-stack
+  # via the home-manager module. No options are configured here — see that
+  # shared module for provider config + autoDream schedule.
+
   local.hermes = {
     enable = true;
     voice.enable = isWorkstation; # faster-whisper model is large
+
+    # Mount the merged agentic-stack skills (fork's bundled seed skills +
+    # schrodinger-dispatch + project-specific snowfall-lib) alongside hermes's
+    # bundled categories. The hermes installPhase iterates `${extraSkillsDir}/*/`
+    # and treats each dir as a category, copying SKILL.md files in.
+    # agentic-stack uses the agentskills.io flat layout (`<skill>/SKILL.md`)
+    # which the hermes adapter docs explicitly support.
+    #
+    # Source-of-truth: same derivation that `programs.agentic-stack.skills.merged`
+    # exposes to .claude/skills, so hermes and Claude Code see identical sets.
+    extraSkillsDir = config.local.agentic-stack.mergedSkills;
 
     # Main model: Gemini 3.0 Pro via OAuth personal login (gemini-cli)
     mainModel = {
