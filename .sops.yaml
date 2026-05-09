@@ -20,7 +20,7 @@
 # Full rotation procedure (admin compromise, host rebuild, root rotation):
 # see secrets/README.md.
 #
-# This repo is darwin-only. The desk-nxst-001 NixOS host and its
+# This repo is darwin-only. The pdx-nxst-003 NixOS host and its
 # service-side secrets (litellm-master-key, openwebui-*, atlassian-*,
 # github-api-token, langgraph-pg-password, gfr-exo-auth-token, ...)
 # moved to ~/Repositories/schrodinger/nixstation as part of the
@@ -52,7 +52,7 @@ creation_rules:
           - *host_l75t4yhxv7_mba
   # JuiceFS-related secrets (Redis password for metadata KV +
   # SeaweedFS S3 admin secret). The backend runs on
-  # desk-nxst-001 (managed in nixstation); every Mac
+  # pdx-nxst-003 (managed in nixstation); every Mac
   # mounts JuiceFS as a client and needs `META_PASSWORD` (redis) +
   # `--secret-key <admin-secret>` (S3). admin (for editing) + every
   # darwin host_* anchor (so each Mac's darwin-rebuild can surface the
@@ -67,7 +67,7 @@ creation_rules:
           - *host_l75t4yhxv7_mba
   # Per-client LiteLLM virtual keys. Each darwin client (claude-code,
   # opencode, hermes) reads its own decrypted EnvironmentFile and
-  # presents the key to the LiteLLM proxy on desk-nxst-001:4000. File
+  # presents the key to the LiteLLM proxy on pdx-nxst-001:4000. File
   # content: a single `LITELLM_API_KEY_<CLIENT>=sk-...` line.
   - path_regex: secrets/litellm-key-claude-code-darwin\.yaml$
     key_groups:

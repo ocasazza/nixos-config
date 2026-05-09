@@ -83,7 +83,7 @@ let
       ];
     }
     {
-      hostname = "desk-nxst-001";
+      hostname = "pdx-nxst-003";
       system = "x86_64-linux";
       maxJobs = 4;
       supportedFeatures = [

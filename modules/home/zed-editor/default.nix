@@ -33,10 +33,10 @@
       agent = {
         default_model = {
           provider = "openai";
-          model = "desk-nxst-001-qwen3.6-35b-a3b";
+          model = "pdx-nxst-003-qwen3.6-35b-a3b";
         };
       };
-      # LiteLLM proxy on desk-nxst-001 exposed as an OpenAI-compatible
+      # LiteLLM proxy on pdx-nxst-003 exposed as an OpenAI-compatible
       # provider. API key (OPENAI_API_KEY) is injected into the GUI session
       # at login by the dev.schrodinger.opencode-env LaunchAgent in
       # modules/darwin/opencode/default.nix — no manual keychain setup needed.
@@ -46,8 +46,8 @@
           api_url = "${lib.salt.ai.providers.litellm.caddyEndpoint}/v1";
           available_models = [
             {
-              name = "desk-nxst-001-qwen3.6-35b-a3b";
-              display_name = "Qwen3.6-35B-A3B @ desk-nxst-001 vLLM";
+              name = "pdx-nxst-003-qwen3.6-35b-a3b";
+              display_name = "Qwen3.6-35B-A3B @ pdx-nxst-003 vLLM";
               max_tokens = 32768;
             }
             {

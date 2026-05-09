@@ -28,9 +28,22 @@ let
   # Render bifrost's config.json from the enabled provider blocks. Each
   # entry uses `env.<NAME>` as the value, which bifrost expands at request
   # time using its launchd EnvironmentVariables (set below).
+  # vertex-proxy.sdgr.app/v1 has /v1 as the message endpoint root. Bifrost's
+  # anthropic provider appends /v1/messages itself, so we need the bare host.
+  vertexProxyBaseURL = lib.removeSuffix "/v1" cfg.providers.vertexProxy.endpoint;
+
   bifrostConfig = {
     "$schema" = "https://www.getbifrost.ai/schema";
+    # Disable the config persistence store so bifrost is purely driven by
+    # config.json on each start. Without this, bifrost remembers providers
+    # in ~/.bifrost/config.db across restarts and we end up with phantom
+    # entries (e.g. an auto-bootstrapped openai key from a prior run).
+    config_store.enabled = false;
+    logs_store.enabled = false;
     providers =
+      # azure: Azure-specific config goes in `azure_key_config` PER KEY
+      # (per `core/schemas/account.go:Key.AzureKeyConfig`). The endpoint
+      # is the resource base URL — bifrost composes the deployment path.
       lib.optionalAttrs cfg.providers.azure.enable {
         azure = {
           keys = [
@@ -39,21 +52,18 @@ let
               value = "env.AZURE_API_KEY";
               weight = 1;
               models = [ "*" ];
+              azure_key_config = {
+                endpoint = "https://${cfg.providers.azure.resourceName}.openai.azure.com";
+                # api_version defaults to 2024-10-21 (matches what opencode
+                # was using), so we omit it here.
+              };
             }
           ];
-          azure_config = {
-            resource_name = cfg.providers.azure.resourceName;
-            # Azure deployments are keyed by deployment id (case-sensitive).
-            deployments = {
-              "${cfg.providers.azure.deployment}" = { };
-            };
-          };
         };
       }
+      # litellm: custom OpenAI-compatible upstream. Routes the local-model
+      # groups LiteLLM already federates (pdx-nxst-003 vLLM, exo MLX, etc.).
       // lib.optionalAttrs cfg.providers.litellm.enable {
-        # LiteLLM as a custom OpenAI-compatible upstream. Routes ALL local
-        # model groups (pdx-nxst-003 vLLM, exo MLX, embedding, etc.) that
-        # LiteLLM already federates.
         litellm = {
           custom_provider_config = {
             base_provider_type = "openai";
@@ -73,10 +83,16 @@ let
           };
         };
       }
+      # vertex-proxy: Schrodinger's Anthropic-on-Vertex passthrough. Custom
+      # anthropic upstream. Bifrost appends /v1/messages itself, so base_url
+      # is the bare host (vertexProxyBaseURL strips the /v1 suffix).
+      #
+      # The proxy doesn't expose `/v1/models` (it's a messages-only
+      # passthrough), so bifrost's startup model-list call returns HTML/403.
+      # That's harmless — POST /v1/messages still works. Bifrost will
+      # silently flag the provider as "list_models_failed" but accept
+      # routed chat completion requests.
       // lib.optionalAttrs cfg.providers.vertexProxy.enable {
-        # Schrodinger Vertex proxy (Anthropic-via-Vertex). gcloud ADC
-        # access token from the refresh helper. Bifrost retries on 401
-        # so a stale token gets re-tried after the next refresh.
         vertex-proxy = {
           custom_provider_config = {
             base_provider_type = "anthropic";
@@ -91,27 +107,47 @@ let
             }
           ];
           network_config = {
-            base_url = cfg.providers.vertexProxy.endpoint;
+            base_url = vertexProxyBaseURL;
             default_request_timeout_in_seconds = 300;
           };
         };
       }
+      # vertex (Google Vertex AI): native bifrost provider for Gemini access
+      # using gcloud ADC. Per-key config holds project_id / project_number /
+      # region. AuthCredentials="" tells bifrost to use the access token from
+      # the `value` field directly (instead of a service-account JSON file).
       // lib.optionalAttrs cfg.providers.geminiVertex.enable {
-        # Gemini access via Vertex AI using the same gcloud ADC token.
-        # Replaces the gemini-cli OAuth flow with a unified Google auth.
-        # Models: gemini-2.5-pro, gemini-2.5-flash, etc.
         vertex = {
           keys = [
             {
+              # Bifrost's vertex provider uses Google's ADC chain via
+              # `google.FindDefaultCredentials` (see core/providers/vertex/
+              # vertex.go:getAuthTokenSource). The Key.Value field is NOT
+              # used for vertex auth. Empty value avoids being mistaken
+              # for an API key in API-key flows.
               name = "main";
-              value = "env.GCLOUD_ACCESS_TOKEN";
+              value = "";
               weight = 1;
               models = [ "*" ];
+              vertex_key_config = {
+                project_id = cfg.providers.geminiVertex.projectId;
+                project_number = cfg.providers.geminiVertex.projectNumber;
+                region = cfg.providers.geminiVertex.region;
+                # Empty auth_credentials triggers ADC discovery from
+                # ~/.config/gcloud/application_default_credentials.json
+                # (per account.go NOTE). User must have run
+                # `gcloud auth application-default login` once.
+                auth_credentials = "";
+              };
             }
           ];
-          vertex_config = {
-            project_id = cfg.providers.geminiVertex.projectId;
-            region = cfg.providers.geminiVertex.region;
+          # Defense-in-depth: set x-goog-user-project so the ADC token's
+          # quota project is unambiguous (the user also ran
+          # `gcloud auth application-default set-quota-project <id>`).
+          network_config = {
+            extra_headers = {
+              "x-goog-user-project" = cfg.providers.geminiVertex.projectId;
+            };
           };
         };
       };
@@ -203,6 +239,13 @@ in
           # (which doesn't expose the gemini provider block — only model names).
           default = "gemini-enterprise-495018";
         };
+        projectNumber = mkOption {
+          type = types.str;
+          # Numeric project number for the GCP project, required by bifrost's
+          # vertex_key_config. Get with: `gcloud projects describe <id> --format='value(projectNumber)'`.
+          default = "901456275242";
+          description = "Numeric GCP project number (different from projectId).";
+        };
         region = mkOption {
           type = types.str;
           default = "us-central1";
@@ -232,6 +275,12 @@ in
           $DRY_RUN_CMD mkdir -p ${configDirAbs} ${configDirAbs}/secrets ${logDir}
           $DRY_RUN_CMD chmod 700 ${configDirAbs}/secrets
           $DRY_RUN_CMD install -m 0600 ${configJson} ${configDirAbs}/config.json
+          # Wipe bifrost's persistent config_store DB so phantom providers
+          # from prior runs don't shadow what's in config.json. The
+          # `config_store.enabled = false` flag in config.json should
+          # prevent these from ever being written, but be defensive.
+          $DRY_RUN_CMD rm -f ${configDirAbs}/config.db ${configDirAbs}/config.db-shm ${configDirAbs}/config.db-wal
+          $DRY_RUN_CMD rm -f ${configDirAbs}/logs.db ${configDirAbs}/logs.db-shm ${configDirAbs}/logs.db-wal
         '';
       };
 

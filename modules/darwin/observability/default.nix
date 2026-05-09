@@ -1,4 +1,4 @@
-# Darwin OpenTelemetry Collector — pushes Mac telemetry to desk-nxst-001.
+# Darwin OpenTelemetry Collector — pushes Mac telemetry to pdx-nxst-003.
 #
 # This is the Mac-side counterpart to modules/nixos/observability. It runs
 # a single otelcol-contrib daemon under launchd with three intake paths:
@@ -13,14 +13,14 @@
 #
 #   2. filelog receiver tailing opencode pipeline logs
 #      (scripts/{ingest,reingest-auto}.log). They ship to Loki on
-#      desk-nxst-001.
+#      pdx-nxst-003.
 #
 #   3. hostmetrics receiver — CPU / memory / disk / load / network /
 #      filesystem. Replaces the need to install/manage node_exporter
 #      on every Mac.
 #
-# All three pipelines forward via OTLP/gRPC to desk-nxst-001's collector
-# at desk-nxst-001:4317. The `resource` processor stamps host.name and
+# All three pipelines forward via OTLP/gRPC to pdx-nxst-003's collector
+# at pdx-nxst-003:4317. The `resource` processor stamps host.name and
 # service.namespace on every signal so Grafana queries can slice by
 # `host_name` consistently across the server and all Macs (matches the
 # claude-code OTel attribute convention in modules/darwin/claude-code).
@@ -29,11 +29,11 @@
 #   * pushgateway aggregates by job — we'd lose per-host slicing.
 #   * Logs and metrics need different transports / endpoints — one
 #     daemon owns both.
-#   * Symmetric with desk-nxst-001's collector (same package, same
+#   * Symmetric with pdx-nxst-003's collector (same package, same
 #     config shape, same OTLP egress) so adding receivers/exporters
 #     is one place.
 #   * Local OTLP loopback means scripts don't need network reachability
-#     to desk-nxst-001 — the collector batches and retries on flaky LANs.
+#     to pdx-nxst-003 — the collector batches and retries on flaky LANs.
 {
   config,
   lib,
@@ -48,7 +48,7 @@ let
   # central dashboards filter on.
   hostName = config.networking.hostName or "darwin";
 
-  # Default OTLP target. The bare `desk-nxst-001` hostname resolves via
+  # Default OTLP target. The bare `pdx-nxst-003` hostname resolves via
   # the corp DNS canonicalisation pushed by AppGate (`schrodinger.com`
   # search domain). Override per-host via cfg.endpoint if name resolution
   # is flaky off-corp.
@@ -115,7 +115,7 @@ let
       };
 
       processors = {
-        # Standard OTel hygiene processors, mirroring desk-nxst-001's collector.
+        # Standard OTel hygiene processors, mirroring pdx-nxst-003's collector.
         memory_limiter = {
           check_interval = "1s";
           limit_mib = 256;
@@ -125,7 +125,7 @@ let
           send_batch_size = 1024;
         };
         # Stamp every signal with host identity so Grafana can slice
-        # by host_name across all Macs + desk-nxst-001.
+        # by host_name across all Macs + pdx-nxst-003.
         resource = {
           attributes = [
             {
@@ -186,7 +186,7 @@ in
   options.local.darwinObservability = {
     enable = lib.mkEnableOption ''
       OpenTelemetry collector daemon that pushes this Mac's host metrics
-      and opencode pipeline logs to desk-nxst-001's collector. Counterpart
+      and opencode pipeline logs to pdx-nxst-003's collector. Counterpart
       to the `local.observability` module on NixOS hosts.
     '';
 
@@ -201,7 +201,7 @@ in
       type = lib.types.str;
       default = defaultEndpoint;
       description = ''
-        OTLP/gRPC endpoint on desk-nxst-001. Bare hostname resolves via
+        OTLP/gRPC endpoint on pdx-nxst-003. Bare hostname resolves via
         the corp DNS canonicalisation pushed by AppGate; override
         per-host if name resolution is flaky off-corp.
       '';
@@ -213,7 +213,7 @@ in
       description = ''
         Port for the loopback OTLP/gRPC receiver. Local SDKs / scripts
         can push to `127.0.0.1:<port>` and the collector will relay to
-        desk-nxst-001 with the right host.name/service.namespace stamps.
+        pdx-nxst-003 with the right host.name/service.namespace stamps.
       '';
     };
 
@@ -242,7 +242,7 @@ in
     # no node_exporter-style textfile receiver, so reingest metric
     # ingestion happens via the loopback OTLP/HTTP push path documented
     # at the top of this file. The script's .prom write remains as a
-    # fallback for hosts that do run node_exporter (desk-nxst-001).
+    # fallback for hosts that do run node_exporter (pdx-nxst-003).
     # Add a `textfileDir` option here only if otelcol-contrib gains a
     # textfile receiver in a future release.
 
