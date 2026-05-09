@@ -1530,11 +1530,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1778344879,
-        "narHash": "sha256-skAjKQHNFiTtNwrLm192bJX3Ll4t80IdNeN7c5M20ws=",
+        "lastModified": 1778369872,
+        "narHash": "sha256-HgDaW4Jkpatn8cU63WqL3rjXaDE1mhs7wqGLLtaRfCw=",
         "ref": "refs/heads/main",
-        "rev": "907f6204513587d485325e40b039812150c01615",
-        "revCount": 5,
+        "rev": "f61e052c64a21260b1790a2b9544965e27440e5e",
+        "revCount": 6,
         "type": "git",
         "url": "file:///Users/casazza/Repositories/schrodinger/schrodinger-agentic-stack"
       },
