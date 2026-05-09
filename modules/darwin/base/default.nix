@@ -358,10 +358,21 @@ in
     telemetry.enable = false;
   };
 
-  # Gemini CLI with personal sign-in access
+  # Gemini CLI with personal sign-in access. extraSettings restores
+  # custom seatbelt sandbox + UI verbosity that was previously hand-edited
+  # in ~/.gemini/settings.json before the Nix module owned the file.
   programs.gemini-cli = {
     enable = true;
     authType = "oauth-personal";
+    extraSettings = {
+      ui.errorVerbosity = "full";
+      tools = {
+        sandbox = "/Users/${user.name}/Repositories/schrodinger/nixstation/.gemini/sandbox-macos-custom.sb";
+        sandboxAllowedPaths = [ "/Users/${user.name}/.config/nixos-config" ];
+      };
+      seatbeltProfile = "custom";
+      ide.hasSeenNudge = true;
+    };
   };
 
   # opencode wiring (binary, sops keys, user-level config, MCP servers)

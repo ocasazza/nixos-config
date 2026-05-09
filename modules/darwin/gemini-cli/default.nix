@@ -10,14 +10,7 @@
 
 let
   cfg = config.programs.gemini-cli;
-  ai = config.local.ai;
   user = lib.salt.user;
-
-  # Use unified defaults if not overridden
-  vertexProjectIdResolved =
-    if cfg.vertex.projectId != "" then cfg.vertex.projectId else ai.providers.gemini.projectId;
-  vertexRegionResolved =
-    if cfg.vertex.region != "" then cfg.vertex.region else ai.providers.gemini.location;
 in
 {
   options.programs.gemini-cli = {
@@ -103,6 +96,26 @@ in
       default = null;
       description = "Optional path to a sops-managed oauth_creds.json file.";
     };
+
+    extraSettings = lib.mkOption {
+      type = lib.types.attrs;
+      default = { };
+      description = ''
+        Extra fields merged into ~/.gemini/settings.json on top of the
+        managed `security.auth` block. Use for `ui.*`, `tools.*`,
+        `seatbeltProfile`, `ide.*`, etc.
+      '';
+      example = lib.literalExpression ''
+        {
+          ui.errorVerbosity = "full";
+          tools = {
+            sandbox = "/path/to/custom-profile.sb";
+            sandboxAllowedPaths = [ "/path/to/repo" ];
+          };
+          seatbeltProfile = "custom";
+        }
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -124,14 +137,13 @@ in
         ''}
       '';
 
-      # Managed settings.json: select the desired auth type.
-      home.file.".gemini/settings.json".text = builtins.toJSON {
-        security = {
-          auth = {
-            selectedType = cfg.authType;
-          };
-        };
-      };
+      # Managed settings.json: select the desired auth type, plus any
+      # caller-supplied extras (ui, tools, seatbeltProfile, ide.*).
+      home.file.".gemini/settings.json".text = builtins.toJSON (
+        lib.recursiveUpdate {
+          security.auth.selectedType = cfg.authType;
+        } cfg.extraSettings
+      );
 
       # Optional credentials files from sops
       home.file.".gemini/google_accounts.json" = lib.mkIf (cfg.googleAccountsFile != null) {

@@ -5,12 +5,13 @@
     "claude-code": {
       "installed_at": "2026-05-09T00:00:00Z",
       "files_written": [],
-      "files_overwritten": ["CLAUDE.md", ".claude/settings.json"],
+      "files_overwritten": ["CLAUDE.md"],
       "files_alerted": [],
       "file_results": [],
       "post_install_results": [],
       "_synthesized": true,
-      "_managed_by": "nix"
+      "_managed_by": "nix",
+      "_notes": "~/.claude/settings.json and ~/.claude/skills are Nix-managed via programs.agentic-stack.harnesses.claude-code (global, not project-level). Claude Code merges the global config with project-level <project>/.claude/settings.local.json."
     },
     "opencode": {
       "installed_at": "2026-05-09T00:00:00Z",
