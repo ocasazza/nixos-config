@@ -181,16 +181,15 @@ in
       };
       litellm = {
         enable = true;
+        # Use subdomain on :8080 (port 80 is firewalled externally)
+        endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
         # Same — reuse the opencode-darwin LiteLLM virtual key.
         apiKeyFile = config.sops.secrets.litellm-key-opencode-darwin.path;
       };
-      # vertex-proxy.enable = false: bifrost can't talk to vertex-proxy.sdgr.app
-      # because bifrost's anthropic provider sends x-api-key (vertex-proxy needs
-      # Authorization: Bearer with rotating id-token) and extra_headers don't
-      # support env-var indirection. claude-code goes direct to vertex-proxy
-      # via its existing apiKeyHelper instead. Set true if/when bifrost adds
-      # rotating-Bearer support upstream.
-      vertexProxy.enable = false;
+      # vertex-proxy: Anthropic via Schrodinger's vertex proxy. Bifrost handles
+      # the gcloud id-token rotation via its launchd refresh job, so claude-code
+      # no longer needs its own apiKeyHelper.
+      vertexProxy.enable = true;
       geminiVertex.enable = true;
     };
   };
@@ -210,11 +209,10 @@ in
     # exposes to .claude/skills, so hermes and Claude Code see identical sets.
     extraSkillsDir = config.local.agentic-stack.mergedSkills;
 
-    # Main model: Gemini 3.0 Pro via OAuth personal login (gemini-cli)
-    mainModel = {
-      provider = "gemini";
-      name = lib.salt.ai.models.gemini3Pro; # gemini-3-pro
-    };
+    # Main model: local Qwen via LiteLLM router through bifrost
+    # (Gemini OAuth works standalone via gemini-cli; vertex provider
+    # doesn't expose Gemini models via OpenAI-compatible API)
+    # mainModel inherits from litellm.enable=true default
 
     # Tool calling (delegation): local Qwen via LiteLLM router
     delegation.useVertexProxy = false;
@@ -240,12 +238,13 @@ in
     # Use the Caddy proxy endpoint (:8080/litellm) so no local SSH tunnel
     # is required.
     #
-    # Now routed through local bifrost gateway (http://localhost:8080/v1)
+    # Now routed through local bifrost gateway (http://localhost:8080)
     # which fronts the upstream LiteLLM. Bifrost handles auth + routing;
     # the per-host litellm-key-hermes is consumed by bifrost via env var,
     # not by hermes directly. Hermes still supplies a key (ignored by
     # bifrost in single-tenant mode) for compatibility.
-    litellm.endpoint = lib.salt.ai.providers.bifrost.endpoint;
+    # Don't include /v1 suffix - hermes appends it automatically
+    litellm.endpoint = "http://${lib.salt.ai.providers.bifrost.host}:${toString lib.salt.ai.providers.bifrost.port}";
     litellm.virtualKeyFile = config.sops.secrets.litellm-key-hermes.path;
 
     soulMd = ''
@@ -399,25 +398,15 @@ in
   programs.claude-code = {
     enable = true;
     model = lib.salt.ai.models.claudeSonnet;
+    # Direct to vertex-proxy, reusing bifrost's gcloud id-token refresh.
+    # Use apiKeyHelper to read the token file that bifrost maintains.
     vertex = {
       enable = true;
       projectId = lib.salt.ai.providers.vertex.projectId;
       region = lib.salt.ai.providers.vertex.region;
-      # Direct to Schrodinger vertex-proxy. We tried routing this through
-      # bifrost but ran into two architectural blockers:
-      #   1. Bifrost's anthropic base provider hardcodes the `x-api-key`
-      #      header — vertex-proxy needs `Authorization: Bearer <id-token>`.
-      #      Bifrost's `extra_headers` is static (no env-var indirection)
-      #      so we can't inject a rotating id-token without runtime config
-      #      rewrites + bifrost restarts every 50 min.
-      #   2. Bifrost's vertex provider URL is hardcoded to
-      #      aiplatform.googleapis.com (no BaseURL override) so we can't
-      #      point its native vertex provider at vertex-proxy either.
-      # apiKeyHelper script (`gcloud auth print-identity-token`) handles
-      # token rotation per-request. Bifrost still fronts Azure + Gemini +
-      # LiteLLM; claude-code just bypasses it for the Anthropic path.
       baseURL = lib.salt.ai.providers.vertex.proxyEndpoint;
     };
+    # Use a custom apiKeyHelper that reads bifrost's maintained gcloud id-token
     apiKeyHelper = true;
     telemetry.enable = false;
   };
@@ -432,6 +421,11 @@ in
   programs.gemini-cli = {
     enable = true;
     authType = "oauth-personal";
+    # Even with OAuth, configure vertex project for enterprise access
+    vertex = {
+      projectId = "gemini-enterprise-495018";
+      region = "us-central1";
+    };
     extraSettings = {
       ui.errorVerbosity = "full";
       tools = {
