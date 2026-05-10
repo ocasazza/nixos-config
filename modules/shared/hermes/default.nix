@@ -86,6 +86,44 @@ let
           };
         });
       };
+      # Several alibabacloud packages don't declare setuptools as a build
+      # dependency in their pyproject.toml. Add it to nativeBuildInputs so
+      # uv2nix can build the source distributions.
+      setuptoolsOverlay = final: prev: {
+        alibabacloud-tea = prev.alibabacloud-tea.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-credentials = prev.alibabacloud-credentials.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-credentials-api = prev.alibabacloud-credentials-api.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-dingtalk = prev.alibabacloud-dingtalk.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-endpoint-util = prev.alibabacloud-endpoint-util.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-gateway-dingtalk = prev.alibabacloud-gateway-dingtalk.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-gateway-spi = prev.alibabacloud-gateway-spi.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-openapi-util = prev.alibabacloud-openapi-util.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-tea-openapi = prev.alibabacloud-tea-openapi.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        alibabacloud-tea-util = prev.alibabacloud-tea-util.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+        darabonba-core = prev.darabonba-core.overrideAttrs (old: {
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
+        });
+      };
       pythonSet =
         (callPackage hermes.inputs.pyproject-nix.build.packages {
           python = python311;
@@ -96,6 +134,7 @@ let
               projectOverlay
               onnxruntimeOverlay
               cffiOverlay
+              setuptoolsOverlay
             ]
           );
     in
