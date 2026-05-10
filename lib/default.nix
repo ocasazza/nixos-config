@@ -31,11 +31,11 @@ rec {
   ai = {
     providers = {
       litellm = {
-        host = "pdx-nxst-001.schrodinger.com";
-        port = 4000;
-        endpoint = "http://pdx-nxst-001.schrodinger.com:4000";
+        host = "litellm.pdx-nxst-001.schrodinger.com";
+        port = 8080;
+        endpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080";
         localEndpoint = "http://localhost:4000";
-        caddyEndpoint = "http://pdx-nxst-001.schrodinger.com:8080/litellm";
+        caddyEndpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080";
         defaultLocalGroup = "pdx-nxst-003-qwen3.6-35b-a3b";
         defaultCloudGroup = "coder-cloud-claude";
         modelGroups = {
