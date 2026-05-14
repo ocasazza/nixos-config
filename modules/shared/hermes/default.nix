@@ -12,32 +12,6 @@ with lib;
 
 let
   cfg = config.local.hermes;
-  ai = config.local.ai;
-
-  # The effective local base_url: LiteLLM's router takes priority over
-  # exo takes priority over ollama when all are configured.
-  localBaseUrl =
-    if cfg.litellm.enable then
-      "${ai.providers.litellm.endpoint}/v1"
-    else
-      throw "No LiteLLM endpoint provided. Check hermes module paramaters";
-
-  localModelName = ai.models.defaultLocal;
-
-  vertexProxyBaseUrl = ai.providers.vertex.proxyEndpoint;
-
-  # api_key injected into hermes' generated config. LiteLLM's router
-  # expects the virtual-key bearer; everything else keeps the legacy
-  # "ollama" literal (vLLM ignores the value).
-  # `$LITELLM_HERMES_API_KEY` (not `env:...`) is the literal placeholder
-  # the activation-time sed replaces with the real sops-decrypted key
-  # before hermes ever reads the file. Keeping a single placeholder form
-  # keeps the substitution unambiguous.
-  localApiKey =
-    if cfg.litellm.enable then
-      "$LITELLM_HERMES_API_KEY"
-    else
-      throw "No LiteLLM API key provided. Please provide a sops encrypted API_KEY";
 
   isDarwin = builtins.elem system [
     "aarch64-darwin"
@@ -48,606 +22,84 @@ let
     "aarch64-linux"
   ];
 
-  # On Darwin, rebuild hermes venv from the fork source.
-  # The fork (~/Repositories/schrodinger/hermes-agent, schrodinger branch) carries
-  # all Schrodinger changes as proper commits — no patches needed here.
+  # Import package logic
+  package = import ./package.nix {
+    inherit
+      pkgs
+      lib
+      hermes
+      system
+      cfg
+      ;
+  };
+
+  # Generate config text from template
+  configText = import ./config-template.nix {
+    inherit
+      lib
+      cfg
+      user
+      ;
+  };
+
+  # Build a list of secret substitutions for the activation script.
+  # Each entry is a bash snippet that replaces a placeholder in the
+  # generated config with the real secret value.
   #
-  # Two wheel overrides are still required because uv.lock doesn't include
-  # macOS ARM64 variants for these packages:
-  #   - onnxruntime: missing macosx_14_0_arm64 wheel
-  #   - cffi: 2.0.0 regresses callback thread-safety on macOS (segfault in
-  #     CoreAudio callback); pinned to 1.17.1
-  hermesVenvDarwin = pkgs.callPackage (
-    {
-      python311,
-      lib,
-      callPackage,
-    }:
+  # Supported placeholders:
+  #   $LITELLM_HERMES_API_KEY  → read from cfg.litellm.virtualKeyFile
+  #   $AZURE_API_KEY            → read from cfg.delegation.azureKeyFile
+  #   $GEMINI_API_KEY           → read from cfg.mainModel.geminiKeyFile
+  #   $VERTEX_PROXY_ID_TOKEN    → read from gcloud auth print-identity-token
+  #
+  # Add more as needed following the same pattern.
+  secretSubstitutions =
     let
-      workspace = hermes.inputs.uv2nix.lib.workspace.loadWorkspace {
-        workspaceRoot = hermes.outPath;
-      };
-      projectOverlay = workspace.mkPyprojectOverlay {
-        sourcePreference = "wheel";
-      };
-      onnxruntimeOverlay = _final: prev: {
-        onnxruntime = prev.onnxruntime.overrideAttrs (_old: {
-          src = pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/60/69/6c40720201012c6af9aa7d4ecdd620e521bd806dc6269d636fdd5c5aeebe/onnxruntime-1.24.4-cp311-cp311-macosx_14_0_arm64.whl";
-            hash = "sha256-C9/Ojppkl87FhKq0B7cb9pfaxeG3t5dK3FC/dTO9s6I=";
-          };
-        });
-      };
-      cffiOverlay = _final: prev: {
-        cffi = prev.cffi.overrideAttrs (_old: {
-          src = pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/6c/f5/6c3a8efe5f503175aaddcbea6ad0d2c96dad6f5abb205750d1b3df44ef29/cffi-1.17.1-cp311-cp311-macosx_11_0_arm64.whl";
-            hash = "sha256-MMXgy1rkk8BMi0KRblLKOAefGyNcL4rl9FJ7ljxAHK8=";
-          };
-        });
-      };
-      # Several alibabacloud packages don't declare setuptools as a build
-      # dependency in their pyproject.toml. Add it to nativeBuildInputs so
-      # uv2nix can build the source distributions.
-      setuptoolsOverlay = final: prev: {
-        alibabacloud-tea = prev.alibabacloud-tea.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-credentials = prev.alibabacloud-credentials.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-credentials-api = prev.alibabacloud-credentials-api.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-dingtalk = prev.alibabacloud-dingtalk.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-endpoint-util = prev.alibabacloud-endpoint-util.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-gateway-dingtalk = prev.alibabacloud-gateway-dingtalk.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-gateway-spi = prev.alibabacloud-gateway-spi.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-openapi-util = prev.alibabacloud-openapi-util.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-tea-openapi = prev.alibabacloud-tea-openapi.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        alibabacloud-tea-util = prev.alibabacloud-tea-util.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-        darabonba-core = prev.darabonba-core.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools ];
-        });
-      };
-      pythonSet =
-        (callPackage hermes.inputs.pyproject-nix.build.packages {
-          python = python311;
-        }).overrideScope
-          (
-            lib.composeManyExtensions [
-              hermes.inputs.pyproject-build-systems.overlays.default
-              projectOverlay
-              onnxruntimeOverlay
-              cffiOverlay
-              setuptoolsOverlay
-            ]
-          );
-    in
-    pythonSet.mkVirtualEnv "hermes-agent-env" {
-      hermes-agent = [ "all" ];
-    }
-  ) { };
-
-  # Repackage hermes from the Schrodinger fork with the rebuilt venv on Darwin.
-  # pname includes -schrodinger for FleetDM build identification (ITHELP-46694).
-  hermesPackageDarwin =
-    let
-      skillsSrc = "${hermes.outPath}/skills";
-      # Runtime tools — base + skill-dependent
-      runtimeDeps =
-        with pkgs;
-        [
-          nodejs_20
-          ripgrep
-          git
-          openssh
-          ffmpeg
-          jq
-          curl
-        ]
-        ++ lib.optionals (builtins.elem "github" cfg.skills) [ gh ];
-      runtimePath = lib.makeBinPath runtimeDeps;
-    in
-    pkgs.stdenv.mkDerivation {
-      pname = "hermes-agent-schrodinger";
-      version = "0.1.0";
-      dontUnpack = true;
-      dontBuild = true;
-      nativeBuildInputs = [ pkgs.makeWrapper ];
-      installPhase = ''
-        runHook preInstall
-        mkdir -p $out/share/hermes-agent/skills $out/bin
-        # Copy only the enabled skill categories from upstream
-        # TODO: Copy any skill that exists in an explicitly defined skill list
-      ''
-      + lib.concatMapStringsSep "\n" (cat: ''
-        if [ -d "${skillsSrc}/${cat}" ]; then
-          cp -r "${skillsSrc}/${cat}" "$out/share/hermes-agent/skills/${cat}"
+      # Use sed without -i (BSD/GNU portable) and redirect to a temp file.
+      # The \$ escapes the $ in the double-quoted Nix string so bash
+      # does NOT expand the placeholder — sed sees it literally.
+      # The target file is passed as $TMPFILE from the activation script.
+      mkSed = placeholder: filePath: ''
+        if [ -r "${toString filePath}" ]; then
+          VALUE="$(cut -d= -f2- < "${toString filePath}")"
+          run sed "s|\${placeholder}|$VALUE|g" "$TMPFILE" > "$TMPFILE.sed"
+          run mv -f "$TMPFILE.sed" "$TMPFILE"
         fi
-      '') cfg.skills
-      + lib.optionalString (cfg.extraSkillsDir != null) ''
-
-        # Merge extra custom skills into the skills dir
-        for dir in ${cfg.extraSkillsDir}/*/; do
-          cat_name="$(basename "$dir")"
-          if [ ! -d "$out/share/hermes-agent/skills/$cat_name" ]; then
-            cp -r "$dir" "$out/share/hermes-agent/skills/$cat_name"
-          else
-            # Merge individual skills into existing category
-            cp -rn "$dir"/* "$out/share/hermes-agent/skills/$cat_name/" 2>/dev/null || true
-          fi
-        done
-      ''
-      + ''
-
-        ${lib.concatMapStringsSep "\n"
-          (name: ''
-            makeWrapper ${hermesVenvDarwin}/bin/${name} $out/bin/${name} \
-              --suffix PATH : "${runtimePath}" \
-              --set HERMES_BUNDLED_SKILLS $out/share/hermes-agent/skills
-          '')
-          [
-            "hermes"
-            "hermes-agent"
-            "hermes-acp"
-          ]
-        }
-        runHook postInstall
       '';
-      meta = with lib; {
-        description = "AI agent with advanced tool-calling capabilities";
-        homepage = "https://github.com/NousResearch/hermes-agent";
-        mainProgram = "hermes";
-        license = licenses.mit;
-        platforms = platforms.unix;
-      };
-    };
-
-  defaultPackage = if isDarwin then hermesPackageDarwin else hermes.packages.${system}.default;
+    in
+    concatStringsSep "\n" (
+      (optional (cfg.litellm.enable && cfg.litellm.virtualKeyFile != null) (
+        mkSed "$LITELLM_HERMES_API_KEY" cfg.litellm.virtualKeyFile
+      ))
+      ++ (optional (cfg.delegation.azureKeyFile != null) (
+        mkSed "$AZURE_API_KEY" cfg.delegation.azureKeyFile
+      ))
+      ++ (optional (cfg.mainModel.geminiKeyFile != null) (
+        mkSed "$GEMINI_API_KEY" cfg.mainModel.geminiKeyFile
+      ))
+      ++ (optional cfg.mainModel.vertexProxyIdToken ''
+        TOKEN="$(${pkgs.google-cloud-sdk}/bin/gcloud auth print-identity-token 2>/dev/null || true)"
+        if [ -n "$TOKEN" ]; then
+          run sed "s|\$VERTEX_PROXY_ID_TOKEN|$TOKEN|g" "$TMPFILE" > "$TMPFILE.sed"
+          run mv -f "$TMPFILE.sed" "$TMPFILE"
+        fi
+      '')
+    );
 in
 {
-  options.local.hermes = {
-    enable = mkEnableOption "Hermes Agent TUI";
-
-    package = mkOption {
-      type = types.package;
-      default = defaultPackage;
-      description = "The Hermes Agent package to install";
-    };
-
-    skills = mkOption {
-      type = types.listOf types.str;
-      default = [
-        "software-development"
-        "autonomous-ai-agents"
-        "github"
-        "research"
-        "productivity"
-        "mcp"
-        "note-taking"
-      ];
-      description = "Skill categories to include from upstream hermes bundled skills";
-    };
-
-    extraSkillsDir = mkOption {
-      type = types.nullOr types.path;
-      default = null;
-      description = ''
-        Path to a directory of additional custom skills.
-        These are merged alongside the upstream bundled skills.
-      '';
-    };
-
-    # ── Main model configuration ──────────────────────────────────────
-    # Controls the default model and provider for Hermes. This overrides
-    # the litellm/vertexProxy automatic selection when set.
-    mainModel = {
-      provider = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          Provider for the main model. Options: "gemini" (OAuth), "anthropic"
-          (Vertex proxy), "litellm" (LiteLLM router). When null, defaults to
-          "litellm" if litellm.enable=true, otherwise "anthropic".
-        '';
-      };
-
-      name = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          Model name for the main provider. Required when mainModel.provider
-          is set. Examples: "gemini-3-pro", "claude-sonnet-4-7",
-          "pdx-nxst-003-qwen3.6-35b-a3b".
-        '';
-      };
-
-      baseURL = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          Base URL for the main provider. Optional - most providers use
-          auto-resolution. Set this for custom endpoints.
-        '';
-      };
-
-      apiKey = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          API key for the main provider. Optional - OAuth providers (gemini)
-          don't need this. Use environment variable references like
-          "$LITELLM_HERMES_API_KEY".
-        '';
-      };
-    };
-
-    vertexProxy = {
-      baseURL = mkOption {
-        type = types.str;
-        default = lib.salt.ai.providers.vertex.proxyBaseURL;
-        description = ''
-          Vertex AI proxy base URL (Anthropic SDK appends /v1/messages).
-          When `local.hermes.litellm.enable = true` this value is
-          ignored — cloud calls route through LiteLLM's `/vertex/v1`
-          passthrough instead.
-        '';
-      };
-
-      model = mkOption {
-        type = types.str;
-        default = lib.salt.ai.models.claudeSonnet;
-        description = "Model to use via Vertex proxy";
-      };
-    };
-
-    # ── LiteLLM-routed path ───────────────────────────────────────────
-    # Route all hermes calls through the LiteLLM proxy on pdx-nxst-003:
-    #   - `vertexProxy.baseURL` references become `<endpoint>/vertex/v1`
-    #     (passthrough — gcloud id-token still flows via the refresh_token
-    #     shim into ~/.hermes/.env)
-    #   - `localBaseUrl` (ollama/exo) becomes `<endpoint>/v1` with
-    #     authentication via the sops-decrypted virtual key
-    #
-    # Mutually exclusive with the legacy path: `enable = true` on this
-    # block overrides everything that would otherwise hit vertex-proxy
-    # or localhost:52416 directly.
-    litellm = {
-      # Default-on: hermes routes through LiteLLM rather than hitting Vertex /
-      # exo directly. The legacy direct path is still reachable by setting
-      # `local.hermes.litellm.enable = false;`. When enabled but no
-      # `virtualKeyFile` is wired, only the cloud passthrough (/vertex/v1)
-      # works — local routing (/v1) needs the per-host sops-decrypted key.
-      enable = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Route Hermes through LiteLLM instead of direct providers";
-      };
-
-      endpoint = mkOption {
-        type = types.str;
-        default = lib.salt.ai.providers.litellm.caddyEndpoint;
-        description = ''
-          LiteLLM base URL. Serves `/vertex/v1` (passthrough for cloud
-          Claude) and `/v1` (OpenAI-compat router for local groups).
-
-          Defaults to the Caddy-fronted FQDN path
-          (`http://pdx-nxst-001.schrodinger.com:8080/litellm`) so every
-          fleet client routes through one auditable reverse proxy that
-          aggregates the various upstream providers. Bare `:4000` is
-          reachable inside the corp LAN but bypasses Caddy.
-        '';
-      };
-
-      virtualKeyFile = mkOption {
-        type = types.nullOr types.path;
-        default = null;
-        description = ''
-          Path to this client's LiteLLM virtual key file. Expected
-          format: a single `LITELLM_HERMES_API_KEY=sk-...` line that
-          the zsh shellInit sources at every new shell, so the value
-          is exported as `$LITELLM_HERMES_API_KEY` for hermes' config
-          file to pick up via its `env:LITELLM_HERMES_API_KEY` indirect
-          reference.
-
-          On pdx-nxst-003 this is
-          `config.sops.secrets.litellm-key-hermes.path`; on darwin
-          it's the /run/secrets path once sops-nix is wired on darwin
-          hosts.
-        '';
-      };
-
-      defaultLocalGroup = mkOption {
-        type = types.str;
-        default = lib.salt.ai.providers.litellm.defaultLocalGroup;
-        description = ''
-          LiteLLM model alias hermes refers to when picking a
-          "local" model (delegation in non-vertex mode, auxiliary
-          in non-vertex mode). Defaults to pdx-nxst-003-qwen3.6-35b-a3b.
-        '';
-      };
-    };
-
-    delegation = {
-      enable = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Route subtasks to a dedicated subagent model";
-      };
-
-      model = mkOption {
-        type = types.str;
-        default = "claude-haiku-4-5";
-        description = "Model to use for subagent delegation";
-      };
-
-      provider = mkOption {
-        type = types.str;
-        default = "anthropic";
-        description = "Provider for subagent delegation (anthropic uses the Vertex proxy)";
-      };
-
-      useVertexProxy = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Route subagent delegation through the Vertex AI proxy (uses vertexProxy.baseURL)";
-      };
-
-      maxIterations = mkOption {
-        type = types.int;
-        default = 50;
-        description = "Per-subagent iteration cap";
-      };
-
-      defaultToolsets = mkOption {
-        type = types.listOf types.str;
-        default = [
-          "terminal"
-          "file"
-          "web"
-        ];
-        description = "Default toolsets available to subagents";
-      };
-    };
-
-    auxiliary = {
-      enable = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Enable auxiliary model configuration for side tasks";
-      };
-
-      useVertexProxy = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Route auxiliary tasks (vision, web_extract, approval, etc.) through Vertex proxy with Haiku instead of local LLM";
-      };
-
-      model = mkOption {
-        type = types.str;
-        default = "claude-haiku-4-5";
-        description = "Model for auxiliary tasks when useVertexProxy is true";
-      };
-    };
-
-    agent = {
-      maxTurns = mkOption {
-        type = types.int;
-        default = 90;
-        description = "Maximum tool-calling iterations per conversation";
-      };
-
-      reasoningEffort = mkOption {
-        type = types.str;
-        default = "";
-        description = "Reasoning effort level: empty (medium), xhigh, high, medium, low, minimal, none";
-      };
-
-      gatewayTimeout = mkOption {
-        type = types.int;
-        default = 1800;
-        description = "Gateway agent inactivity timeout in seconds (0 = unlimited)";
-      };
-    };
-
-    compression = {
-      enable = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Enable automatic context compression when nearing model context limit";
-      };
-
-      threshold = mkOption {
-        type = types.str;
-        default = "0.70";
-        description = "Compress when prompt tokens reach this ratio of the model context window";
-      };
-
-      protectLastN = mkOption {
-        type = types.int;
-        default = 20;
-        description = "Always keep at least this many recent messages uncompressed";
-      };
-
-      summaryModel = mkOption {
-        type = types.str;
-        # Use a fast local model for compression. Must be in the LiteLLM
-        # allowlist for the hermes virtual key.
-        default = "litellm/gfr-osx26-02-gpt-oss-120b";
-        description = "Model used for compression summarisation (should be fast/cheap). Use a local model to avoid cloud egress.";
-      };
-    };
-
-    display = {
-      streaming = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Stream tokens to the terminal as they arrive";
-      };
-
-      showCost = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Show estimated cost in the CLI status bar";
-      };
-
-      bellOnComplete = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Play terminal bell when the agent finishes a task";
-      };
-
-      showReasoning = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Show model reasoning/thinking blocks above each response";
-      };
-
-      toolProgress = mkOption {
-        type = types.enum [
-          "off"
-          "new"
-          "all"
-          "verbose"
-        ];
-        default = "all";
-        description = "Tool call progress verbosity: off, new, all, verbose";
-      };
-    };
-
-    approvals = {
-      mode = mkOption {
-        type = types.enum [
-          "manual"
-          "smart"
-          "off"
-        ];
-        default = "smart";
-        description = "Dangerous command approval mode: manual, smart (auto-approve low-risk), off";
-      };
-    };
-
-    fileReadMaxChars = mkOption {
-      type = types.int;
-      default = 200000;
-      description = "Maximum characters per read_file call — increase for large-context models like Claude";
-    };
-
-    memoryCharLimit = mkOption {
-      type = types.int;
-      default = 2200;
-      description = "Maximum characters per memory entry";
-    };
-
-    userCharLimit = mkOption {
-      type = types.int;
-      default = 1375;
-      description = "Maximum characters per user profile entry";
-    };
-
-    soulMd = mkOption {
-      type = types.lines;
-      default = "";
-      description = ''
-        Content for ~/.hermes/SOUL.md — global agent identity injected into every session
-        regardless of working directory (slot #1 in system prompt, before project context).
-        Leave empty to keep the built-in Hermes default.
-      '';
-    };
-
-    skin = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = ''
-        Hermes display skin name (e.g. "schrodinger", "cyberpunk", "ares").
-        Skins are YAML files placed at ~/.hermes/skins/<name>.yaml.
-        Leave null to use the default skin.
-      '';
-    };
-
-    voice = {
-      enable = mkEnableOption "Hermes CLI voice mode (microphone input + TTS output)";
-
-      recordKey = mkOption {
-        type = types.str;
-        default = "ctrl+b";
-        description = "Key binding to start/stop voice recording in the TUI";
-      };
-
-      autoTts = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Automatically enable TTS when voice mode starts";
-      };
-
-      silenceThreshold = mkOption {
-        type = types.int;
-        default = 200;
-        description = "RMS level (0-32767) below which audio counts as silence";
-      };
-
-      silenceDuration = mkOption {
-        type = types.float;
-        default = 3.0;
-        description = "Seconds of silence before recording auto-stops";
-      };
-
-      sttProvider = mkOption {
-        type = types.enum [
-          "local"
-          "groq"
-          "openai"
-        ];
-        default = "local";
-        description = "Speech-to-text provider. 'local' uses faster-whisper with no API key";
-      };
-
-      sttModel = mkOption {
-        type = types.str;
-        default = "base";
-        description = "Whisper model for local STT (tiny, base, small, medium, large-v3)";
-      };
-
-      ttsProvider = mkOption {
-        type = types.enum [
-          "edge"
-          "elevenlabs"
-          "openai"
-          "neutts"
-        ];
-        default = "edge";
-        description = "Text-to-speech provider. 'edge' is free with no API key";
-      };
-
-      ttsVoice = mkOption {
-        type = types.str;
-        default = "en-US-AriaNeural";
-        description = "Voice name for Edge TTS (ignored for other providers)";
-      };
-    };
-  };
+  imports = [
+    (import ./options.nix {
+      inherit lib;
+      defaultPackage = package;
+    })
+  ];
 
   config = mkIf cfg.enable (mkMerge [
     # Common config: package, config file, shell init
     {
       environment.systemPackages = [ cfg.package ];
 
-      # `force = true`: at activation, the home.activation.hermesConfigInjectKey
+      # `force = true`: at activation, the home.activation.hermesConfigInjectSecrets
       # script (defined below) replaces this symlink with a real, key-injected
       # file. On the next activation HM would normally try to back up the
       # real file to `.bak` before placing a fresh symlink — and barf if the
@@ -655,379 +107,70 @@ in
       # skips both the backup and the collision.
       home-manager.users.${user.name}.home.file.".hermes/config.yaml" = {
         force = true;
-        text = concatStringsSep "\n" (
-          (
-            # Explicit mainModel.provider overrides automatic selection
-            if cfg.mainModel.provider != null then
-              [
-                "# Main model: ${cfg.mainModel.provider}/${cfg.mainModel.name}"
-                "# Explicit override via local.hermes.mainModel.provider"
-                "model:"
-                "  default: \"${cfg.mainModel.name}\""
-                "  provider: \"${cfg.mainModel.provider}\""
-              ]
-              ++ (optionals (cfg.mainModel.baseURL != null) [
-                "  base_url: \"${cfg.mainModel.baseURL}\""
-              ])
-              ++ (optionals (cfg.mainModel.apiKey != null) [
-                "  api_key: \"${cfg.mainModel.apiKey}\""
-              ])
-              ++ [ "" ]
-            else if cfg.litellm.enable then
-              [
-                "# Main model: GPT-OSS-120B on gfr-osx26-02 vLLM (always-on)."
-                "# Routes through bifrost (localhost:8080) which requires provider/"
-                "# model format. To switch models, use `/model litellm/<name>`."
-                "model:"
-                "  default: \"litellm/gfr-osx26-02-gpt-oss-120b\""
-                "  provider: \"custom\""
-                "  base_url: \"http://localhost:8080/v1\""
-                "  api_key: \"placeholder\""
-                ""
-              ]
-            else
-              [
-                "# Main model: cloud Claude direct to vertex-proxy (legacy path,"
-                "# active because local.hermes.litellm.enable = false)"
-                "model:"
-                "  default: \"${cfg.vertexProxy.model}\""
-                "  provider: \"anthropic\""
-                "  base_url: \"${vertexProxyBaseUrl}\""
-                ""
-              ]
-          )
-          ++ [
-            "# Custom OpenAI-compatible providers — pick any of these via"
-            "# `/model <provider>/<model>` in the hermes TUI. The main `model:`"
-            "# block above selects the default."
-            "custom_providers:"
-          ]
-          ++ optionals cfg.litellm.enable [
-            "  # LiteLLM router via bifrost (localhost:8080). Model names must match"
-            "  # the allowlist configured on the LiteLLM proxy for the hermes"
-            "  # virtual key — any name not in that allowlist returns 403."
-            "  - name: \"litellm\""
-            "    base_url: \"http://localhost:8080/v1\""
-            "    api_key: \"$LITELLM_HERMES_API_KEY\""
-            "    models:"
-            "      - \"desk-nxst-001-qwen3.6-35b-a3b\""
-            "      - \"desk-nxst-004-qwen3-32b\""
-            "      - \"desk-nxst-004-qwen3-embedding\""
-            "      - \"gfr-osx26-02-qwen3-coder-next\""
-            "      - \"gfr-osx26-03-qwen3-coder-next\""
-            "      - \"laptop-qwen3-coder\""
-            "      - \"gfr-osx26-02-gpt-oss-120b\""
-            "      - \"gfr-osx26-03-gpt-oss-120b\""
-          ]
-          ++ [
-            "  # Google Gemini via OAuth through bifrost's vertex provider"
-            "  # Uses bifrost's ADC access token for gemini-enterprise-495018"
-            "  - name: \"gemini-oauth\""
-            "    base_url: \"http://localhost:8080/vertex\""
-            "    api_key: \"placeholder\""
-            "    models:"
-            "      - \"gemini-3-pro\""
-            "      - \"gemini-3-flash\""
-            "      - \"gemini-2.5-pro\""
-            "      - \"gemini-2.5-flash\""
-            "      - \"gemini-2.0-flash-exp\""
-          ]
-          ++ optionals cfg.delegation.enable ([
-            "# Subagent delegation: local LLM (LiteLLM router when enabled)"
-            "delegation:"
-            "  base_url: \"${localBaseUrl}\""
-            "  model: \"${cfg.delegation.model}\""
-            "  api_key: \"${localApiKey}\""
-            "  max_iterations: ${toString cfg.delegation.maxIterations}"
-            "  default_toolsets: [${
-                concatStringsSep ", " (map (t: "\"${t}\"") cfg.delegation.defaultToolsets)
-              }]"
-            ""
-          ])
-          ++ optionals cfg.auxiliary.enable ([
-            "# Auxiliary tasks: local LLM (LiteLLM router when enabled)"
-            "auxiliary:"
-            "  vision:"
-            "    base_url: \"${localBaseUrl}\""
-            "    model: \"${localModelName}\""
-            "    api_key: \"${localApiKey}\""
-            "  web_extract:"
-            "    base_url: \"${localBaseUrl}\""
-            "    model: \"${localModelName}\""
-            "    api_key: \"${localApiKey}\""
-            "  compression:"
-            "    timeout: 120"
-            ""
-          ])
-          ++ optionals cfg.compression.enable [
-            "# Context compression: Haiku for fast cheap summaries"
-            "compression:"
-            "  enabled: true"
-            "  threshold: ${cfg.compression.threshold}"
-            "  target_ratio: 0.25"
-            "  protect_last_n: ${toString cfg.compression.protectLastN}"
-            "  summary_model: \"${cfg.compression.summaryModel}\""
-            "  summary_provider: \"${cfg.delegation.provider}\""
-            "  summary_base_url: \"${vertexProxyBaseUrl}\""
-            ""
-          ]
-          ++ optionals cfg.voice.enable [
-            "# Voice mode: microphone input + TTS output"
-            "voice:"
-            "  record_key: \"${cfg.voice.recordKey}\""
-            "  auto_tts: ${if cfg.voice.autoTts then "true" else "false"}"
-            "  silence_threshold: ${toString cfg.voice.silenceThreshold}"
-            "  silence_duration: ${toString cfg.voice.silenceDuration}"
-            ""
-            "stt:"
-            "  provider: \"${cfg.voice.sttProvider}\""
-            "  local:"
-            "    model: \"${cfg.voice.sttModel}\""
-            ""
-            "tts:"
-            "  provider: \"${cfg.voice.ttsProvider}\""
-            "  edge:"
-            "    voice: \"${cfg.voice.ttsVoice}\""
-            ""
-          ]
-          ++ [
-            "agent:"
-            "  tool_use_enforcement: \"auto\""
-            "  max_turns: ${toString cfg.agent.maxTurns}"
-            "  gateway_timeout: ${toString cfg.agent.gatewayTimeout}"
-          ]
-          ++ optionals (cfg.agent.reasoningEffort != "") [
-            "  reasoning_effort: \"${cfg.agent.reasoningEffort}\""
-          ]
-          ++ [
-            ""
-            "terminal:"
-            "  backend: local"
-            "  persistent_shell: true"
-            "  timeout: 180"
-            ""
-            "memory:"
-            "  provider: \"holographic\""
-            "  memory_enabled: true"
-            "  user_profile_enabled: true"
-            "  memory_char_limit: ${toString cfg.memoryCharLimit}"
-            "  user_char_limit: ${toString cfg.userCharLimit}"
-            "  nudge_interval: 10"
-            "  flush_min_turns: 6"
-            ""
-            "# Holographic memory plugin: HRR-backed compositional recall over a"
-            "# local SQLite store. auto_extract pulls facts from the conversation"
-            "# without requiring explicit `memory.record` calls."
-            "plugins:"
-            "  hermes-memory-store:"
-            "    db_path: \"/Users/${user.name}/.hermes/memory_store.db\""
-            "    auto_extract: true"
-            ""
-            "skills:"
-            "  creation_nudge_interval: 15"
-            ""
-            "checkpoints:"
-            "  enabled: true"
-            "  max_snapshots: 50"
-            ""
-            "approvals:"
-            "  mode: \"${cfg.approvals.mode}\""
-            ""
-            "display:"
-            "  streaming: ${if cfg.display.streaming then "true" else "false"}"
-            "  show_cost: ${if cfg.display.showCost then "true" else "false"}"
-            "  bell_on_complete: ${if cfg.display.bellOnComplete then "true" else "false"}"
-            "  show_reasoning: ${if cfg.display.showReasoning then "true" else "false"}"
-            "  tool_progress: \"${cfg.display.toolProgress}\""
-            "  inline_diffs: true"
-          ]
-          ++ optionals (cfg.skin != null) [
-            "  skin: \"${cfg.skin}\""
-          ]
-          ++ [
-            ""
-            "security:"
-            "  redact_secrets: true"
-            "  tirith_enabled: false"
-            ""
-            "file_read_max_chars: ${toString cfg.fileReadMaxChars}"
-          ]
-        );
+        text = configText;
       };
 
       programs.zsh.shellInit = mkAfter (''
         # faster-whisper model is already cached locally; suppress the
         # huggingface_hub unauthenticated-request warning at transcription time.
         export HF_HUB_OFFLINE=1
-        # Unified AI Provider Environment handled by modules/darwin/ai
       '');
     }
 
     # One-shot at activation: render ~/.hermes/config.yaml from the
-    # nix-store template with the sops-decrypted LITELLM virtual key
-    # spliced in. Replaces the previous per-shell sed approach, which
-    # had three problems: (1) BSD-vs-GNU sed-i incompatibility on macOS,
-    # (2) raced when hermes was launched outside an interactive shell
-    # (launchd, cron), (3) ran on every shell open for a one-shot op.
+    # nix-store template with all sops-decrypted secrets spliced in.
+    # Replaces the previous per-shell sed approach, which had three
+    # problems: (1) BSD-vs-GNU sed-i incompatibility on macOS, (2) raced
+    # when hermes was launched outside an interactive shell (launchd,
+    # cron), (3) ran on every shell open for a one-shot op.
     #
     # Lives in its own mkMerge block so it doesn't collide with the
-    # `home-manager.users.<u>.home.file.".hermes/config.yaml".text`
+    # `home-manager.users.<u>.home.file."/.hermes/config.yaml".text`
     # attribute defined above (Nix attribute paths can't repeat at
     # the same nesting level within a single attrset literal).
-    (mkIf (cfg.litellm.enable && cfg.litellm.virtualKeyFile != null) {
-      # Use the function form so `lib.hm.dag` (home-manager's extension
-      # namespace) is in scope. The outer nix-darwin lib doesn't have it.
+    (mkIf (secretSubstitutions != "") {
       home-manager.users.${user.name} =
         { lib, ... }:
         {
-          home.activation.hermesConfigInjectKey = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-            if [ -r "${toString cfg.litellm.virtualKeyFile}" ] \
-                && [ -L "$HOME/.hermes/config.yaml" ]; then
-              KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
+          home.activation.hermesConfigInjectSecrets = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+            if [ -L "$HOME/.hermes/config.yaml" ]; then
               TEMPLATE="$(readlink "$HOME/.hermes/config.yaml")"
-              # Replace the symlink with a real, key-injected file.
-              # Writing to a tmp file + mv keeps the swap atomic.
-              run sed "s|\$LITELLM_HERMES_API_KEY|$KEY|g" "$TEMPLATE" \
-                > "$HOME/.hermes/config.yaml.new"
-              run mv -f "$HOME/.hermes/config.yaml.new" "$HOME/.hermes/config.yaml"
+              # Use mktemp so a previous failed run can't leave a stale
+              # .new file with restrictive permissions behind.
+              TMPFILE="$(mktemp "$HOME/.hermes/.config.yaml.XXXXXXXXXX")"
+              run cp "$TEMPLATE" "$TMPFILE"
+              ${secretSubstitutions}
+              run mv -f "$TMPFILE" "$HOME/.hermes/config.yaml"
               run chmod 0400 "$HOME/.hermes/config.yaml"
             fi
           '';
         };
     })
 
+    # ~/.hermes/.env: hermes loads this with override=True, so empty
+    # values (e.g. GOOGLE_API_KEY=) wipe shell env vars that our
+    # zsh.shellInit sets. Write a clean .env at activation so stale
+    # entries from `hermes setup` don't break provider auth.
+    {
+      home-manager.users.${user.name} =
+        { lib, ... }:
+        {
+          home.activation.hermesEnvCleanup = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+            run install -m 0600 /dev/null "$HOME/.hermes/.env"
+            echo "# Managed by nix-darwin hermes module — do not edit." \
+              > "$HOME/.hermes/.env"
+          '';
+        };
+    }
+
     # SOUL.md: global agent identity (only written when soulMd option is set)
     (mkIf (cfg.soulMd != "") {
       home-manager.users.${user.name}.home.file.".hermes/SOUL.md".text = cfg.soulMd;
     })
 
-    # Custom display skins: ~/.hermes/skins/<name>.yaml
-    (mkIf (cfg.skin != null) {
-      home-manager.users.${user.name}.home.file.".hermes/skins/${cfg.skin}.yaml".text =
-        builtins.readFile (
-          pkgs.writeText "${cfg.skin}-skin.yaml" ''
-            name: ${cfg.skin}
-            description: Schrodinger Inc. — physics-based molecular discovery & drug design theme
-            colors:
-              banner_border: "#1032CF"
-              banner_title: "#FFFFFF"
-              banner_accent: "#A6DDF5"
-              banner_dim: "#534698"
-              banner_text: "#E8EDF5"
-              ui_accent: "#2A4EEF"
-              ui_label: "#1032CF"
-              ui_ok: "#4CAF50"
-              ui_error: "#EF5350"
-              ui_warn: "#F37C28"
-              prompt: "#E8EDF5"
-              input_rule: "#1032CF"
-              response_border: "#2A4EEF"
-              status_bar_bg: "#12122D"
-              status_bar_text: "#E8EDF5"
-              status_bar_strong: "#A6DDF5"
-              status_bar_dim: "#534698"
-              status_bar_good: "#4CAF50"
-              status_bar_warn: "#F37C28"
-              status_bar_bad: "#2A4EEF"
-              status_bar_critical: "#EF5350"
-              voice_status_bg: "#12122D"
-              completion_menu_bg: "#0D0D22"
-              completion_menu_current_bg: "#1A1A45"
-              completion_menu_meta_bg: "#12122D"
-              completion_menu_meta_current_bg: "#1E1E50"
-              session_label: "#2A4EEF"
-              session_border: "#534698"
-            spinner:
-              waiting_faces:
-                - "(⚛)"
-                - "(◈)"
-                - "(◎)"
-                - "(⊕)"
-                - "(⬡)"
-              thinking_faces:
-                - "(⚛)"
-                - "(◈)"
-                - "(◎)"
-                - "(⌁)"
-                - "(⊕)"
-              thinking_verbs:
-                - "simulating conformation"
-                - "computing binding affinity"
-                - "running FEP+ calculation"
-                - "optimizing scaffold"
-                - "mapping electron density"
-                - "sampling molecular dynamics"
-                - "equilibrating system"
-                - "minimizing energy"
-              wings:
-                - ["⟪⚛", "⚛⟫"]
-                - ["⟪◈", "◈⟫"]
-                - ["⟪⊕", "⊕⟫"]
-                - ["⟪⬡", "⬡⟫"]
-            branding:
-              agent_name: "Schrodinger Agent"
-              welcome: "Welcome to Schrödinger. Physics-based AI for molecular discovery. Type your message or /help for commands."
-              goodbye: "Until next simulation. ⚛"
-              response_label: " ⚛ Schrodinger "
-              prompt_symbol: "⚛ ❯ "
-              help_header: "(⚛) Available Commands"
-            tool_prefix: "│"
-            tool_emojis:
-              terminal: "⚙"
-              web_search: "◎"
-              read_file: "◇"
-              write_file: "◆"
-              search_files: "⊕"
-              execute_code: "⌁"
-              browser_navigate: "◈"
-              delegate_task: "▣"
-              mixture_of_agents: "⚛"
-              memory: "◐"
-              clarify: "?"
-              cronjob: "↻"
-              process: "⚙"
-              todo: "☐"
-            banner_logo: |
-              [#2A4EEF]  ⚛[/]  [bold #E8EDF5]S C H R Ö D I N G E R[/]
-            banner_hero: |
-                              [#5A1818]▓[/][#8A5530]▓[/][#5A1818]▓▓▓▓[/]    [#5A1818]▓▓▓[/]
-                              [#5A1818]▓▓▓▓▓▓[/]  [#5A1818]▓[/][#8A5530]▓[/][#5A1818]▓▓▓▓▓[/]
-                           [#5A1818]▓▓▓▓▓[/][#FFD060]▓[/][#5A1818]▓▓▓[/][#7A1018]▓[/][#5A1818]▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓[/]
-                          [#5A1818]▓▓▓▓▓▓▓▓▓▓▓▓[/][#FFD060]▓[/][#5A1818]▓▓▓[/][#FFD060]▓[/][#8A5530]▓[/][#7A1018]▓▓[/][#8A5530]▓[/][#5A1818]▓[/]
-                         [#5A1818]▓▓▓▓▓▓▓▓[/][#FFD060]▓[/][#5A1818]▓▓▓[/][#FFD060]▓[/][#5A1818]▓▓▓[/][#FFD060]▓[/][#5A1818]▓[/][#8A5530]▓[/][#7A1018]▓[/][#5A1818]▓[/][#8A5530]▓[/][#5A1818]▓[/]
-                         [#5A1818]▓▓▓[/][#FFD060]▓[/][#5A1818]▓▓▓▓▓[/][#FFD060]▓[/][#5A1818]▓[/][#FFD060]▓▓▓[/][#5A1818]▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓▓[/]
-                        [#5A1818]▓[/][#8A5530]▓[/][#FFD060]▓[/][#5A1818]▓▓▓▓▓▓▓[/][#FFD060]▓▓▓▓[/][#8A5530]▓[/][#7A1018]▓[/][#8A5530]▓▓▓[/][#5A1818]▓▓[/][#8A5530]▓▓[/][#5A1818]▓[/][#7A1018]▓[/]
-                        [#7A1018]▓[/][#5A1818]▓[/][#FFD060]▓▓▓[/][#5A1818]▓▓▓[/][#FFD060]▓▓▓[/][#5A1818]▓▓[/][#7A1018]▓▓[/][#FF2A3A]▓▓▓[/][#7A1018]▓[/][#5A1818]▓▓[/][#8A5530]▓[/][#5A1818]▓▓[/][#7A1018]▓[/]
-                        [#7A1018]▓[/][#5A1818]▓▓[/][#FFD060]▓▓▓▓▓[/][#5A1818]▓[/][#FFD060]▓▓[/][#5A1818]▓▓[/][#7A1018]▓▓[/][#FF2A3A]▓[/][#7A1018]▓[/][#5A1818]▓▓▓[/][#7A1018]▓▓▓▓▓[/]
-                        [#7A1018]▓[/][#5A1818]▓▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓▓▓[/][#8A5530]▓[/][#7A1018]▓▓[/][#8A5530]▓▓[/][#7A1018]▓[/][#FF2A3A]▓▓▓▓▓[/][#7A1018]▓[/]
-                      [#5A1818]▓▓▓▓[/][#FFD060]▓[/][#5A1818]▓▓[/][#7A1018]▓[/][#8A5530]▓▓[/][#7A1018]▓[/][#FF2A3A]▓▓[/][#7A1018]▓[/][#8A5530]▓[/][#5A1818]▓[/][#8A5530]▓▓[/][#7A1018]▓[/][#FF2A3A]▓▓▓▓▓▓▓[/][#7A1018]▓[/]
-                    [#5A1818]▓▓[/][#D8D8D8]▓▓▓▓▓▓[/][#5A1818]▓▓▓▓▓▓▓▓▓▓[/][#FF2A3A]▓▓▓▓▓▓▓▓▓[/][#C81A26]▓[/][#5A1818]▓[/]
-                    [#5A1818]▓[/][#3FAA3F]▓[/][#D8D8D8]▓[/][#3FAA3F]▓▓[/][#D8D8D8]▓▓▓▓▓▓▓▓▓▓▓▓[/][#5A1818]▓▓[/][#FF2A3A]▓▓▓▓▓▓▓[/][#C81A26]▓[/][#7A1018]▓[/]
-                    [#3FAA3F]▓[/][#D8D8D8]▓[/][#3FAA3F]▓[/][#5A1818]▓[/][#D8D8D8]▓▓▓▓▓▓▓[/][#3FAA3F]▓▓▓[/][#D8D8D8]▓▓▓▓[/][#5A1818]▓▓[/][#FF2A3A]▓[/][#C81A26]▓▓▓▓▓[/][#7A1018]▓[/][#5A1818]▓[/]
-                    [#2C7A2C]▓[/][#D8D8D8]▓[/][#5A1818]▓▓▓[/][#FFD060]▓▓[/][#5A1818]▓▓[/][#D8D8D8]▓▓[/][#5A1818]▓▓[/][#3FAA3F]▓▓▓▓▓[/][#D8D8D8]▓[/][#5A1818]▓[/][#C81A26]▓▓▓▓[/][#7A1018]▓[/][#5A1818]▓▓[/]
-                    [#5A1818]▓▓▓▓▓▓▓▓▓▓▓▓▓[/][#D8D8D8]▓[/][#3FAA3F]▓▓▓▓[/][#D8D8D8]▓[/][#5A1818]▓[/][#C81A26]▓▓▓[/][#7A1018]▓[/][#8A5530]▓[/][#5A1818]▓[/]
-                   [#5A1818]▓▓▓▓▓▓▓▓▓▓▓▓[/][#FFD060]▓[/][#5A1818]▓[/][#D8D8D8]▓[/][#3FAA3F]▓▓▓▓[/][#5A1818]▓[/][#8A5530]▓[/][#C81A26]▓[/][#8A5530]▓▓▓[/][#5A1818]▓▓[/]
-                   [#5A1818]▓▓▓▓▓▓▓[/][#FFD060]▓▓[/][#5A1818]▓▓[/][#FFD060]▓[/][#5A1818]▓▓▓[/][#D8D8D8]▓▓▓[/][#5A1818]▓▓[/][#8A5530]▓▓▓▓▓[/][#5A1818]▓[/]
-                   [#5A1818]▓[/][#FFD060]▓[/][#5A1818]▓▓▓▓▓[/][#8A5530]▓▓[/][#5A1818]▓▓▓[/][#7A1018]▓▓[/][#8A5530]▓[/][#5A1818]▓▓[/][#8A5530]▓[/][#C81A26]▓[/][#8A5530]▓▓▓▓▓[/][#5A1818]▓▓[/]
-                   [#5A1818]▓[/][#8A5530]▓[/][#7A1018]▓▓▓▓[/][#C81A26]▓▓▓▓▓▓▓[/][#7A1018]▓▓▓▓▓[/][#C81A26]▓[/][#8A5530]▓▓▓▓▓[/][#5A1818]▓▓[/]
-                   [#5A1818]▓▓[/][#7A1018]▓[/][#C81A26]▓▓▓▓▓▓▓▓▓[/][#7A1018]▓▓▓▓▓[/][#8A5530]▓[/][#C81A26]▓[/][#8A5530]▓[/][#5A1818]▓[/][#8A5530]▓▓▓[/][#5A1818]▓[/]
-                    [#5A1818]▓▓[/][#8A5530]▓▓[/][#7A1018]▓▓[/][#C81A26]▓▓[/][#7A1018]▓▓▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓▓▓▓▓▓[/]
-                     [#5A1818]▓▓▓▓[/][#C81A26]▓[/][#7A1018]▓▓▓[/][#5A1818]▓▓[/][#7A1018]▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓▓▓▓▓[/]
-                    [#5A1818]▓▓▓▓▓[/][#C81A26]▓[/][#8A5530]▓[/][#5A1818]▓[/][#7A1018]▓▓▓[/][#5A1818]▓▓[/][#7A1018]▓▓▓[/][#8A5530]▓▓[/][#5A1818]▓▓▓[/][#8A5530]▓[/][#5A1818]▓[/]
-                    [#5A1818]▓▓▓▓▓▓▓▓▓[/][#8A5530]▓▓[/][#7A1018]▓▓[/][#5A1818]▓[/][#7A1018]▓▓[/][#8A5530]▓[/][#5A1818]▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓[/]
-                   [#5A1818]▓[/][#D8D8D8]▓[/][#5A1818]▓▓▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓[/][#8A5530]▓[/][#7A1018]▓[/][#5A1818]▓[/][#7A1018]▓[/][#8A5530]▓[/][#5A1818]▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓[/]
-                   [#5A1818]▓▓▓▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓▓▓▓[/][#7A1018]▓▓▓[/][#5A1818]▓▓▓▓▓[/]
-                   [#5A1818]▓▓▓▓▓▓▓▓[/][#8A5530]▓[/][#5A1818]▓▓▓▓▓▓[/][#7A1018]▓▓▓[/][#5A1818]▓▓▓▓▓[/]
-                  [#5A1818]▓▓▓▓▓▓▓▓▓[/][#8A5530]▓▓[/][#5A1818]▓▓▓▓▓▓[/][#7A1018]▓▓[/][#5A1818]▓▓[/][#8A5530]▓[/][#5A1818]▓[/]
-                  [#2C7A2C]▓[/][#3FAA3F]▓[/][#D8D8D8]▓[/][#5A1818]▓▓▓▓▓[/][#8A5530]▓[/][#7A1018]▓[/][#8A5530]▓▓▓▓[/][#5A1818]▓▓▓[/][#7A1018]▓▓[/][#5A1818]▓▓▓▓[/]
-                  [#3FAA3F]▓▓[/][#D8D8D8]▓[/][#5A1818]▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓[/][#8A5530]▓▓[/][#5A1818]▓▓▓[/]
-                 [#5A1818]▓[/][#3FAA3F]▓[/][#5A1818]▓▓▓[/][#2C7A2C]▓▓▓[/][#5A1818]▓▓▓▓▓[/][#2C7A2C]▓▓▓[/][#3FAA3F]▓▓[/][#5A1818]▓▓[/][#2C7A2C]▓▓▓[/][#5A1818]▓[/]
-                [#5A1818]▓[/][#3FAA3F]▓▓[/][#2C7A2C]▓[/][#5A1818]▓[/][#2C7A2C]▓[/][#3FAA3F]▓[/][#2C7A2C]▓▓[/][#5A1818]▓▓▓▓[/][#2C7A2C]▓▓▓▓▓[/][#3FAA3F]▓▓▓▓▓▓[/][#2C7A2C]▓[/][#5A1818]▓[/]
-              [#5A1818]▓[/][#2C7A2C]▓[/][#3FAA3F]▓[/][#D8D8D8]▓[/][#3FAA3F]▓[/][#5A1818]▓[/][#2C7A2C]▓▓[/][#3FAA3F]▓[/][#2C7A2C]▓▓[/][#5A1818]▓▓▓▓[/][#2C7A2C]▓▓▓▓[/][#3FAA3F]▓▓▓▓▓▓▓▓[/][#2C7A2C]▓[/][#5A1818]▓[/]
-              [#5A1818]▓[/][#3FAA3F]▓[/][#D8D8D8]▓▓[/][#3FAA3F]▓[/][#5A1818]▓[/][#2C7A2C]▓[/][#3FAA3F]▓[/][#2C7A2C]▓▓[/][#5A1818]▓▓▓▓▓▓[/][#2C7A2C]▓▓[/][#3FAA3F]▓▓▓▓▓▓▓▓▓[/][#2C7A2C]▓[/][#5A1818]▓[/]
-          ''
-        );
-    })
+    # Custom display skins managed by hermes-mod (not Nix).
+    # Reference copy: modules/shared/hermes/skins/<name>.yaml
+    # Live file: ~/.hermes/skins/<name>.yaml (writable, managed by hermes-mod)
 
     # NixOS (Linux): Ollama as a systemd service
     (optionalAttrs isLinux {

@@ -198,6 +198,29 @@ in
     enable = true;
     voice.enable = isWorkstation; # faster-whisper model is large
 
+    # ── High-performance component mapping ────────────────────────────
+    # Orchestration: Gemini 3.1 (high context, native OAuth via Bifrost/Vertex)
+    mainModel = {
+      provider = "custom";
+      name = "gemini-3.1-pro-preview";
+      baseURL = "http://localhost:8080/v1";
+      apiKey = "placeholder";
+    };
+
+    # Plan Execution: Kimi-K2.6 via Azure/Bifrost
+    delegation = {
+      enable = true;
+      provider = "custom";
+      model = "Kimi-K2.6";
+    };
+
+    # Planning & Aux tasks: Claude Opus 4.7 via Vertex/Bifrost
+    auxiliary = {
+      enable = true;
+      useVertexProxy = false; # Use Bifrost route for Opus
+      model = "claude-opus-4-7";
+    };
+
     # Mount the merged agentic-stack skills (fork's bundled seed skills +
     # schrodinger-dispatch + project-specific snowfall-lib) alongside hermes's
     # bundled categories. The hermes installPhase iterates `${extraSkillsDir}/*/`
@@ -209,25 +232,8 @@ in
     # exposes to .claude/skills, so hermes and Claude Code see identical sets.
     extraSkillsDir = config.local.agentic-stack.mergedSkills;
 
-    # Main model: local Qwen via LiteLLM router through bifrost
-    # (Gemini OAuth works standalone via gemini-cli; vertex provider
-    # doesn't expose Gemini models via OpenAI-compatible API)
-    # mainModel inherits from litellm.enable=true default
-
-    # Tool calling (delegation): local Qwen via LiteLLM router
-    delegation.useVertexProxy = false;
-    delegation.model = "pdx-nxst-003-qwen3.6-35b-a3b";
-
-    # Regular tasks (auxiliary): use main model (Gemini 3.0 Pro OAuth)
-    # Since auxiliary doesn't have separate provider/model settings when not
-    # using vertex, it will use the delegation model path
-    auxiliary.useVertexProxy = false;
-
-    # Compression: trigger earlier (0.60 vs default 0.70) so the summary
-    # model has more room to work, and use local Qwen via LiteLLM so
-    # context compression itself never hits cloud/vertex as an automatic
-    # fallback — the user explicitly decides when to invoke cloud paths.
-    compression.threshold = "0.60";
+    # Compression: trigger early for high-context models.
+    compression.threshold = "0.10";
     compression.summaryModel = "litellm/pdx-nxst-003-qwen3.6-35b-a3b";
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'

@@ -254,8 +254,8 @@ in
         };
         region = mkOption {
           type = types.str;
-          default = "us-central1";
-          description = "Vertex AI region for Gemini calls. us-central1 has the broadest model availability.";
+          default = "us-east5";
+          description = "Vertex AI region for Gemini calls.";
         };
       };
     };

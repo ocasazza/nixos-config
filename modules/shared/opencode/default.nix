@@ -93,7 +93,7 @@ in
               "$schema" = "https://opencode.ai/config.json";
               # Default model: pdx-nxst-003 vLLM (Qwen3.6-35B-A3B-AWQ, 65k context).
               # No smart-routing — all backends are explicit aliases below.
-              model = "litellm/pdx-nxst-003-qwen3.6-35b-a3b";
+              model = "sdgr-glm/glm-5.1-fp8";
               # Disable the in-TUI auto-update prompt — supervisor-spawned
               # sessions can't dismiss it and end up wedged on the modal.
               autoupdate = false;
@@ -111,8 +111,16 @@ in
                 "litellm"
                 "azure"
                 "omlx"
-                "google-vertex"
+                "sdgr-glm"
               ];
+              # Route the built-in anthropic provider through vertex-proxy.
+              # opencode detects vertex-proxy baseURL and automatically rewrites
+              # requests to rawPredict format, reads GOOGLE_VERTEX_PROJECT for
+              # the project ID, and injects a gcloud identity token as Bearer.
+              # This replaces the broken google-vertex built-in (which reads
+              # GOOGLE_CLOUD_PROJECT = gemini-enterprise-495018 instead of the
+              # correct vertex project).
+              provider.anthropic.options.baseURL = lib.salt.ai.providers.vertex.proxyEndpoint;
               # Schrodinger Azure OpenAI (resource: schrodinger-code). API key
               # comes from the sops-decrypted AZURE_API_KEY env var sourced
               # above; resourceName from AZURE_RESOURCE_NAME (set in
@@ -124,10 +132,10 @@ in
               provider.azure = {
                 npm = "@ai-sdk/azure";
                 name = "Schrodinger Azure";
-                options = {
-                  apiKey = "$AZURE_API_KEY";
-                  resourceName = "$AZURE_RESOURCE_NAME";
-                };
+                # No options.apiKey / options.resourceName here: opencode only
+                # interpolates $VAR in baseURL, not in arbitrary option fields.
+                # The @ai-sdk/azure SDK reads AZURE_API_KEY and AZURE_RESOURCE_NAME
+                # from the environment directly when these are omitted.
                 models = {
                   "${lib.salt.ai.providers.azure.deployment}" = {
                     name = "Kimi K2.6";
@@ -267,49 +275,18 @@ in
                   };
                 };
               };
-              # Bifrost local gateway (http://localhost:8080/v1). Single endpoint
-              # that fronts Azure (Schrodinger), LiteLLM (pdx-nxst-001), Vertex
-              # CLI proxy (Anthropic), and Vertex AI (Gemini). Each model is
-              # prefixed by bifrost's provider name so the gateway routes correctly.
-              # Auth: bifrost is single-tenant on localhost (no key required);
-              # the apiKey here is sent but ignored by bifrost.
-              provider.bifrost = {
+              provider.sdgr-glm = {
                 npm = "@ai-sdk/openai-compatible";
-                name = "Bifrost (local gateway)";
+                name = "Schrödinger GLM";
                 options = {
-                  baseURL = lib.salt.ai.providers.bifrost.endpoint;
-                  apiKey = "no-auth";
+                  baseURL = "https://glm-5-1-fp8.autoscale.sdgr.app/v1";
+                  apiKey = "noauth";
                 };
                 models = {
-                  "azure/${lib.salt.ai.providers.azure.deployment}" = {
-                    name = "Kimi K2.6 (via bifrost → Azure)";
-                    tool_call = true;
+                  "glm-5.1-fp8" = {
+                    name = "GLM-5.1 FP8 (H200)";
                     limit = {
-                      context = 200000;
-                      output = 32768;
-                    };
-                  };
-                  "vertex/gemini-2.5-pro" = {
-                    name = "Gemini 2.5 Pro (via bifrost → Vertex)";
-                    tool_call = true;
-                    limit = {
-                      context = 1000000;
-                      output = 65536;
-                    };
-                  };
-                  "vertex-proxy/claude-sonnet-4-7" = {
-                    name = "Claude Sonnet 4.7 (via bifrost → Vertex proxy)";
-                    tool_call = true;
-                    limit = {
-                      context = 200000;
-                      output = 32768;
-                    };
-                  };
-                  "litellm/pdx-nxst-003-qwen3.6-35b-a3b" = {
-                    name = "Qwen3.6-35B (via bifrost → LiteLLM)";
-                    tool_call = true;
-                    limit = {
-                      context = 131072;
+                      context = 202752;
                       output = 32768;
                     };
                   };
@@ -324,16 +301,6 @@ in
                 "AGENTS.md"
                 "${brainDir}/AGENTS.md"
               ];
-              # agentic-stack default safety rules from upstream's opencode
-              # adapter (adapters/opencode/opencode.json).
-              permissions = {
-                bash = {
-                  "git push --force*" = "deny";
-                  "rm -rf /*" = "deny";
-                  "git push *" = "ask";
-                };
-                edit = "allow";
-              };
             }
           );
 
