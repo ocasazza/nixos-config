@@ -36,6 +36,10 @@ rec {
         endpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080";
         localEndpoint = "http://localhost:4000";
         caddyEndpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080";
+        # Caddy proxies /vertex/* directly to vertex-proxy.sdgr.app (bypassing
+        # LiteLLM), stripping the /vertex prefix and forwarding all headers.
+        # Clients send gcloud id-tokens; vertex-proxy validates them directly.
+        vertexPassthroughEndpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080/vertex/v1";
         defaultLocalGroup = "pdx-nxst-003-qwen3.6-35b-a3b";
         defaultCloudGroup = "coder-cloud-claude";
         modelGroups = {
@@ -66,20 +70,6 @@ rec {
         apiPort = 52415;
         libp2pPort = 52416;
         baseURL = "http://localhost:52415/v1";
-      };
-
-      # Bifrost — local LLM gateway running per-Mac (launchd user agent).
-      # Fronts LiteLLM, Azure (Schrodinger), Vertex CLI proxy, and Gemini
-      # via Vertex (using gcloud ADC tokens). All harnesses (hermes,
-      # opencode, claude-code, pi) point at this single endpoint.
-      bifrost = {
-        host = "localhost";
-        port = 8080;
-        endpoint = "http://localhost:8080/v1";
-        # Default route key the harnesses pick if no override.
-        # `bifrost/azure/Kimi-K2.6` resolves: bifrost provider →
-        # azure subroute → Kimi-K2.6 deployment on schrodinger-code.
-        defaultModel = "azure/Kimi-K2.6";
       };
 
       telemetry = {

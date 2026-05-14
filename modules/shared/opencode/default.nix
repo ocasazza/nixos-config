@@ -113,14 +113,17 @@ in
                 "omlx"
                 "sdgr-glm"
               ];
-              # Route the built-in anthropic provider through vertex-proxy.
-              # opencode detects vertex-proxy baseURL and automatically rewrites
-              # requests to rawPredict format, reads GOOGLE_VERTEX_PROJECT for
-              # the project ID, and injects a gcloud identity token as Bearer.
-              # This replaces the broken google-vertex built-in (which reads
-              # GOOGLE_CLOUD_PROJECT = gemini-enterprise-495018 instead of the
-              # correct vertex project).
-              provider.anthropic.options.baseURL = lib.salt.ai.providers.vertex.proxyEndpoint;
+              # Route the built-in anthropic provider through the Caddy vertex
+              # passthrough on litellm.pdx-nxst-001. Caddy proxies /vertex/*
+              # directly to vertex-proxy.sdgr.app (bypassing LiteLLM entirely),
+              # stripping the /vertex prefix and forwarding all headers including
+              # the client's gcloud id-token. This gives us a single ingress
+              # point for observability while keeping vertex-proxy auth intact.
+              # opencode detects the vertex-proxy baseURL pattern and automatically
+              # rewrites requests to rawPredict format, reads
+              # GOOGLE_VERTEX_PROJECT for the project ID, and injects a gcloud
+              # identity token as Bearer.
+              provider.anthropic.options.baseURL = lib.salt.ai.providers.litellm.vertexPassthroughEndpoint;
               # Schrodinger Azure OpenAI (resource: schrodinger-code). API key
               # comes from the sops-decrypted AZURE_API_KEY env var sourced
               # above; resourceName from AZURE_RESOURCE_NAME (set in
