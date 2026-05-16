@@ -237,7 +237,9 @@ in
 
     # Manage ~/.claude/ declaratively via home-manager.
     home-manager.users.${user.name} = {
-      home.file.".claude/settings.json".text = builtins.toJSON settingsWithModel;
+      home.file.".claude/settings.json".source =
+        (pkgs.formats.json { }).generate "claude-settings.json"
+          settingsWithModel;
 
       home.file.".claude/skills".source = config.local.skills.path;
       home.file.".claude/commands".source = config.local.commands.path;

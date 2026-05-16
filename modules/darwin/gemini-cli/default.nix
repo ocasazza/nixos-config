@@ -145,7 +145,7 @@ in
 
       # Managed settings.json: select the desired auth type, vertex config if provided,
       # plus any caller-supplied extras (ui, tools, seatbeltProfile, ide.*).
-      home.file.".gemini/settings.json".text = builtins.toJSON (
+      home.file.".gemini/settings.json".source = (pkgs.formats.json { }).generate "gemini-settings.json" (
         lib.recursiveUpdate {
           security.auth.selectedType = cfg.authType;
           vertex = lib.optionalAttrs (cfg.vertex.projectId != "") {
