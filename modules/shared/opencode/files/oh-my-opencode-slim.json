@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
+  "preset": "local",
+  "presets": {
+    "local": {
+      "orchestrator": {
+        "model": "azure/Kimi-K2.6",
+        "skills": ["*"],
+        "mcps": ["*"]
+      },
+      "designer": {
+        "model": "azure/Kimi-K2.6",
+        "variant": "medium",
+        "skills": ["agent-browser"],
+        "mcps": []
+      },
+      "explorer": {
+        "model": "azure/Kimi-K2.6",
+        "skills": ["*"],
+        "mcps": ["*"]
+      },
+      "council": { "model": "azure/Kimi-K2.6", "skills": ["*"], "mcps": ["*"] },
+      "oracle": { "model": "azure/Kimi-K2.6", "skills": ["*"], "mcps": ["*"] },
+      "fixer": { "model": "azure/Kimi-K2.6", "skills": ["*"], "mcps": ["*"] },
+      "librarian": {
+        "model": "azure/Kimi-K2.6",
+        "skills": ["*"],
+        "mcps": ["websearch", "context7", "grep_app"]
+      }
+    }
+  }
+}

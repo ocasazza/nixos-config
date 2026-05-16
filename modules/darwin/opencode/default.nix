@@ -24,13 +24,20 @@ in
 {
   imports = [ sharedOpencode ];
 
+  # gcloud CLI needed by the vertex-proxy plugin for identity token refresh.
+  environment.systemPackages = [
+    pkgs.google-cloud-sdk
+  ];
+
   # Per-client LiteLLM virtual key + Schrodinger Azure OpenAI key.
   # Both decrypt to single `KEY=value` lines — the home.sessionVariablesExtra
   # in the shared config uses `cut -d= -f2-` to peel the value off (same pattern as
   # modules/darwin/claude-code/default.nix:255).
   sops.secrets = {
+    # hybrid-olive key: covers opencode and hermes (hybrid team — local + cloud).
+    # Migrated from litellm-key-opencode-darwin to the new multi-tenant key model.
     litellm-key-opencode-darwin = {
-      sopsFile = ../../../secrets/litellm-key-opencode-darwin.yaml;
+      sopsFile = ../../../secrets/litellm-key-hybrid-olive.yaml;
       format = "yaml";
       key = "litellm_api_key";
       mode = "0440";

@@ -84,25 +84,14 @@
       url = "github:NousResearch/hermes-agent";
     };
 
-    # Schrodinger fork of agentic-stack — portable .agent/ brain (skills,
-    # memory, protocols, hooks, tools) + Schrodinger coordination patterns
-    # + provider integration. Local repo mirrors the hermes pattern above.
-    schrodinger-agentic-stack = {
-      url = "git+file:///Users/casazza/Repositories/schrodinger/schrodinger-agentic-stack";
+    # Centralized agent skills for AI clients (gemini, claude, hermes, pi).
+    nason-skills = {
+      url = "git+file:///Users/casazza/Repositories/schrodinger/nason-skills?ref=feat/flaked";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    # Bifrost — Go-based LLM gateway (~40x faster than LiteLLM, OpenAI-compatible,
-    # 20+ providers, MCP gateway). Upstream ships its own flake exposing
-    # packages.<sys>.bifrost-http and a (NixOS-only) services.bifrost module.
-    # We use the package directly and write our own darwin module wrapping
-    # launchd.user.agents (modules/darwin/bifrost/).
-    #
-    # NOT following our nixpkgs — bifrost's go.mod requires go >= 1.26.2,
-    # but our pinned nixpkgs (Feb 2026) has go_1_26 = 1.26.1. Bifrost's
-    # own staging-next nixpkgs has the newer go.
-    bifrost = {
-      url = "github:maximhq/bifrost?ref=transports/v1.5.0";
+    olive-skills = {
+      url = "git+ssh://git@github.com/schrodinger/olive-skills";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     consortium = {
@@ -174,10 +163,6 @@
 
       # Overlays applied to all channels
       overlays = [
-        # Make our claude-code package available as pkgs.claude-code
-        (_final: prev: {
-          claude-code = prev.callPackage ./packages/claude-code { };
-        })
         # omlx — LLM inference server with continuous batching & SSD KV caching
         # for Apple Silicon. see packages/omlx/default.nix for why we use a
         # user-local venv rather than a full from-source build.
@@ -191,25 +176,6 @@
         # twg — Atlassian Teamwork Graph CLI for Jira/Confluence/Bitbucket
         (_final: prev: {
           twg = prev.callPackage ./packages/twg { };
-        })
-        # agentic-stack — portable .agent/ brain (skills + memory + protocols
-        # + tools) for AI coding harnesses (claude-code, opencode, hermes).
-        # Sourced from the schrodinger-agentic-stack flake input (private fork
-        # of upstream codejunkie99/agentic-stack v0.15.0). The overlay exposes
-        # `pkgs.agentic-stack` for legacy consumers; new code should reference
-        # `inputs.schrodinger-agentic-stack.packages.<system>.default` directly.
-        (final: _prev: {
-          agentic-stack =
-            inputs.schrodinger-agentic-stack.packages.${final.stdenv.hostPlatform.system}.default;
-        })
-        # bifrost — high-performance LLM gateway (Go, 40x faster than LiteLLM).
-        # Wrapper at packages/bifrost/ uses upstream's bifrost-http.nix with
-        # a stub bifrost-ui (upstream's UI npmDepsHash drifted post-v1.5.0).
-        # The /v1/* API works fully; only the localhost:8080/ui page is stubbed.
-        # Pass `inputs` through callPackage so the package can resolve the
-        # bifrost flake input (and its newer nixpkgs for Go 1.26.2).
-        (_final: prev: {
-          bifrost = prev.callPackage ./packages/bifrost { inherit inputs; };
         })
         # Expose nixpkgs.skills to pkgs for use in Home Manager packages.
         (final: _prev: {

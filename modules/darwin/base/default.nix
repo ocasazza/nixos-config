@@ -24,7 +24,7 @@ in
     ../../../modules/darwin/home-manager.nix
     ../../../modules/darwin/power
     ../../../modules/shared
-    ../../../modules/shared/agentic-stack
+    ../../../modules/shared/skills
     ../../../modules/shared/cachix
     ../../../modules/shared/distributed-builds
     ../../../modules/shared/hermes
@@ -87,29 +87,42 @@ in
       # modules/darwin/opencode/default.nix alongside the rest of the
       # opencode wiring. Snowfall auto-applies that module on every
       # darwin host.
-      # LiteLLM virtual key for hermes. Same shape as the claude-code
-      # secret above (single `litellm_api_key` scalar with KEY=VALUE).
-      # Hermes' shellInit reads the file at every shell start and
-      # exports `LITELLM_HERMES_API_KEY`, which hermes' config.yaml
-      # references via `api_key: env:LITELLM_HERMES_API_KEY`. Without
-      # this, hermes' /v1 path against LiteLLM 401s and the only working
-      # route is the /vertex/v1 cloud passthrough (gcloud id-token).
+      # LiteLLM virtual key for hermes (service account: local-svc-hermes,
+      # local-compute team). Hermes' shellInit reads the file at every
+      # shell start and exports `LITELLM_HERMES_API_KEY`, which hermes'
+      # config.yaml references via `api_key: env:LITELLM_HERMES_API_KEY`.
+      # Without this, hermes' /v1 path against LiteLLM 401s and the only
+      # working route is the /vertex/v1 cloud passthrough (gcloud id-token).
       #
       # Mode 0440 + group=staff so the user shell that sources the
-      # file (zsh interactive) can read it; default 0400 root would
-      # block it. Re-encrypted for each darwin host_* age key listed in
-      # `.sops.yaml`'s litellm-key-hermes rule (currently
-      # gn9cflm92k_mbp + ck2q9ln7pm_mba; gjhc5vvn49_mbp and l75t4yhxv7_mba
-      # need a `sops updatekeys` to join the keygroup before this option
-      # decrypts cleanly on those hosts).
-      litellm-key-hermes = {
-        sopsFile = ../../../secrets/litellm-key-hermes.yaml;
+      # file (zsh interactive) can read it; default 0400 root would block it.
+      # Re-encrypted for each darwin host_* age key listed in `.sops.yaml`'s
+      # litellm-key-local-svc-hermes rule.
+      litellm-key-local-svc-hermes = {
+        sopsFile = ../../../secrets/litellm-key-local-svc-hermes.yaml;
         format = "yaml";
         key = "litellm_api_key";
         mode = "0440";
         owner = "root";
         group = "staff";
       };
+      # Gemini Enterprise API key for hermes' gemini provider fallback.
+      # When mainModel.geminiKeyFile is set, the hermes activation script
+      # replaces `$GEMINI_API_KEY` in config.yaml with this value.
+      #
+      # To enable: encrypt the secret first, then uncomment this block:
+      #   sops encrypt --in-place secrets/gemini-enterprise-api-key.yaml
+      #   sops updatekeys secrets/gemini-enterprise-api-key.yaml
+      #   git add secrets/gemini-enterprise-api-key.yaml
+      #
+      # gemini-enterprise-api-key = {
+      #   sopsFile = ../../../secrets/gemini-enterprise-api-key.yaml;
+      #   format = "yaml";
+      #   key = "gemini_api_key";
+      #   mode = "0440";
+      #   owner = "root";
+      #   group = "staff";
+      # };
       # Redis password for pdx-nxst-003's JuiceFS metadata KV. Sops-nix writes
       # just the value to /run/secrets/redis-seaweedfs-password.
       # Re-encrypted to every host_*  age key in `.sops.yaml` so each
@@ -158,83 +171,75 @@ in
   # makes more of it available to the exo MLX shard. Don't gate exo
   # on workstation. GN9 has no TB cables and is excluded from the mesh
   # by topology, so its `exo.enable = true` is a no-op there.
-  # agentic-stack: provided by `modules/shared/agentic-stack/` which imports
-  # the schrodinger-agentic-stack flake input and wires programs.agentic-stack
-  # via the home-manager module. No options are configured here — see that
-  # shared module for provider config + autoDream schedule.
-
-  # Bifrost — local LLM gateway (per-Mac). Single endpoint at localhost:8080
-  # that hermes/opencode/claude-code/pi all point at. Fronts LiteLLM (for
-  # local vLLM models), Azure (Schrodinger Kimi), Vertex proxy (Anthropic
-  # via gcloud id-token), and Vertex AI (Gemini via gcloud ADC).
-  #
-  # Requires once-per-machine: `gcloud auth application-default login` to
-  # set up ADC for the vertex-proxy + Gemini providers. The ADC tokens are
-  # refreshed every 50 min by ai.bifrost.gcloud-token-refresh launchd job.
-  local.bifrost = {
-    enable = true;
-    providers = {
-      azure = {
-        enable = true;
-        # Reuse the existing opencode key (single-tenant Mac).
-        apiKeyFile = config.sops.secrets.azure-api-key-opencode-darwin.path;
-      };
-      litellm = {
-        enable = true;
-        # Use subdomain on :8080 (port 80 is firewalled externally)
-        endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
-        # Same — reuse the opencode-darwin LiteLLM virtual key.
-        apiKeyFile = config.sops.secrets.litellm-key-opencode-darwin.path;
-      };
-      # vertex-proxy: Anthropic via Schrodinger's vertex proxy. Bifrost handles
-      # the gcloud id-token rotation via its launchd refresh job, so claude-code
-      # no longer needs its own apiKeyHelper.
-      vertexProxy.enable = true;
-      geminiVertex.enable = true;
-    };
-  };
 
   local.hermes = {
     enable = true;
     voice.enable = isWorkstation; # faster-whisper model is large
 
-    # ── High-performance component mapping ────────────────────────────
-    # Orchestration: Gemini 3.1 (high context, native OAuth via Bifrost/Vertex)
+    # ── Provider configuration ──────────────────────────────────────────
+    # Hermes' built-in provider registry handles auth automatically for
+    # most providers (OAuth ADC for gemini, env-var resolution for
+    # anthropic, etc.). For providers not in the registry, set baseURL
+    # + apiKey directly — hermes treats it as a custom OpenAI-compatible
+    # endpoint.
+    #
+    # Built-in providers: gemini, anthropic, openai-codex, copilot, zai,
+    # kimi-coding, minimax, deepseek, alibaba, ai-gateway, opencode-zen,
+    # opencode-go, hf, nous.
+    #
+    # --- Azure OpenAI (delegation) ---
+    # delegation.baseURL = "https://<resource>.openai.azure.com/openai/deployments/<deployment>";
+    # delegation.apiKey = "$AZURE_API_KEY";
+    # delegation.azureKeyFile = config.sops.secrets.azure-api-key-opencode-darwin.path;
+    #
+    # --- Vertex Proxy (Claude via Schrodinger proxy) ---
+    # mainModel.provider = null;
+    # mainModel.baseURL = "https://vertex-proxy.sdgr.app/v1";
+    # mainModel.apiKey = "$VERTEX_PROXY_ID_TOKEN";
+    # mainModel.vertexProxyIdToken = true;  # activation script calls gcloud auth print-identity-token
+    #
+    # --- Gemini Enterprise (Vertex AI) ---
+    # mainModel.provider = null;
+    # mainModel.baseURL = "https://us-central1-aiplatform.googleapis.com/v1beta1/projects/gemini-enterprise-495018/locations/us-central1/endpoints/openapi";
+    # mainModel.apiKey = "$GEMINI_API_KEY";  # or use ADC OAuth
+    # mainModel.geminiKeyFile = config.sops.secrets.gemini-enterprise-api-key.path;
+
     mainModel = {
-      provider = "custom";
-      name = "gemini-3.1-pro-preview";
-      baseURL = "http://localhost:8080/v1";
-      apiKey = "placeholder";
+      name = "glm-5.1-fp8";
+      baseURL = "https://glm-5-1-fp8.autoscale.sdgr.app/v1";
+      apiKey = "noauth";
     };
 
-    # Plan Execution: Kimi-K2.6 via Azure/Bifrost
+    # Vertex AI Claude models via LiteLLM passthrough.
+    # Switch at runtime: /model custom:vertex-proxy:claude-opus-4-7
+    vertexProxy.enable = true;
+
+    # Plan Execution: Azure OpenAI (Kimi K2.6) via direct endpoint
     delegation = {
       enable = true;
-      provider = "custom";
       model = "Kimi-K2.6";
+      baseURL = "https://schrodinger-code.openai.azure.com/openai/deployments/Kimi-K2.6";
+      apiKey = "$AZURE_API_KEY";
+      azureKeyFile = config.sops.secrets.azure-api-key-opencode-darwin.path;
+      models = {
+        "Kimi-K2.6" = {
+          contextLength = 131072;
+        };
+      };
     };
 
-    # Planning & Aux tasks: Claude Opus 4.7 via Vertex/Bifrost
+    # Aux tasks: Gemini via built-in provider (vision + web_extract)
     auxiliary = {
       enable = true;
-      useVertexProxy = false; # Use Bifrost route for Opus
-      model = "claude-opus-4-7";
+      provider = "gemini";
+      model = "gemini-2.5-pro";
     };
 
-    # Mount the merged agentic-stack skills (fork's bundled seed skills +
-    # schrodinger-dispatch + project-specific snowfall-lib) alongside hermes's
-    # bundled categories. The hermes installPhase iterates `${extraSkillsDir}/*/`
-    # and treats each dir as a category, copying SKILL.md files in.
-    # agentic-stack uses the agentskills.io flat layout (`<skill>/SKILL.md`)
-    # which the hermes adapter docs explicitly support.
-    #
-    # Source-of-truth: same derivation that `programs.agentic-stack.skills.merged`
-    # exposes to .claude/skills, so hermes and Claude Code see identical sets.
-    extraSkillsDir = config.local.agentic-stack.mergedSkills;
+    extraSkillsDir = config.local.skills.path;
 
     # Compression: trigger early for high-context models.
     compression.threshold = "0.10";
-    compression.summaryModel = "litellm/pdx-nxst-003-qwen3.6-35b-a3b";
+    compression.summaryModel = "litellm/qwen3.6-35b-a3b";
 
     # Wire the per-host LiteLLM virtual key. With this set, hermes'
     # local-routing path (explicit model aliases / embedding) authenticates
@@ -244,14 +249,9 @@ in
     # Use the Caddy proxy endpoint (:8080/litellm) so no local SSH tunnel
     # is required.
     #
-    # Now routed through local bifrost gateway (http://localhost:8080)
-    # which fronts the upstream LiteLLM. Bifrost handles auth + routing;
-    # the per-host litellm-key-hermes is consumed by bifrost via env var,
-    # not by hermes directly. Hermes still supplies a key (ignored by
-    # bifrost in single-tenant mode) for compatibility.
-    # Don't include /v1 suffix - hermes appends it automatically
-    litellm.endpoint = "http://${lib.salt.ai.providers.bifrost.host}:${toString lib.salt.ai.providers.bifrost.port}";
-    litellm.virtualKeyFile = config.sops.secrets.litellm-key-hermes.path;
+    # Direct to LiteLLM
+    litellm.endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
+    litellm.virtualKeyFile = config.sops.secrets.litellm-key-local-svc-hermes.path;
 
     soulMd = ''
       You are Hermes Agent running on a Schrodinger engineering workstation (Apple Silicon Mac,
@@ -303,19 +303,6 @@ in
         Edit secrets with `sops secrets/fleet.env` or any `secrets/*.yaml` file.
       - Private flake inputs (git-fleet, git-fleet-runner, hermes) require SSH agent
         with `~/.ssh/id_ed25519` loaded.
-
-      ## Agentic Stack (The Brain)
-
-      This project uses the **agentic-stack** portable brain. Memory, skills, and protocols
-      live in the `.agent/` directory.
-
-      - **Recall first**: before non-trivial tasks, run `agentic-recall "<description>"`
-        (or `python3 .agent/tools/recall.py`) to consult distilled lessons.
-      - **Skills**: read `.agent/skills/_index.md` for discovery. Load full `SKILL.md` files
-        when triggers match (e.g., `snowfall-lib`, `litellm`).
-      - **Reflect**: after significant actions, run `agentic-learn` or
-        `python3 .agent/tools/memory_reflect.py <skill> <action> <outcome> --note "<why>"`
-        to teach the system new rules.
 
       ## File System
 
@@ -387,7 +374,7 @@ in
     providers = {
       litellm = {
         enable = true;
-        apiKeyFile = config.sops.secrets.litellm-key-hermes.path;
+        apiKeyFile = config.sops.secrets.litellm-key-opencode-darwin.path;
       };
       vertex.enable = true;
       gemini.enable = true;
@@ -403,22 +390,20 @@ in
   # they're consumed by hermes / ingest / open-webui instead.
   programs.claude-code = {
     enable = true;
-    model = lib.salt.ai.models.claudeSonnet;
-    # Direct to vertex-proxy, reusing bifrost's gcloud id-token refresh.
-    # Use apiKeyHelper to read the token file that bifrost maintains.
+    model = "claude-sonnet-4-6";
+    environment.MAX_THINKING_TOKENS = "10240";
     vertex = {
       enable = true;
       projectId = lib.salt.ai.providers.vertex.projectId;
       region = lib.salt.ai.providers.vertex.region;
       baseURL = lib.salt.ai.providers.vertex.proxyEndpoint;
     };
-    # Use a custom apiKeyHelper that reads bifrost's maintained gcloud id-token
     apiKeyHelper = true;
     telemetry.enable = false;
   };
 
   # Pi Coding Agent — TS-based terminal harness. npm-installed; routes
-  # through bifrost; ships agentic-stack's memory-hook extension.
+  # through LiteLLM. Skills from nason-skills.
   programs.pi.enable = true;
 
   # Gemini CLI with personal sign-in access. extraSettings restores

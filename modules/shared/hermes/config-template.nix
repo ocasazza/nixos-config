@@ -141,22 +141,56 @@ concatStringsSep "\n" (
   # ── Custom Providers ──────────────────────────────────────────────
   # Register custom OpenAI-compatible endpoints so hermes can resolve
   # them by name instead of falling back to auto-detection.
-  ++ optionals (mainModelIsCustom || delegationIsCustom) [
-    "custom_providers:"
+  # Uses the `providers:` dict format (new-style) with `models:` sub-dicts
+  # so the /model picker shows available models per provider.
+  ++ optionals (mainModelIsCustom || delegationIsCustom || cfg.vertexProxy.enable) [
+    "providers:"
   ]
-  ++ optionals mainModelIsCustom [
-    "  - name: \"custom-main\""
-    "    base_url: \"${cfg.mainModel.baseURL}\""
-    "    api_key: \"${if cfg.mainModel.apiKey != null then cfg.mainModel.apiKey else ""}\""
-    "    api_mode: \"chat_completions\""
-  ]
-  ++ optionals delegationIsCustom [
-    "  - name: \"custom-delegation\""
-    "    base_url: \"${cfg.delegation.baseURL}\""
-    "    api_key: \"${if cfg.delegation.apiKey != null then cfg.delegation.apiKey else ""}\""
-    "    api_mode: \"chat_completions\""
-  ]
-  ++ optionals (mainModelIsCustom || delegationIsCustom) [
+  ++ optionals mainModelIsCustom (
+    [ "  custom-main:" ]
+    ++ [ "    name: \"Custom Main\"" ]
+    ++ [ "    base_url: \"${cfg.mainModel.baseURL}\"" ]
+    ++ [ "    api_key: \"${if cfg.mainModel.apiKey != null then cfg.mainModel.apiKey else ""}\"" ]
+    ++ [ "    api_mode: \"chat_completions\"" ]
+    ++ (optionals (cfg.mainModel.models != { }) (
+      [ "    models:" ]
+      ++ (mapAttrsToList (
+        name: m: "      ${name}:\n        context_length: ${toString m.contextLength}"
+      ) cfg.mainModel.models)
+    ))
+  )
+  ++ optionals delegationIsCustom (
+    [ "  custom-delegation:" ]
+    ++ [ "    name: \"Custom Delegation\"" ]
+    ++ [ "    base_url: \"${cfg.delegation.baseURL}\"" ]
+    ++ [ "    api_key: \"${if cfg.delegation.apiKey != null then cfg.delegation.apiKey else ""}\"" ]
+    ++ [ "    api_mode: \"chat_completions\"" ]
+    ++ (optionals (cfg.delegation.models != { }) (
+      [ "    models:" ]
+      ++ (mapAttrsToList (
+        name: m: "      ${name}:\n        context_length: ${toString m.contextLength}"
+      ) cfg.delegation.models)
+    ))
+  )
+  ++ optionals cfg.vertexProxy.enable (
+    let
+      # Strip trailing /v1 for anthropic_messages mode — the SDK appends
+      # /v1/messages automatically. A double /v1/v1/messages results in 404.
+      vertexBase = lib.removeSuffix "/v1" cfg.vertexProxy.endpoint;
+    in
+    [ "  vertex-proxy:" ]
+    ++ [ "    name: \"Vertex Proxy (Claude via LiteLLM)\"" ]
+    ++ [ "    base_url: \"${vertexBase}\"" ]
+    ++ [ "    api_key: \"$VERTEX_PROXY_ID_TOKEN\"" ]
+    ++ [ "    api_mode: \"anthropic_messages\"" ]
+    ++ (optionals (cfg.vertexProxy.models != { }) (
+      [ "    models:" ]
+      ++ (mapAttrsToList (
+        name: m: "      ${name}:\n        context_length: ${toString m.contextLength}"
+      ) cfg.vertexProxy.models)
+    ))
+  )
+  ++ optionals (mainModelIsCustom || delegationIsCustom || cfg.vertexProxy.enable) [
     ""
   ]
   ++ [

@@ -77,7 +77,7 @@ let
       ++ (optional (cfg.mainModel.geminiKeyFile != null) (
         mkSed "$GEMINI_API_KEY" cfg.mainModel.geminiKeyFile
       ))
-      ++ (optional cfg.mainModel.vertexProxyIdToken ''
+      ++ (optional (cfg.mainModel.vertexProxyIdToken || cfg.vertexProxy.enable) ''
         TOKEN="$(${pkgs.google-cloud-sdk}/bin/gcloud auth print-identity-token 2>/dev/null || true)"
         if [ -n "$TOKEN" ]; then
           run sed "s|\$VERTEX_PROXY_ID_TOKEN|$TOKEN|g" "$TMPFILE" > "$TMPFILE.sed"

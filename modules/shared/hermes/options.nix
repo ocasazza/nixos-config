@@ -36,16 +36,21 @@ with lib;
     };
 
     # ── Main model configuration ──────────────────────────────────────
-    # Controls the default model and provider for Hermes. This overrides
-    # the litellm/vertexProxy automatic selection when set.
+    # Direct configuration: set provider + model, optionally override
+    # base_url and api_key. Built-in providers: gemini, anthropic,
+    # openai-codex, copilot, zai, kimi-coding, minimax, deepseek,
+    # alibaba, ai-gateway, opencode-zen, opencode-go, hf, nous.
+    # For providers not in the built-in registry, use base_url + api_key
+    # (OpenAI-compatible custom endpoint) or add a custom_providers entry.
     mainModel = {
       provider = mkOption {
         type = types.nullOr types.str;
         default = null;
         description = ''
-          Provider for the main model. Options: "gemini" (OAuth), "anthropic"
-          (Vertex proxy), "litellm" (LiteLLM router). When null, defaults to
-          "litellm" if litellm.enable=true, otherwise "anthropic".
+          Built-in provider name for the main model. Examples: "gemini"
+          (uses gcloud ADC OAuth), "anthropic" (uses ANTHROPIC_TOKEN),
+          "openai-codex" (ChatGPT OAuth). When null and baseURL is set,
+          hermes treats it as a custom OpenAI-compatible endpoint.
         '';
       };
 
@@ -53,9 +58,8 @@ with lib;
         type = types.nullOr types.str;
         default = null;
         description = ''
-          Model name for the main provider. Required when mainModel.provider
-          is set. Examples: "gemini-3-pro", "claude-sonnet-4-7",
-          "pdx-nxst-003-qwen3.6-35b-a3b".
+          Model name / slug. Examples: "gemini-2.5-pro",
+          "claude-sonnet-4-7", "gpt-5.3-codex".
         '';
       };
 
@@ -63,8 +67,10 @@ with lib;
         type = types.nullOr types.str;
         default = null;
         description = ''
-          Base URL for the main provider. Optional - most providers use
-          auto-resolution. Set this for custom endpoints.
+          Direct OpenAI-compatible endpoint URL. Overrides the provider's
+          default base URL. Use this for Azure OpenAI, Vertex proxy, or
+          any custom endpoint. Example:
+          "https://schrodinger-code.openai.azure.com/openai/deployments/Kimi-K2.6".
         '';
       };
 
@@ -72,43 +78,114 @@ with lib;
         type = types.nullOr types.str;
         default = null;
         description = ''
-          API key for the main provider. Optional - OAuth providers (gemini)
-          don't need this. Use environment variable references like
-          "$LITELLM_HERMES_API_KEY".
+          API key for the direct endpoint. For built-in providers this is
+          usually unnecessary (OAuth / env-var resolution handles auth).
+          For custom endpoints (Azure, Vertex proxy) set this to a
+          placeholder like "$AZURE_API_KEY" or "$VERTEX_PROXY_ID_TOKEN"
+          and wire the corresponding sops secret + activation script.
+        '';
+      };
+
+      geminiKeyFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          Path to a sops-decrypted file containing the Gemini API key
+          (single `GEMINI_API_KEY=...` line). When set, the activation
+          script replaces `$GEMINI_API_KEY` in the generated config with
+          the real key. Used when mainModel.provider = "gemini" and you
+          prefer API-key auth over gcloud ADC OAuth.
+        '';
+      };
+
+      vertexProxyIdToken = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          When true, the activation script reads the current gcloud
+          id-token and replaces `$VERTEX_PROXY_ID_TOKEN` in the generated
+          config. Use this when mainModel.baseURL points at the
+          Schrodinger vertex proxy.
+        '';
+      };
+
+      models = mkOption {
+        type = types.attrsOf (
+          types.submodule {
+            options = {
+              contextLength = mkOption {
+                type = types.int;
+                default = 128000;
+                description = "Context window length for this model";
+              };
+            };
+          }
+        );
+        default = { };
+        description = ''
+          Models available via the main model custom provider. When
+          non-empty, these populate the /model picker for the custom-main
+          provider entry. Keys are model IDs, values are per-model config.
         '';
       };
     };
 
+    # ── Vertex AI Claude via LiteLLM passthrough ──────────────────────
+    # Adds a `vertex-proxy` providers entry so Hermes can reach Claude
+    # models on Vertex AI through the LiteLLM /vertex passthrough.
+    # Auth uses gcloud identity tokens (replaced at activation time).
+    # Switch at runtime with: /model vertex-proxy:claude-opus-4-7
     vertexProxy = {
-      baseURL = mkOption {
-        type = types.str;
-        default = lib.salt.ai.providers.vertex.proxyBaseURL;
+      enable = mkOption {
+        type = types.bool;
+        default = false;
         description = ''
-          Vertex AI proxy base URL (Anthropic SDK appends /v1/messages).
-          When `local.hermes.litellm.enable = true` this value is
-          ignored — cloud calls route through LiteLLM's `/vertex/v1`
-          passthrough instead.
+          Add a vertex-proxy providers entry pointing at the LiteLLM
+          /vertex passthrough. When enabled, Hermes can reach Claude
+          models on Vertex AI via /model vertex-proxy:<model>.
+          The gcloud identity token is injected at activation time.
         '';
       };
 
-      model = mkOption {
+      endpoint = mkOption {
         type = types.str;
-        default = lib.salt.ai.models.claudeSonnet;
-        description = "Model to use via Vertex proxy";
+        default = lib.salt.ai.providers.litellm.vertexPassthroughEndpoint;
+        description = ''
+          LiteLLM vertex passthrough URL. Defaults to the Caddy-fronted
+          FQDN (http://litellm.pdx-nxst-001.schrodinger.com:8080/vertex/v1).
+          The /v1 suffix is automatically stripped for anthropic_messages mode.
+        '';
+      };
+
+      models = mkOption {
+        type = types.attrsOf (
+          types.submodule {
+            options = {
+              contextLength = mkOption {
+                type = types.int;
+                default = 200000;
+                description = "Context window length for this model";
+              };
+            };
+          }
+        );
+        default = {
+          "claude-sonnet-4-6" = {
+            contextLength = 200000;
+          };
+          "claude-opus-4-7" = {
+            contextLength = 200000;
+          };
+        };
+        description = ''
+          Models available via vertex-proxy. Keys are model IDs shown
+          in the /model picker. Defaults to Claude Sonnet 4 + Opus 4.7.
+        '';
       };
     };
 
     # ── LiteLLM-routed path ───────────────────────────────────────────
-    # Route all hermes calls through the LiteLLM proxy on pdx-nxst-003:
-    #   - `vertexProxy.baseURL` references become `<endpoint>/vertex/v1`
-    #     (passthrough — gcloud id-token still flows via the refresh_token
-    #     shim into ~/.hermes/.env)
-    #   - `localBaseUrl` (ollama/exo) becomes `<endpoint>/v1` with
-    #     authentication via the sops-decrypted virtual key
-    #
-    # Mutually exclusive with the legacy path: `enable = true` on this
-    # block overrides everything that would otherwise hit vertex-proxy
-    # or localhost:52416 directly.
+    # Route local model calls through the LiteLLM proxy on pdx-nxst-001.
     litellm = {
       # Default-on: hermes routes through LiteLLM rather than hitting Vertex /
       # exo directly. The legacy direct path is still reachable by setting
@@ -147,10 +224,9 @@ with lib;
           file to pick up via its `env:LITELLM_HERMES_API_KEY` indirect
           reference.
 
-          On pdx-nxst-003 this is
-          `config.sops.secrets.litellm-key-hermes.path`; on darwin
-          it's the /run/secrets path once sops-nix is wired on darwin
-          hosts.
+          On darwin hosts this is
+          `config.sops.secrets.litellm-key-local-svc-hermes.path`
+          (local-compute service account key minted on pdx-nxst-001).
         '';
       };
 
@@ -160,7 +236,7 @@ with lib;
         description = ''
           LiteLLM model alias hermes refers to when picking a
           "local" model (delegation in non-vertex mode, auxiliary
-          in non-vertex mode). Defaults to pdx-nxst-003-qwen3.6-35b-a3b.
+          in non-vertex mode). Defaults to qwen3.6-35b-a3b.
         '';
       };
     };
@@ -174,20 +250,50 @@ with lib;
 
       model = mkOption {
         type = types.str;
-        default = "claude-haiku-4-5";
+        default = "Kimi-K2.6";
         description = "Model to use for subagent delegation";
       };
 
       provider = mkOption {
-        type = types.str;
-        default = "anthropic";
-        description = "Provider for subagent delegation (anthropic uses the Vertex proxy)";
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Built-in provider for subagent delegation. When null and
+          baseURL is set, hermes uses the direct endpoint. Examples:
+          "gemini", "anthropic", "openrouter", "zai".
+        '';
       };
 
-      useVertexProxy = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Route subagent delegation through the Vertex AI proxy (uses vertexProxy.baseURL)";
+      baseURL = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Direct OpenAI-compatible endpoint for subagents. Overrides
+          provider resolution. Use this for Azure OpenAI, local vLLM,
+          or any custom endpoint. Falls back to OPENAI_API_KEY env var
+          when apiKey is not set.
+        '';
+      };
+
+      apiKey = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          API key for the delegation endpoint. Set to a placeholder like
+          "$AZURE_API_KEY" and wire the sops secret + activation script.
+          When null and baseURL is set, hermes falls back to OPENAI_API_KEY.
+        '';
+      };
+
+      azureKeyFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          Path to a sops-decrypted file containing the Azure OpenAI API
+          key (single `AZURE_API_KEY=...` line). When set, the activation
+          script replaces `$AZURE_API_KEY` in the generated config. Use
+          this when delegation.baseURL points at an Azure OpenAI endpoint.
+        '';
       };
 
       maxIterations = mkOption {
@@ -205,6 +311,26 @@ with lib;
         ];
         description = "Default toolsets available to subagents";
       };
+
+      models = mkOption {
+        type = types.attrsOf (
+          types.submodule {
+            options = {
+              contextLength = mkOption {
+                type = types.int;
+                default = 128000;
+                description = "Context window length for this model";
+              };
+            };
+          }
+        );
+        default = { };
+        description = ''
+          Models available via the delegation provider. When non-empty,
+          these populate the /model picker for the delegation custom provider.
+          Keys are model IDs, values are per-model config.
+        '';
+      };
     };
 
     auxiliary = {
@@ -214,16 +340,39 @@ with lib;
         description = "Enable auxiliary model configuration for side tasks";
       };
 
-      useVertexProxy = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Route auxiliary tasks (vision, web_extract, approval, etc.) through Vertex proxy with Haiku instead of local LLM";
+      provider = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Built-in provider for auxiliary tasks (vision, web_extract).
+          When null and baseURL is set, hermes uses the direct endpoint.
+          "gemini" is recommended for vision (multimodal).
+        '';
       };
 
       model = mkOption {
         type = types.str;
-        default = "claude-haiku-4-5";
-        description = "Model for auxiliary tasks when useVertexProxy is true";
+        default = "gemini-2.5-pro";
+        description = "Model for auxiliary tasks (vision, web_extract)";
+      };
+
+      baseURL = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Direct OpenAI-compatible endpoint for auxiliary tasks. Overrides
+          provider resolution. Use this for Gemini API, local vision models,
+          or any custom endpoint.
+        '';
+      };
+
+      apiKey = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          API key for the auxiliary endpoint. Set to a placeholder like
+          "$GEMINI_API_KEY" and wire the sops secret + activation script.
+        '';
       };
     };
 

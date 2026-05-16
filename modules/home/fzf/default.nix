@@ -5,7 +5,9 @@
 {
   programs.fzf = {
     enable = true;
-    enableZshIntegration = true;
+    # Disabled enableZshIntegration because it tries to manipulate ZLE options,
+    # which breaks in VSCode's integrated terminal. We manually load it in zsh config.
+    enableZshIntegration = false;
     defaultOptions = [
       "--height=40%"
       "--layout=reverse"

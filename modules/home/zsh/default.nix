@@ -28,6 +28,24 @@ in
           ];
         };
 
+        # ── Init first (before everything) ────────────────────────
+        initExtraFirst = ''
+          # ── terminal cleanup trap (fixes mouse mode stuck after SSH drop) ──
+          zshexit() {
+            # Reset terminal to sane state: clear mouse tracking, alternate screen, etc.
+            printf '\033[?1000l\033[?1002l\033[?1006l\033[?1049l\033[m' >/dev/tty 2>/dev/null || true
+          }
+
+          # ── zellij: one fresh session per terminal window ────────
+          # `exec zellij` (no subcommand) always creates a new random-named
+          # session. We deliberately do NOT use `attach -c`: with multiple
+          # active sessions it can't pick one, prints the selector, and
+          # exits — which Ghostty surfaces as "failed to launch".
+          if [[ -z ''${ZELLIJ:-} && -z ''${SSH_CONNECTION:-} && -z ''${SSH_CLIENT:-} && "$TERM_PROGRAM" != "vscode" ]]; then
+            exec ${pkgs.zellij}/bin/zellij
+          fi
+        '';
+
         # ── Init before compinit (OMZ calls compinit) ─────────────
         initExtraBeforeCompInit = ''
           # ── fzf-tab completion sources ──
@@ -94,10 +112,9 @@ in
           # ── escape-timeout for vim-mode compatibility ──────────
           export ESCAPE_TIME=100
 
-          # ── zellij auto-attach (local only, never on SSH) ──────
-          if [[ -z ''${SSH_CONNECTION:-} && -z ''${SSH_CLIENT:-} ]]; then
-            export ZELLIJ_AUTO_ATTACH=true
-            export ZELLIJ_AUTO_EXIT=true
+          # ── fzf integration (skip ZLE bindings in VSCode) ─────────
+          if [[ "$TERM_PROGRAM" != "vscode" && $options[zle] = on ]]; then
+            source <(${pkgs.fzf}/bin/fzf --zsh)
           fi
 
           # ── carapace completions ───────────────────────────────

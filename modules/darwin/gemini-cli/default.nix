@@ -18,7 +18,11 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.gemini-cli-bin;
+      default = pkgs.writeShellScriptBin "gemini" ''
+        export GEMINI_CLI_TRUST_WORKSPACE=true
+        export NODE_NO_WARNINGS=1
+        exec ${pkgs.gemini-cli-bin}/bin/gemini "$@"
+      '';
       description = "The gemini-cli package to use.";
     };
 
@@ -119,6 +123,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    environment.systemPackages = [ cfg.package ];
+
     home-manager.users.${user.name} = {
       # Environment variables for gemini-cli.
       # Unified variables are now handled by modules/darwin/ai.
@@ -137,11 +143,15 @@ in
         ''}
       '';
 
-      # Managed settings.json: select the desired auth type, plus any
-      # caller-supplied extras (ui, tools, seatbeltProfile, ide.*).
+      # Managed settings.json: select the desired auth type, vertex config if provided,
+      # plus any caller-supplied extras (ui, tools, seatbeltProfile, ide.*).
       home.file.".gemini/settings.json".text = builtins.toJSON (
         lib.recursiveUpdate {
           security.auth.selectedType = cfg.authType;
+          vertex = lib.optionalAttrs (cfg.vertex.projectId != "") {
+            projectId = cfg.vertex.projectId;
+            region = cfg.vertex.region;
+          };
         } cfg.extraSettings
       );
 

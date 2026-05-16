@@ -96,7 +96,39 @@ creation_rules:
           - *host_ck2q9ln7pm_mba
           - *host_gjhc5vvn49_mbp
           - *host_l75t4yhxv7_mba
+  # Gemini Enterprise API key for hermes' gemini provider when using
+  # API-key auth instead of gcloud ADC OAuth. Single `gemini_api_key`
+  # scalar; sops-nix writes the value to /run/secrets/... for the
+  # hermes activation script to splice into config.yaml.
+  - path_regex: secrets/gemini-enterprise-api-key\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
   - path_regex: secrets/litellm-key-(opencode|hermes)\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
+  # Multi-tenant LiteLLM keys (new key hierarchy on pdx-nxst-001).
+  # hybrid-olive: opencode + hermes hybrid-team key (local + cloud models).
+  # local-svc-hermes: hermes service account, local-compute team only.
+  # The encrypted .yaml files are sourced from nixstation's secrets/ directory.
+  - path_regex: secrets/litellm-key-hybrid-olive\.yaml$
+    key_groups:
+      - age:
+          - *admin_olive
+          - *host_gn9cflm92k_mbp
+          - *host_ck2q9ln7pm_mba
+          - *host_gjhc5vvn49_mbp
+          - *host_l75t4yhxv7_mba
+  - path_regex: secrets/litellm-key-local-svc-hermes\.yaml$
     key_groups:
       - age:
           - *admin_olive

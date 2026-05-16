@@ -36,15 +36,16 @@ rec {
         endpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080";
         localEndpoint = "http://localhost:4000";
         caddyEndpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080";
-        # Caddy proxies /vertex/* directly to vertex-proxy.sdgr.app (bypassing
-        # LiteLLM), stripping the /vertex prefix and forwarding all headers.
-        # Clients send gcloud id-tokens; vertex-proxy validates them directly.
+        # LiteLLM /vertex passthrough (auth: false) proxies to
+        # vertex-proxy.sdgr.app. Clients send gcloud id-tokens;
+        # vertex-proxy validates them directly.
         vertexPassthroughEndpoint = "http://litellm.pdx-nxst-001.schrodinger.com:8080/vertex/v1";
-        defaultLocalGroup = "pdx-nxst-003-qwen3.6-35b-a3b";
-        defaultCloudGroup = "coder-cloud-claude";
+        defaultLocalGroup = "qwen3.6-35b-a3b";
+        defaultCloudGroup = "azure-kimi-k2.6";
         modelGroups = {
-          "pdx-nxst-003-qwen3.6-35b-a3b" = "pdx-nxst-003-qwen3.6-35b-a3b";
-          coder-cloud-claude = "coder-cloud-claude";
+          "qwen3.6-35b-a3b" = "qwen3.6-35b-a3b";
+          "azure-kimi-k2.6" = "azure-kimi-k2.6";
+          "sdgr-glm-5.1" = "sdgr-glm-5.1";
           embedding = "embedding";
         };
       };

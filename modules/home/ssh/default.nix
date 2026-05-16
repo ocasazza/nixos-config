@@ -59,10 +59,7 @@ in
       # non-entitled LAN hosts), so it routes over IPv6 via Bonjour.
       # All other home LAN hosts work fine over IPv4 through AppGate.
       #
-      # NOTE: 192.168.1.35 is included as a Host pattern so that muscle
-      # memory `ssh olive@192.168.1.35` still works — the HostName override
-      # rewrites it to seir.local + forces IPv6 before the connect happens.
-      "seir seir.local 192.168.1.35" = {
+      "seir seir.local" = {
         hostname = "seir.local";
         user = "olive";
         addressFamily = "inet6";

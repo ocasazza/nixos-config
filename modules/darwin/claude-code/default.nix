@@ -239,9 +239,17 @@ in
     home-manager.users.${user.name} = {
       home.file.".claude/settings.json".text = builtins.toJSON settingsWithModel;
 
+      home.file.".claude/skills".source = config.local.skills.path;
+      home.file.".claude/commands".source = config.local.commands.path;
+
       home.file.".claude/get-iam-token.sh" = lib.mkIf helperActive {
         executable = true;
-        text = lib.salt.ai.scripts.getIamToken;
+        text = ''
+          #!/usr/bin/env bash
+          set -euo pipefail
+          export CLOUDSDK_CORE_PROJECT="${cfg.vertex.projectId}"
+          exec ${pkgs.google-cloud-sdk}/bin/gcloud auth print-identity-token
+        '';
       };
 
       # When litellm + virtual key (not cloudPassthrough), read the sops

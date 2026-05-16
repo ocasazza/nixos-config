@@ -5,11 +5,10 @@
 {
   programs.zellij = {
     enable = true;
-    # HM's zsh integration injects an auto-start snippet that honors
-    # $ZELLIJ_AUTO_ATTACH / $ZELLIJ_AUTO_EXIT (set in zsh.sessionVariables
-    # above), so every new Ghostty pane attaches to (or creates) a
-    # session and exits cleanly on detach.
-    enableZshIntegration = true;
+    # Disabled enableZshIntegration because it unconditionally injects the
+    # auto-start eval at the beginning of .zshrc, which breaks VSCode's
+    # integrated terminal. We manually control auto-start in zsh config.
+    enableZshIntegration = false;
     settings = {
       # Don't show the startup tip / first-run wizard.
       show_startup_tips = false;

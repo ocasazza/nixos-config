@@ -86,31 +86,6 @@ in
         };
       };
 
-      # Bifrost — local gateway. Runtime config layered on top of
-      # lib.salt.ai.providers.bifrost. Consumed by modules/darwin/bifrost/
-      # which renders ~/.bifrost/config.json and runs the launchd agent.
-      bifrost = {
-        enable = mkEnableOption "Local Bifrost LLM gateway (per-Mac launchd)";
-        port = mkOption {
-          type = types.port;
-          default = lib.salt.ai.providers.bifrost.port;
-          description = "TCP port the Bifrost gateway binds to.";
-        };
-        endpoint = mkOption {
-          type = types.str;
-          default = lib.salt.ai.providers.bifrost.endpoint;
-          description = "OpenAI-compatible endpoint URL harnesses point at.";
-        };
-        apiKeyFile = mkOption {
-          type = types.nullOr types.path;
-          default = null;
-          description = ''
-            Sops-decrypted path to the local Bifrost admin key. Bifrost
-            uses this for `BIFROST_API_KEY` env var; harnesses send it as
-            Bearer auth. Currently single-user / no-auth is also supported.
-          '';
-        };
-      };
     };
 
     # Standard model mappings
@@ -125,7 +100,7 @@ in
       };
       defaultLocal = mkOption {
         type = types.str;
-        default = "pdx-nxst-003-qwen3.6-35b-a3b";
+        default = "qwen3.6-35b-a3b";
       };
     };
   };
@@ -139,6 +114,11 @@ in
         GOOGLE_CLOUD_PROJECT = cfg.providers.gemini.projectId;
         GOOGLE_CLOUD_LOCATION = cfg.providers.gemini.location;
         AZURE_RESOURCE_NAME = cfg.providers.azure.resourceName;
+        # Placeholder so the Anthropic SDK doesn't refuse to initialize.
+        # Not used for actual auth — Vertex Claude is available via the
+        # LiteLLM /vertex passthrough (auth: false, clients bring own
+        # gcloud id-token).
+        ANTHROPIC_API_KEY = "vertex-proxy-uses-gcloud-identity-token";
       };
 
       # Secret-based env (sourced at shell init)

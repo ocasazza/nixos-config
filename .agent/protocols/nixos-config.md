@@ -4,7 +4,7 @@ Project-specific rules for the **nixos-config** repository. Loaded via the
 root `AGENTS.md` (which also points at `.agent/AGENTS.md` for the portable
 brain). This file is the source of truth for Nix-side conventions, command
 discipline, and the `.dreams/` + `.memories/` workflows that predate
-agentic-stack adoption.
+nason-skills adoption.
 
 ## Project Overview
 
@@ -198,10 +198,8 @@ purpose is **token efficiency** — they let agents understand the project
 by reading only the small, relevant slices of state they need, rather than
 ingesting the entire codebase.
 
-These are SEPARATE from agentic-stack's `.agent/memory/` (working /
-episodic / semantic / personal). The agentic-stack memory captures
-**agent learnings across sessions**; `.memories/` and `.dreams/` capture
-**project state and architecture decisions**. Both are first-class.
+`.memories/` and `.dreams/` capture **project state and architecture
+decisions**.
 
 ### Design Principles
 
