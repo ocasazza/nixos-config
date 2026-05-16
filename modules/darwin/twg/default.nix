@@ -51,33 +51,19 @@ in
     };
   };
 
-  # Generate ~/.config/twg/auth.conf from sops secrets.
+  # Generate ~/.config/twg/auth.conf from sops secrets via template.
   # TWG stores auth state as a TOML file with [default] section containing
-  # email, site, token, and optional bitbucket_token.
-  home-manager.users.${user.name} = {
-    home.activation.twgAuth =
-      config.home-manager.users.${user.name}.lib.dag.entryAfter [ "writeBoundary" ]
-        ''
-                # Generate TWG auth.conf from sops-decrypted secrets
-                TWG_CONFIG_DIR="$HOME/.config/twg"
-                mkdir -p "$TWG_CONFIG_DIR"
-
-                if [ -r "${config.sops.secrets.atlassian-email.path}" ] && \
-                   [ -r "${config.sops.secrets.atlassian-api-token.path}" ] && \
-                   [ -r "${config.sops.secrets.atlassian-site.path}" ]; then
-
-                  EMAIL=$(cat "${config.sops.secrets.atlassian-email.path}")
-                  TOKEN=$(cat "${config.sops.secrets.atlassian-api-token.path}")
-                  SITE=$(cat "${config.sops.secrets.atlassian-site.path}")
-
-                  cat > "$TWG_CONFIG_DIR/auth.conf" <<EOF
-          [default]
-          email = "$EMAIL"
-          site = "$SITE"
-          token = "$TOKEN"
-          EOF
-                  chmod 600 "$TWG_CONFIG_DIR/auth.conf"
-                fi
-        '';
+  # email, site, and token.
+  sops.templates."twg-auth.conf" = {
+    path = "/Users/${user.name}/.config/twg/auth.conf";
+    mode = "0600";
+    owner = user.name;
+    content = lib.generators.toTOML { } {
+      default = {
+        email = config.sops.placeholder."atlassian-email";
+        site = config.sops.placeholder."atlassian-site";
+        token = config.sops.placeholder."atlassian-api-token";
+      };
+    };
   };
 }

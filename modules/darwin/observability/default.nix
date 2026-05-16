@@ -63,124 +63,122 @@ let
   };
   pipelineDebugExporters = lib.optional cfg.debugExporter "debug";
 
-  configFile = pkgs.writeText "otelcol-darwin.yaml" (
-    builtins.toJSON {
-      receivers = {
-        # ── OTLP intake (loopback) ───────────────────────────────────
-        # Local-only OTLP endpoint so scripts can push metrics/logs/
-        # traces directly without needing an SDK. scripts/reingest-
-        # auto.sh in the obsidian repo posts JSON to
-        # http://127.0.0.1:4318/v1/metrics for the reingest gauges
-        # (otelcol-contrib has no textfile-collector receiver, so the
-        # script's textfile write stays as a fallback for hosts
-        # without this collector). gRPC port also bound for any local
-        # SDK-based emitters.
-        otlp.protocols = {
-          grpc.endpoint = "127.0.0.1:${toString cfg.otlpGrpcPort}";
-          http.endpoint = "127.0.0.1:${toString cfg.otlpHttpPort}";
-        };
+  configFile = (pkgs.formats.yaml { }).generate "otelcol-darwin.yaml" {
+    receivers = {
+      # ── OTLP intake (loopback) ───────────────────────────────────
+      # Local-only OTLP endpoint so scripts can push metrics/logs/
+      # traces directly without needing an SDK. scripts/reingest-
+      # auto.sh in the obsidian repo posts JSON to
+      # http://127.0.0.1:4318/v1/metrics for the reingest gauges
+      # (otelcol-contrib has no textfile-collector receiver, so the
+      # script's textfile write stays as a fallback for hosts
+      # without this collector). gRPC port also bound for any local
+      # SDK-based emitters.
+      otlp.protocols = {
+        grpc.endpoint = "127.0.0.1:${toString cfg.otlpGrpcPort}";
+        http.endpoint = "127.0.0.1:${toString cfg.otlpHttpPort}";
+      };
 
-        # ── Host metrics (CPU, mem, disk, load, network) ─────────────
-        hostmetrics = {
-          collection_interval = "30s";
-          scrapers = {
-            cpu = { };
-            memory = { };
-            load = { };
-            disk = { };
-            filesystem = { };
-            network = { };
-          };
-        };
-
-        # opencode pipeline logs — the two append-mode files written
-        # by scripts/ingest.sh and scripts/reingest-auto.sh. The
-        # `add` stanza operator stamps a service.name on every log
-        # entry's resource (host.name + service.namespace come from
-        # the resource processor below). Field path syntax is dotted
-        # per pkg/stanza/docs/operators/add.md.
-        filelog = {
-          include = cfg.logFiles;
-          start_at = "end";
-          include_file_name = true;
-          include_file_path = true;
-          operators = [
-            {
-              type = "add";
-              field = "resource.service.name";
-              value = "opencode-pipeline";
-            }
-          ];
+      # ── Host metrics (CPU, mem, disk, load, network) ─────────────
+      hostmetrics = {
+        collection_interval = "30s";
+        scrapers = {
+          cpu = { };
+          memory = { };
+          load = { };
+          disk = { };
+          filesystem = { };
+          network = { };
         };
       };
 
-      processors = {
-        # Standard OTel hygiene processors, mirroring pdx-nxst-003's collector.
-        memory_limiter = {
-          check_interval = "1s";
-          limit_mib = 256;
-        };
-        batch = {
-          timeout = "5s";
-          send_batch_size = 1024;
-        };
-        # Stamp every signal with host identity so Grafana can slice
-        # by host_name across all Macs + pdx-nxst-003.
-        resource = {
-          attributes = [
-            {
-              key = "host.name";
-              value = hostName;
-              action = "upsert";
-            }
-            {
-              key = "service.namespace";
-              value = "darwin-host";
-              action = "upsert";
-            }
-          ];
-        };
+      # opencode pipeline logs — the two append-mode files written
+      # by scripts/ingest.sh and scripts/reingest-auto.sh. The
+      # `add` stanza operator stamps a service.name on every log
+      # entry's resource (host.name + service.namespace come from
+      # the resource processor below). Field path syntax is dotted
+      # per pkg/stanza/docs/operators/add.md.
+      filelog = {
+        include = cfg.logFiles;
+        start_at = "end";
+        include_file_name = true;
+        include_file_path = true;
+        operators = [
+          {
+            type = "add";
+            field = "resource.service.name";
+            value = "opencode-pipeline";
+          }
+        ];
       };
+    };
 
-      exporters = {
-        otlp = {
-          endpoint = cfg.endpoint;
-          tls.insecure = true;
-        };
-      }
-      // debugExporterAttrs;
+    processors = {
+      # Standard OTel hygiene processors, mirroring pdx-nxst-003's collector.
+      memory_limiter = {
+        check_interval = "1s";
+        limit_mib = 256;
+      };
+      batch = {
+        timeout = "5s";
+        send_batch_size = 1024;
+      };
+      # Stamp every signal with host identity so Grafana can slice
+      # by host_name across all Macs + pdx-nxst-003.
+      resource = {
+        attributes = [
+          {
+            key = "host.name";
+            value = hostName;
+            action = "upsert";
+          }
+          {
+            key = "service.namespace";
+            value = "darwin-host";
+            action = "upsert";
+          }
+        ];
+      };
+    };
 
-      service = {
-        pipelines = {
-          metrics = {
-            receivers = [
-              "hostmetrics"
-              "otlp"
-            ];
-            processors = [
-              "memory_limiter"
-              "resource"
-              "batch"
-            ];
-            exporters = [ "otlp" ] ++ pipelineDebugExporters;
-          };
-          logs = {
-            receivers = [
-              "filelog"
-              "otlp"
-            ];
-            processors = [
-              "memory_limiter"
-              "resource"
-              "batch"
-            ];
-            exporters = [ "otlp" ] ++ pipelineDebugExporters;
-          };
-        };
-        telemetry.logs.level = cfg.logLevel;
+    exporters = {
+      otlp = {
+        endpoint = cfg.endpoint;
+        tls.insecure = true;
       };
     }
-  );
+    // debugExporterAttrs;
+
+    service = {
+      pipelines = {
+        metrics = {
+          receivers = [
+            "hostmetrics"
+            "otlp"
+          ];
+          processors = [
+            "memory_limiter"
+            "resource"
+            "batch"
+          ];
+          exporters = [ "otlp" ] ++ pipelineDebugExporters;
+        };
+        logs = {
+          receivers = [
+            "filelog"
+            "otlp"
+          ];
+          processors = [
+            "memory_limiter"
+            "resource"
+            "batch"
+          ];
+          exporters = [ "otlp" ] ++ pipelineDebugExporters;
+        };
+      };
+      telemetry.logs.level = cfg.logLevel;
+    };
+  };
 in
 {
   options.local.darwinObservability = {
