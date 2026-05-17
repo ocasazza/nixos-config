@@ -148,7 +148,7 @@ in
 
   local.obsidianVault = {
     enable = true;
-    vaultPath = "/Users/${user.name}/Repositories/ocasazza/obsidian/vault";
+    vaultPath = "${config.users.users.${user.name}.home}/Repositories/ocasazza/obsidian/vault";
     reingestAuto.enable = true;
   };
 
@@ -350,7 +350,7 @@ in
   local.omlx = {
     enable = isWorkstation;
     port = 8000;
-    ssdCacheDir = "/Users/${user.name}/.omlx/cache";
+    ssdCacheDir = "${config.users.users.${user.name}.home}/.omlx/cache";
     maxConcurrentRequests = 8;
   };
 
@@ -428,8 +428,10 @@ in
     extraSettings = {
       ui.errorVerbosity = "full";
       tools = {
-        sandbox = "/Users/${user.name}/Repositories/schrodinger/nixstation/.gemini/sandbox-macos-custom.sb";
-        sandboxAllowedPaths = [ "/Users/${user.name}/.config/nixos-config" ];
+        sandbox = "${
+          config.users.users.${user.name}.home
+        }/Repositories/schrodinger/nixstation/.gemini/sandbox-macos-custom.sb";
+        sandboxAllowedPaths = [ "${config.users.users.${user.name}.home}/.config/nixos-config" ];
       };
       seatbeltProfile = "custom";
       ide.hasSeenNudge = true;
@@ -475,7 +477,9 @@ in
   services.autopkgserver = {
     enable = true;
     # Point to git-fleet repo for recipe overrides (development machine only)
-    recipeOverrideDirs = "/Users/${user.name}/Repositories/schrodinger/git-fleet/lib/software";
+    recipeOverrideDirs = "${
+      config.users.users.${user.name}.home
+    }/Repositories/schrodinger/git-fleet/lib/software";
   };
 
   # Set desktop wallpaper + load fleet MDM secrets.
@@ -489,7 +493,7 @@ in
 
     echo "Loading Fleet MDM secrets..."
     FLEET_SECRETS_FILE="${config.sops.secrets.fleet.path}"
-    USER_ENV_FILE="/Users/${user.name}/.fleet_secrets"
+    USER_ENV_FILE="${config.users.users.${user.name}.home}/.fleet_secrets"
 
     if [ -f "$FLEET_SECRETS_FILE" ]; then
       cp "$FLEET_SECRETS_FILE" "$USER_ENV_FILE"
@@ -934,13 +938,15 @@ in
     # which includes exo cluster membership and all Schrodinger overrides
     NH_DARWIN_FLAKE = ".#darwinConfigurations.${config.networking.hostName}";
     # SOPS key file location
-    SOPS_AGE_KEY_FILE = "/Users/${user.name}/.config/sops/age/keys.txt";
+    SOPS_AGE_KEY_FILE = "${config.users.users.${user.name}.home}/.config/sops/age/keys.txt";
     # Gemini CLI surface
     GEMINI_CLI_SURFACE = "olive-casazza-gemini-cli";
     # Nix configuration
     NIXPKGS_ALLOW_UNFREE = "1";
     # Git SSH configuration
-    GIT_SSH_COMMAND = "ssh -i /Users/${user.name}/.ssh/id_ed25519 -o IdentitiesOnly=yes";
+    GIT_SSH_COMMAND = "ssh -i ${
+      config.users.users.${user.name}.home
+    }/.ssh/id_ed25519 -o IdentitiesOnly=yes";
     # Claude Code env vars now managed by programs.claude-code module
   };
 

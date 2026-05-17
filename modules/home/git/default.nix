@@ -1,5 +1,6 @@
 {
   lib,
+  config,
   ...
 }:
 
@@ -30,7 +31,7 @@ in
       init.defaultBranch = "main";
       pull.rebase = true;
       rebase.autoStash = true;
-      safe.directory = "/Users/${user.name}/src/nixos-config";
+      safe.directory = "${config.home.homeDirectory}/src/nixos-config";
       core = {
         editor = "nvim";
         autocrlf = "input";

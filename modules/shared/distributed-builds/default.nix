@@ -34,7 +34,7 @@
 let
   cfg = config.casazza.distributedBuilds;
 
-  sshKey = "/Users/casazza/.ssh/id_ed25519";
+  sshKey = "/Users/${user.name}/.ssh/id_ed25519";
 
   # SSH user per system — darwin and NixOS hosts both use casazza.
   sshUserForSystem = system: if system == "x86_64-linux" then "casazza" else "casazza";

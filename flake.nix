@@ -229,6 +229,7 @@
             # sharedModules is no longer needed — snowfall auto-applies
             # everything in modules/home/ via its home system-modules.
             sharedModules = [
+              inputs.sops-nix.homeModules.sops
               {
                 # Disable home-manager's deprecated zsh module that emits warnings.
                 disabledModules = [ "programs/zsh/deprecated.nix" ];

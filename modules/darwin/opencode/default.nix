@@ -30,9 +30,8 @@ in
   ];
 
   # Per-client LiteLLM virtual key + Schrodinger Azure OpenAI key.
-  # Both decrypt to single `KEY=value` lines — the home.sessionVariablesExtra
-  # in the shared config uses `cut -d= -f2-` to peel the value off (same pattern as
-  # modules/darwin/claude-code/default.nix:255).
+  # Both decrypt to single `KEY=value` lines — modules use the
+  # `lib.salt.helpers.extractSecret` helper to peel the value off.
   sops.secrets = {
     # hybrid-olive key: covers opencode and hermes (hybrid team — local + cloud).
     # Migrated from litellm-key-opencode-darwin to the new multi-tenant key model.
@@ -71,9 +70,8 @@ in
         <string>/bin/sh</string>
         <string>-c</string>
         <string>
-          SECRET="${config.sops.secrets.litellm-key-opencode-darwin.path}"
-          if [ -r "$SECRET" ]; then
-            KEY="$(cut -d= -f2- "$SECRET")"
+          KEY="${lib.salt.helpers.extractSecret config.sops.secrets.litellm-key-opencode-darwin.path}"
+          if [ -n "$KEY" ]; then
             launchctl setenv OPENAI_API_KEY "$KEY"
             launchctl setenv LITELLM_API_KEY_OPENCODE_DARWIN "$KEY"
           fi

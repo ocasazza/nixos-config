@@ -1,18 +1,8 @@
-{
-  pkgs,
-  lib,
-  ...
-}:
+{ config, ... }:
 
 # SSH client config + per-host blocks. Snowfall auto-discovers this
-# module and applies it to every HM user. `user.name` is read from
-# `lib.salt.user`; `homeDirectory` comes from HM's own
-# `config.home.homeDirectory` where possible, but a few SSH hosts
-# pin the Darwin `/Users/<name>` path explicitly because they're
-# reached from darwin hosts only (iLO, cluster admin keys, etc.).
-let
-  user = lib.salt.user;
-in
+# module and applies it to every HM user. `homeDirectory` comes from
+# HM's own `config.home.homeDirectory`.
 {
   programs.ssh = {
     enable = true;
@@ -30,11 +20,7 @@ in
         controlMaster = "no";
         controlPath = "~/.ssh/master-%r@%n:%p";
         controlPersist = "no";
-        identityFile =
-          if pkgs.stdenv.hostPlatform.isDarwin then
-            "/Users/${user.name}/.ssh/id_ed25519"
-          else
-            "/home/${user.name}/.ssh/id_ed25519";
+        identityFile = "${config.home.homeDirectory}/.ssh/id_ed25519";
       };
 
       "github.com" = {
@@ -64,7 +50,7 @@ in
         user = "olive";
         addressFamily = "inet6";
         identitiesOnly = true;
-        identityFile = "/Users/${user.name}/.ssh/olive_id_ed25519";
+        identityFile = "${config.home.homeDirectory}/.ssh/olive_id_ed25519";
         # seir runs zellij at login and we don't manage its config, so
         # every plain `ssh seir` would `zellij attach` to the same
         # default session and mirror panes across terminals. Force a
@@ -83,7 +69,7 @@ in
       "contra rpi5 mm01 mm02 mm03 mm04 mm05 hp01 hp02 hp03" = {
         user = "olive";
         identitiesOnly = true;
-        identityFile = "/Users/${user.name}/.ssh/olive_id_ed25519";
+        identityFile = "${config.home.homeDirectory}/.ssh/olive_id_ed25519";
       };
 
       # Raspberry Pi 5

@@ -55,7 +55,7 @@ in
   # TWG stores auth state as a TOML file with [default] section containing
   # email, site, and token.
   sops.templates."twg-auth.conf" = {
-    path = "/Users/${user.name}/.config/twg/auth.conf";
+    path = "${config.users.users.${user.name}.home}/.config/twg/auth.conf";
     mode = "0600";
     owner = user.name;
     content = builtins.readFile (

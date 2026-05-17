@@ -73,7 +73,7 @@ in
             };
           };
           defaultModel = cfg.defaultModel;
-          stateDir = "/Users/${user.name}/.pi/state";
+          stateDir = "${config.users.users.${user.name}.home}/.pi/state";
         };
 
         home.file.".pi/skills" = {

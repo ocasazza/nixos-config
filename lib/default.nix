@@ -99,4 +99,16 @@ rec {
       '';
     };
   };
+
+  helpers = {
+    # Generates a bash snippet to safely extract a value from a KEY=VALUE secret file.
+    # Returns the value or an empty string if the file is missing/unreadable.
+    # Used in sessionVariablesExtra and shell wrappers.
+    extractSecret =
+      filePath: ''$(if [ -r "${toString filePath}" ]; then cut -d= -f2- < "${toString filePath}"; fi)'';
+
+    # Standardizes home-relative path construction.
+    # On Darwin, homeBase defaults to /Users.
+    mkHomePath = user: path: "/Users/${user}/${path}";
+  };
 }

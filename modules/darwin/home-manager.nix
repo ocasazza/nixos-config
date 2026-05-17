@@ -19,7 +19,7 @@
 {
   users.users.${user.name} = {
     name = "${user.name}";
-    home = "/Users/${user.name}";
+    home = "/Users/${user.name}"; # nix-darwin manages the account path
     isHidden = false;
     shell = pkgs.zsh;
   };
@@ -100,12 +100,12 @@
       { path = "/Applications/Visual Studio Code.app/"; }
       { path = "/Applications/Notion.app/"; }
       {
-        path = "/Users/${user.name}/Downloads";
+        path = "${config.users.users.${user.name}.home}/Downloads";
         options = "--display stack --view list";
         section = "others";
       }
       {
-        path = "/Users/${user.name}/src";
+        path = "${config.users.users.${user.name}.home}/src";
         options = "--view list";
         section = "others";
       }

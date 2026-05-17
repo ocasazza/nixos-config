@@ -125,17 +125,13 @@ in
       sessionVariablesExtra = mkAfter ''
         # Unified AI Provider Secret Environment
         ${optionalString (cfg.providers.litellm.enable && cfg.providers.litellm.apiKeyFile != null) ''
-          if [ -r "${toString cfg.providers.litellm.apiKeyFile}" ]; then
-            export LITELLM_API_KEY="$(cut -d= -f2- < "${toString cfg.providers.litellm.apiKeyFile}")"
-            # Compatibility alias for hermes
-            export LITELLM_HERMES_API_KEY="$LITELLM_API_KEY"
-          fi
+          export LITELLM_API_KEY="${lib.salt.helpers.extractSecret cfg.providers.litellm.apiKeyFile}"
+          # Compatibility alias for hermes
+          export LITELLM_HERMES_API_KEY="$LITELLM_API_KEY"
         ''}
 
         ${optionalString (cfg.providers.azure.enable && cfg.providers.azure.apiKeyFile != null) ''
-          if [ -r "${toString cfg.providers.azure.apiKeyFile}" ]; then
-            export AZURE_API_KEY="$(cut -d= -f2- < "${toString cfg.providers.azure.apiKeyFile}")"
-          fi
+          export AZURE_API_KEY="${lib.salt.helpers.extractSecret cfg.providers.azure.apiKeyFile}"
         ''}
       '';
     };

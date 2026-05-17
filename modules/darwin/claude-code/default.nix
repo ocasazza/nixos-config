@@ -257,14 +257,9 @@ in
       # When litellm + virtual key (not cloudPassthrough), read the sops
       # key at shell init and export it. The apiKeyHelper path doesn't
       # apply here — the key is static for the session.
-      home.sessionVariablesExtra =
-        lib.optionalString
-          (cfg.litellm.enable && !cfg.litellm.cloudPassthrough && cfg.litellm.virtualKeyFile != null)
-          ''
-            if [ -r "${toString cfg.litellm.virtualKeyFile}" ]; then
-              export ANTHROPIC_API_KEY="$(cut -d= -f2- < "${toString cfg.litellm.virtualKeyFile}")"
-            fi
-          '';
+      home.sessionVariablesExtra = lib.optionalString (
+        cfg.litellm.enable && !cfg.litellm.cloudPassthrough && cfg.litellm.virtualKeyFile != null
+      ) ''export ANTHROPIC_API_KEY="${lib.salt.helpers.extractSecret cfg.litellm.virtualKeyFile}"'';
     };
   };
 }

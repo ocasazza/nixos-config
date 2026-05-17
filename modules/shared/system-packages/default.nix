@@ -48,16 +48,9 @@
       #terraform-ls
       #terraform-docs
 
-      # Media-related packages
-      dejavu_fonts
+      # Text and terminal utilities
       ffmpeg
       fd
-      font-awesome
-      nerd-fonts._0xproto
-      nerd-fonts.droid-sans-mono
-      nerd-fonts.jetbrains-mono
-
-      # Text and terminal utilities
       htop
       iftop
       jq
@@ -115,4 +108,12 @@
       # Linux equivalents / extras
       vscodium # FOSS vscode build, no MS telemetry, builds cleanly on linux
     ];
+
+  fonts.packages = with pkgs; [
+    dejavu_fonts
+    font-awesome
+    nerd-fonts._0xproto
+    nerd-fonts.droid-sans-mono
+    nerd-fonts.jetbrains-mono
+  ];
 }

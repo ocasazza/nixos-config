@@ -29,7 +29,7 @@ in
 
     modelDir = lib.mkOption {
       type = lib.types.str;
-      default = "/Users/${user}/.omlx/models";
+      default = "${config.users.users.${user}.home}/.omlx/models";
       description = "Directory where omlx discovers MLX-format models.";
     };
 
@@ -53,7 +53,7 @@ in
 
     ssdCacheDir = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
-      default = "/Users/${user}/.omlx/cache";
+      default = "${config.users.users.${user}.home}/.omlx/cache";
       description = "Directory for the cold-tier SSD KV cache. Disabled if null.";
     };
 
@@ -98,8 +98,8 @@ in
           SuccessfulExit = false;
         };
         RunAtLoad = true;
-        StandardOutPath = "/Users/${user}/.omlx/logs/launchd.log";
-        StandardErrorPath = "/Users/${user}/.omlx/logs/launchd.err";
+        StandardOutPath = "${config.users.users.${user}.home}/.omlx/logs/launchd.log";
+        StandardErrorPath = "${config.users.users.${user}.home}/.omlx/logs/launchd.err";
         EnvironmentVariables = {
           # Ensure Python can find the venv even under launchd's minimal env.
           PATH = "/usr/bin:/bin:/usr/sbin:/sbin:/run/current-system/sw/bin";
