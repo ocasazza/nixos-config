@@ -69,6 +69,12 @@ in
         default = true;
         description = "Enable Gemini sandbox.";
       };
+
+      driver = lib.mkOption {
+        type = lib.types.str;
+        default = "sandbox-exec";
+        description = "Sandbox driver to use (e.g., sandbox-exec, podman, docker).";
+      };
     };
 
     seatbeltProfile = lib.mkOption {
@@ -130,7 +136,7 @@ in
       # Unified variables are now handled by modules/darwin/ai.
       home.sessionVariablesExtra = ''
         export GEMINI_TELEMETRY_ENABLED="${if cfg.telemetry.enable then "true" else "false"}"
-        export GEMINI_SANDBOX="${if cfg.sandbox.enable then "true" else "false"}"
+        export GEMINI_SANDBOX="${if cfg.sandbox.enable then cfg.sandbox.driver else "false"}"
         export SEATBELT_PROFILE="${cfg.seatbeltProfile}"
         ${lib.optionalString (cfg.authType == "vertex-ai") "export GOOGLE_GENAI_USE_VERTEXAI=\"true\""}
         ${lib.optionalString (
@@ -152,8 +158,14 @@ in
             projectId = cfg.vertex.projectId;
             region = cfg.vertex.region;
           };
+          seatbeltProfile = cfg.seatbeltProfile;
+          tools = lib.optionalAttrs (cfg.seatbeltProfile == "docker") {
+            sandbox = "${config.users.users.${user.name}.home}/.gemini/sandbox-macos-docker.sb";
+          };
         } cfg.extraSettings
       );
+
+      home.file.".gemini/sandbox-macos-docker.sb".source = ./sandbox-macos-docker.sb;
 
       # Optional credentials files from sops
       home.file.".gemini/google_accounts.json" = lib.mkIf (cfg.googleAccountsFile != null) {

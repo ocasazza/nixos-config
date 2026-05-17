@@ -1,0 +1,41 @@
+(version 1)
+
+;; allow everything by default (including network, process-exec, etc.)
+(allow default)
+
+;; deny all writes EXCEPT under specific paths
+(deny file-write*)
+(allow file-write*
+    (subpath (param "HOME_DIR"))
+    (subpath (param "TARGET_DIR"))
+    (subpath (param "TMP_DIR"))
+    (subpath (param "CACHE_DIR"))
+
+    ;; Nix support
+    (subpath "/nix")
+    (subpath "/etc/nix")
+    (subpath "/var/nix")
+    (subpath "/Library/Nix")
+
+    ;; Podman / Docker support
+    (subpath (string-append (param "HOME_DIR") "/.local/share/containers"))
+    (subpath (string-append (param "HOME_DIR") "/.ssh"))
+    (subpath (string-append (param "HOME_DIR") "/.config/containers"))
+    (subpath (string-append (param "HOME_DIR") "/.podman"))
+    (subpath "/var/run/docker.sock")
+    (subpath "/private/var/run/docker.sock")
+
+    ;; Allow writes to included directories from --include-directories
+    (subpath (param "INCLUDE_DIR_0"))
+    (subpath (param "INCLUDE_DIR_1"))
+    (subpath (param "INCLUDE_DIR_2"))
+    (subpath (param "INCLUDE_DIR_3"))
+    (subpath (param "INCLUDE_DIR_4"))
+
+    ;; Shell / tty
+    (literal "/dev/stdout")
+    (literal "/dev/stderr")
+    (literal "/dev/null")
+    (literal "/dev/ptmx")
+    (regex #"^/dev/ttys[0-9]*$")
+)

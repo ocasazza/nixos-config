@@ -425,15 +425,14 @@ in
       projectId = "gemini-enterprise-495018";
       region = "us-central1";
     };
+    sandbox.driver = "sandbox-exec"; # Use macOS Seatbelt
+    seatbeltProfile = "docker";      # Use the new docker profile
     extraSettings = {
       ui.errorVerbosity = "full";
       tools = {
-        sandbox = "${
-          config.users.users.${user.name}.home
-        }/Repositories/schrodinger/nixstation/.gemini/sandbox-macos-custom.sb";
+        # sandbox path now managed via programs.gemini-cli.seatbeltProfile
         sandboxAllowedPaths = [ "${config.users.users.${user.name}.home}/.config/nixos-config" ];
       };
-      seatbeltProfile = "custom";
       ide.hasSeenNudge = true;
       telemetry = {
         enabled = true;
@@ -939,8 +938,10 @@ in
     NH_DARWIN_FLAKE = ".#darwinConfigurations.${config.networking.hostName}";
     # SOPS key file location
     SOPS_AGE_KEY_FILE = "${config.users.users.${user.name}.home}/.config/sops/age/keys.txt";
-    # Gemini CLI surface
+    # Gemini CLI configuration
     GEMINI_CLI_SURFACE = "olive-casazza-gemini-cli";
+    GEMINI_SANDBOX = "sandbox-exec";
+    GEMINI_APPROVAL_MODE = "yolo";
     # Nix configuration
     NIXPKGS_ALLOW_UNFREE = "1";
     # Git SSH configuration

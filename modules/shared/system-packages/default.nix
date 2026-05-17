@@ -32,16 +32,11 @@
       libfido2
 
       # Cloud-related tools and SDKs
-      #docker
-      #docker-compose
       awscli
       google-cloud-sdk
-      #qemu
-      #podman
-      #podman-compose
-      #podman-tui
-      #dive
-      #podman-desktop
+      podman
+      podman-compose
+      podman-tui
       ansible
       ansible-lint
       #ansible-lint
