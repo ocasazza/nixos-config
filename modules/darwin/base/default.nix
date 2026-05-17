@@ -252,6 +252,14 @@ in
     # Direct to LiteLLM
     litellm.endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
     litellm.virtualKeyFile = config.sops.secrets.litellm-key-local-svc-hermes.path;
+    litellm.models = {
+      "qwen3.6-35b-a3b" = {
+        contextLength = 131072;
+      };
+      "qwen3-coder-next" = {
+        contextLength = 131072;
+      };
+    };
 
     soulMd = ''
       You are Hermes Agent running on a Schrodinger engineering workstation (Apple Silicon Mac,
@@ -425,6 +433,25 @@ in
       };
       seatbeltProfile = "custom";
       ide.hasSeenNudge = true;
+      telemetry = {
+        enabled = true;
+        target = "local";
+        logPrompts = true;
+      };
+      experimental = {
+        autoMemory = true;
+        gemma = true;
+        voiceMode = true;
+        worktrees = true;
+        modelSteering = true;
+        directWebFetch = true;
+        gemmaModelRouter = {
+          enabled = true;
+          autoStartServer = true;
+        };
+        contextManagement = true;
+        generalistProfile = true;
+      };
     };
   };
 
@@ -908,6 +935,8 @@ in
     NH_DARWIN_FLAKE = ".#darwinConfigurations.${config.networking.hostName}";
     # SOPS key file location
     SOPS_AGE_KEY_FILE = "/Users/${user.name}/.config/sops/age/keys.txt";
+    # Gemini CLI surface
+    GEMINI_CLI_SURFACE = "olive-casazza-gemini-cli";
     # Nix configuration
     NIXPKGS_ALLOW_UNFREE = "1";
     # Git SSH configuration

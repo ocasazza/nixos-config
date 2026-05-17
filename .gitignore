@@ -13,6 +13,5 @@ projects/*/.env
 
 # Agents
 .claude/settings.local.json
-
-.claude/settings.json
 .claude/skills
+.memories

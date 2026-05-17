@@ -58,12 +58,14 @@ in
     path = "/Users/${user.name}/.config/twg/auth.conf";
     mode = "0600";
     owner = user.name;
-    content = lib.generators.toTOML { } {
-      default = {
-        email = config.sops.placeholder."atlassian-email";
-        site = config.sops.placeholder."atlassian-site";
-        token = config.sops.placeholder."atlassian-api-token";
-      };
-    };
+    content = builtins.readFile (
+      (pkgs.formats.toml { }).generate "twg-auth.conf" {
+        default = {
+          email = config.sops.placeholder."atlassian-email";
+          site = config.sops.placeholder."atlassian-site";
+          token = config.sops.placeholder."atlassian-api-token";
+        };
+      }
+    );
   };
 }

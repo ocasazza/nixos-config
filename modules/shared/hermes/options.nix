@@ -239,6 +239,26 @@ with lib;
           in non-vertex mode). Defaults to qwen3.6-35b-a3b.
         '';
       };
+
+      models = mkOption {
+        type = types.attrsOf (
+          types.submodule {
+            options = {
+              contextLength = mkOption {
+                type = types.int;
+                default = 131072;
+                description = "Context window length for this model";
+              };
+            };
+          }
+        );
+        default = { };
+        description = ''
+          Models exposed in the /model picker under the litellm provider.
+          When non-empty, a 'litellm' providers entry is generated pointing
+          at litellm.endpoint/v1. Keys must be valid LiteLLM model aliases.
+        '';
+      };
     };
 
     delegation = {
