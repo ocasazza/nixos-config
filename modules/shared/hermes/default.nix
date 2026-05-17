@@ -102,6 +102,12 @@ in
       home-manager.users.${user.name}.home.file.".hermes/SOUL.md".text = cfg.soulMd;
     })
 
+    # Hermes display skin: deploy from flake source to ~/.hermes/skins/
+    (mkIf (cfg.skin != null) {
+      home-manager.users.${user.name}.home.file.".hermes/skins/${cfg.skin}.yaml".text =
+        builtins.readFile ./skins/${cfg.skin}.yaml;
+    })
+
     # NixOS (Linux): Ollama as a systemd service
     (optionalAttrs isLinux {
       services.ollama = {

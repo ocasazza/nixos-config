@@ -205,8 +205,8 @@ in
     # mainModel.geminiKeyFile = config.sops.secrets.gemini-enterprise-api-key.path;
 
     mainModel = {
-      name = "glm-5.1-fp8";
-      baseURL = "https://glm-5-1-fp8.autoscale.sdgr.app/v1";
+      name = "ring-2.6-1t";
+      baseURL = "https://ring-2-6-1t.autoscale.sdgr.app/v1";
       apiKey = "noauth";
     };
 
@@ -214,13 +214,11 @@ in
     # Switch at runtime: /model custom:vertex-proxy:claude-opus-4-7
     vertexProxy.enable = true;
 
-    # Plan Execution: Azure OpenAI (Kimi K2.6) via direct endpoint
+    # Plan Execution: Kimi via built-in kimi-coding provider
     delegation = {
       enable = true;
+      provider = "kimi-coding";
       model = "Kimi-K2.6";
-      baseURL = "https://schrodinger-code.openai.azure.com/openai/deployments/Kimi-K2.6";
-      apiKey = "$AZURE_API_KEY";
-      azureKeyFile = config.sops.secrets.azure-api-key-opencode-darwin.path;
       models = {
         "Kimi-K2.6" = {
           contextLength = 131072;
@@ -426,7 +424,7 @@ in
       region = "us-central1";
     };
     sandbox.driver = "sandbox-exec"; # Use macOS Seatbelt
-    seatbeltProfile = "docker";      # Use the new docker profile
+    seatbeltProfile = "docker"; # Use the new docker profile
     extraSettings = {
       ui.errorVerbosity = "full";
       tools = {
