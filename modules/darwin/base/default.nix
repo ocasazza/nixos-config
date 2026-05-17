@@ -251,7 +251,7 @@ in
     #
     # Direct to LiteLLM
     litellm.endpoint = lib.salt.ai.providers.litellm.caddyEndpoint;
-    litellm.virtualKeyFile = config.sops.secrets.litellm-key-local-svc-hermes.path;
+    litellm.virtualKeyFile = config.sops.secrets.litellm-key-opencode-darwin.path;
     litellm.models = {
       "qwen3.6-35b-a3b" = {
         contextLength = 131072;
