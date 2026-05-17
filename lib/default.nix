@@ -46,6 +46,7 @@ rec {
           "qwen3.6-35b-a3b" = "qwen3.6-35b-a3b";
           "azure-kimi-k2.6" = "azure-kimi-k2.6";
           "sdgr-glm-5.1" = "sdgr-glm-5.1";
+          "sdgr-ring" = "sdgr-ring";
           embedding = "embedding";
         };
       };

@@ -33,11 +33,7 @@ let
     else
       cfg.delegation.apiKey;
 
-  hasProviders =
-    mainModelIsCustom
-    || delegationIsCustom
-    || cfg.vertexProxy.enable
-    || (cfg.litellm.enable && cfg.litellm.models != { });
+  hasProviders = true; # sdgr-glm and sdgr-ring are always exposed
 
 in
 # Use // and optionalAttrs (plain Nix) rather than mkMerge/mkIf so that
@@ -203,5 +199,21 @@ in
         api_mode = "chat_completions";
         models = mapAttrs (_: m: { context_length = m.contextLength; }) cfg.litellm.models;
       };
-    });
+    })
+    // {
+      sdgr-glm = {
+        name = "Schrödinger GLM";
+        base_url = "https://glm-5-1-fp8.autoscale.sdgr.app/v1";
+        api_key = "noauth";
+        api_mode = "chat_completions";
+        models."glm-5.1-fp8".context_length = 202752;
+      };
+      sdgr-ring = {
+        name = "Schrödinger Ring";
+        base_url = "https://ring-2-6-1t.autoscale.sdgr.app/v1";
+        api_key = "noauth";
+        api_mode = "chat_completions";
+        models."ring-2.6-1t".context_length = 262144;
+      };
+    };
 })

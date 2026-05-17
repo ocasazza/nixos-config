@@ -24,6 +24,8 @@
         enabled_providers = [
           "litellm"
           "vertex-proxy"
+          "sdgr-glm"
+          "sdgr-ring"
         ];
         provider = {
           litellm = {
@@ -96,6 +98,41 @@
                 limit = {
                   context = 202752;
                   output = 32768;
+                };
+              };
+            };
+          };
+          "sdgr-glm" = {
+            npm = "@ai-sdk/openai-compatible";
+            name = "Schrödinger GLM";
+            options = {
+              baseURL = "https://glm-5-1-fp8.autoscale.sdgr.app/v1";
+              apiKey = "noauth";
+            };
+            models = {
+              "glm-5.1-fp8" = {
+                name = "GLM-5.1 FP8 (H200)";
+                limit = {
+                  context = 202752;
+                  output = 32768;
+                };
+              };
+            };
+          };
+          "sdgr-ring" = {
+            npm = "@ai-sdk/openai-compatible";
+            name = "Schrödinger Ring";
+            options = {
+              baseURL = "https://ring-2-6-1t.autoscale.sdgr.app/v1";
+              apiKey = "noauth";
+            };
+            models = {
+              "ring-2.6-1t" = {
+                name = "Ring 2.6 1T (H200)";
+                reasoningEffort = "xhigh";
+                limit = {
+                  context = 262144;
+                  output = 253952;
                 };
               };
             };

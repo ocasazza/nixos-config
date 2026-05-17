@@ -55,11 +55,12 @@ with lib;
       };
 
       name = mkOption {
-        type = types.nullOr types.str;
-        default = null;
+        type = types.str;
+        default = "ring-2.6-1t";
         description = ''
           Model name / slug. Examples: "gemini-2.5-pro",
           "claude-sonnet-4-7", "gpt-5.3-codex".
+          Default: "ring-2.6-1t" (Schrodinger Ring).
         '';
       };
 

@@ -17,13 +17,18 @@
     (subpath "/var/nix")
     (subpath "/Library/Nix")
 
-    ;; Podman / Docker support
+    ;; Podman / Docker / Colima / Rancher support
     (subpath (string-append (param "HOME_DIR") "/.local/share/containers"))
     (subpath (string-append (param "HOME_DIR") "/.ssh"))
     (subpath (string-append (param "HOME_DIR") "/.config/containers"))
     (subpath (string-append (param "HOME_DIR") "/.podman"))
+    (subpath (string-append (param "HOME_DIR") "/.docker"))
+    (subpath (string-append (param "HOME_DIR") "/.colima"))
+    (subpath (string-append (param "HOME_DIR") "/.rd"))
     (subpath "/var/run/docker.sock")
     (subpath "/private/var/run/docker.sock")
+    (subpath "/var/run/host-services")
+    (subpath "/private/var/run/host-services")
 
     ;; Allow writes to included directories from --include-directories
     (subpath (param "INCLUDE_DIR_0"))
